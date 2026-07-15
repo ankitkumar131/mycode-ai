@@ -154,9 +154,13 @@ export function createReadlineConfirmFns(rl) {
   function askYesNo(question, defaultYes = true) {
     const hint = defaultYes ? 'Y/n' : 'y/N';
     return new Promise((resolve) => {
+      // Explicitly resume readline — it may be paused by the chat REPL
+      rl.resume();
       rl.question(
         chalk.hex('#FBBF24')(`${question} (${hint}) `),
         (answer) => {
+          // Pause again so the chat REPL's line handler doesn't fire
+          rl.pause();
           const trimmed = answer.trim().toLowerCase();
           if (trimmed === '') {
             resolve(defaultYes);

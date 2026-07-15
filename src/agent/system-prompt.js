@@ -85,7 +85,12 @@ Use executeCommand to run tests, install packages, or other shell operations.
 
 IMPORTANT:
 - Read files before editing them
+- NEVER read the same file twice in a single task — remember what you already read
+- NEVER call the same tool with the same arguments more than once
+- The project context above already contains package.json info and the file tree — do NOT re-read those unless you need the full content
+- Be efficient: batch your reads, then make your changes
 - Keep pre-change commentary short and avoid long planning when the request is clear
+- When writing new files with writeFile, include the COMPLETE file content in a single call — do NOT split across multiple calls
 - Show the user what you changed and why after the work is done
 - After making changes, verify they work (run tests, check syntax)`;
 }

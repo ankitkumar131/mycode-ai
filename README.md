@@ -5,7 +5,7 @@
 Like Claude Code, but provider-agnostic. Use OpenRouter, NVIDIA NIM, Ollama, OpenAI, or any OpenAI-compatible API — with automatic failover when providers hit rate limits or go down.
 
 ```
-npm install -g mycode-ai
+npm install -g @ankitkumar131/mycode-ai 
 ```
 
 ---
@@ -14,7 +14,7 @@ npm install -g mycode-ai
 
 ```bash
 # 1. Install globally
-npm install -g mycode-ai
+npm install -g @ankitkumar131/mycode-ai 
 
 # 2. Configure your AI providers
 mycode init

@@ -253,31 +253,53 @@ export class AgentLoop {
         logger.warn(`Failed to parse tool arguments for ${name}`);
       }
 
-      // Build tool options
+      // Determine if this tool needs user confirmation
       const toolOptions = {};
+      let needsConfirm = false;
+
       if (isWriteTool(name)) {
         if (this.confirmWrites && (name === 'writeFile' || name === 'editFile')) {
-          // Use readline-based confirm in chat mode to avoid stdin conflicts
-          toolOptions.confirmFn = this._rlConfirmFns
+          needsConfirm = true;
+          const baseFn = this._rlConfirmFns
             ? this._rlConfirmFns.confirmFileWrite
             : confirmFileWrite;
+          toolOptions.confirmFn = baseFn;
         }
         if (this.confirmCommands && name === 'executeCommand') {
-          toolOptions.confirmFn = this._rlConfirmFns
+          needsConfirm = true;
+          const baseFn = this._rlConfirmFns
             ? this._rlConfirmFns.confirmCommand
             : confirmCommand;
+          toolOptions.confirmFn = baseFn;
         }
       }
 
-      // Execute the tool
+      // Start spinner
       const toolSpinner = createToolSpinner(name);
       toolSpinner.start();
 
+      // CRITICAL: Stop the spinner BEFORE any tool that needs user confirmation.
+      // Ora's animation loop writes ANSI escape codes that overwrite the terminal line,
+      // making it impossible to see or respond to confirmation prompts.
+      // This is how Claude Code, Gemini CLI, etc. handle it — all animations stop
+      // before interactive prompts.
+      if (needsConfirm) {
+        toolSpinner.stop();
+      }
+
       const result = await executeTool(name, args, this.cwd, toolOptions);
 
-      toolSpinner.succeed(
-        `${chalk.hex('#38BDF8').bold(name)} ${chalk.dim('completed')}`
-      );
+      // Show completion
+      if (needsConfirm) {
+        // Spinner was already stopped; just log the result
+        console.log(
+          `${chalk.hex('#34D399')('✔')} ${chalk.hex('#38BDF8').bold(name)} ${chalk.dim('completed')}`
+        );
+      } else {
+        toolSpinner.succeed(
+          `${chalk.hex('#38BDF8').bold(name)} ${chalk.dim('completed')}`
+        );
+      }
 
       // Show tool result
       if (result.length < 500) {

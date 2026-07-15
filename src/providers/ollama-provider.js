@@ -29,7 +29,7 @@ export class OllamaProvider extends BaseProvider {
         messages,
         options: {
           temperature: options.temperature ?? 0.3,
-          num_predict: options.max_tokens ?? 4096,
+          num_predict: options.max_tokens ?? 16384,
         },
       };
 
@@ -77,7 +77,7 @@ export class OllamaProvider extends BaseProvider {
         stream: true,
         options: {
           temperature: options.temperature ?? 0.3,
-          num_predict: options.max_tokens ?? 4096,
+          num_predict: options.max_tokens ?? 16384,
         },
       };
 

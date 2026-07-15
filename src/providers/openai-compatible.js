@@ -44,7 +44,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         model: this.model,
         messages,
         temperature: options.temperature ?? 0.3,
-        max_tokens: options.max_tokens ?? 4096,
+        max_tokens: options.max_tokens ?? 16384,
       };
 
       // Only add tools if we have some and the model should support them
@@ -80,7 +80,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         model: this.model,
         messages,
         temperature: options.temperature ?? 0.3,
-        max_tokens: options.max_tokens ?? 4096,
+        max_tokens: options.max_tokens ?? 16384,
         stream: true,
       };
 
