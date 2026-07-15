@@ -19,6 +19,7 @@ import { registerFixCommand } from '../src/commands/fix.js';
 import { registerEditCommand } from '../src/commands/edit.js';
 import { registerAgentCommand } from '../src/commands/agent.js';
 import { registerConfigCommand } from '../src/commands/config.js';
+import { maybeCheckForUpdates } from '../src/utils/update-check.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -39,6 +40,8 @@ ${chalk.hex('#7C3AED').bold('║')}   ${chalk.dim('Multi-provider • Auto-failo
 ${chalk.hex('#7C3AED').bold('╚══════════════════════════════════════════╝')}
   `);
 
+await maybeCheckForUpdates(pkg);
+
 // Register all commands
 registerInitCommand(program);
 registerChatCommand(program);
@@ -53,4 +56,4 @@ program.action(() => {
   program.help();
 });
 
-program.parse(process.argv);
+await program.parseAsync(process.argv);

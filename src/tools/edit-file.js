@@ -7,6 +7,18 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve, relative } from 'path';
 import { createPatch } from 'diff';
 
+function detectEol(text) {
+  return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
+function normalizeToLf(text) {
+  return text.replace(/\r\n/g, '\n');
+}
+
+function restoreEol(text, eol) {
+  return eol === '\r\n' ? text.replace(/\n/g, '\r\n') : text;
+}
+
 export const editFileTool = {
   definition: {
     type: 'function',
@@ -62,13 +74,17 @@ export const editFileTool = {
       return `Error: File not found: ${relPath}`;
     }
 
-    let content = readFileSync(filePath, 'utf-8');
-    const original = content;
+    const original = readFileSync(filePath, 'utf-8');
+    const originalEol = detectEol(original);
+    let content = normalizeToLf(original);
     let appliedCount = 0;
 
     for (const edit of args.edits) {
-      if (content.includes(edit.search)) {
-        content = content.replace(edit.search, edit.replace);
+      const search = normalizeToLf(edit.search);
+      const replace = normalizeToLf(edit.replace);
+
+      if (content.includes(search)) {
+        content = content.replace(search, replace);
         appliedCount++;
       } else {
         return `Error: Could not find the search text in ${relPath}:\n"${edit.search.slice(0, 100)}..."`;
@@ -80,7 +96,8 @@ export const editFileTool = {
     }
 
     // Generate diff
-    const diffText = createPatch(relPath, original, content, 'before', 'after');
+    const finalContent = restoreEol(content, originalEol);
+    const diffText = createPatch(relPath, original, finalContent, 'before', 'after');
 
     // Ask for confirmation
     if (options.confirmFn) {
@@ -91,7 +108,7 @@ export const editFileTool = {
     }
 
     try {
-      writeFileSync(filePath, content, 'utf-8');
+      writeFileSync(filePath, finalContent, 'utf-8');
       return `✔ Applied ${appliedCount} edit(s) to ${relPath}`;
     } catch (err) {
       return `Error writing file: ${err.message}`;

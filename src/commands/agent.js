@@ -167,7 +167,7 @@ async function startAgentRepl(options) {
     rl.prompt();
   });
 
-  rl.on('close', () => {
-    process.exit(0);
+  await new Promise((resolve) => {
+    rl.once('close', resolve);
   });
 }

@@ -17,6 +17,22 @@ import chalk from 'chalk';
 
 const MAX_ITERATIONS = 25; // Safety limit to prevent infinite loops
 
+function estimateTokens(text) {
+  if (!text) return 0;
+  return Math.ceil(String(text).length / 4);
+}
+
+function estimatePromptTokens(messages) {
+  return messages.reduce((total, message) => {
+    const content =
+      typeof message.content === 'string'
+        ? message.content
+        : JSON.stringify(message.content || '');
+
+    return total + 4 + estimateTokens(message.role) + estimateTokens(content);
+  }, 0);
+}
+
 export class AgentLoop {
   /**
    * @param {ProviderRouter} router - The provider router for AI requests
@@ -27,6 +43,7 @@ export class AgentLoop {
     this.router = router;
     this.cwd = cwd;
     this.mode = options.mode || 'agent';
+    this.enableTools = options.enableTools !== false;
     this.confirmWrites = options.confirmWrites !== false;
     this.confirmCommands = options.confirmCommands !== false;
 
@@ -58,7 +75,7 @@ export class AgentLoop {
       this._iterationCount++;
 
       const messages = this.context.getMessages();
-      const tools = getToolDefinitions({ includeWrite: true });
+      const tools = this.enableTools ? getToolDefinitions({ includeWrite: true }) : [];
 
       // Show thinking spinner
       const spinner = createSpinner(this.router.getCurrentProvider().getLabel());
@@ -108,9 +125,13 @@ export class AgentLoop {
       }
 
       // Show usage info
-      if (response.usage) {
+      const promptTokens = response.usage?.prompt_tokens;
+      const completionTokens = response.usage?.completion_tokens;
+      const hasUsage = Number.isFinite(promptTokens) || Number.isFinite(completionTokens);
+
+      if (hasUsage) {
         logger.info(
-          `Tokens: ${response.usage.prompt_tokens || '?'} in / ${response.usage.completion_tokens || '?'} out`
+          `Tokens: ${Number.isFinite(promptTokens) ? promptTokens : '?'} in / ${Number.isFinite(completionTokens) ? completionTokens : '?'} out`
         );
       }
 
@@ -132,6 +153,7 @@ export class AgentLoop {
     let fullContent = '';
     const toolCalls = [];
     let streamStarted = false;
+    let usage = null;
 
     try {
       const stream = this.router.stream(messages, tools);
@@ -152,7 +174,9 @@ export class AgentLoop {
           }
           toolCalls.push(chunk.tool_call);
         } else if (chunk.type === 'finish') {
-          // Stream done
+          if (chunk.usage) {
+            usage = chunk.usage;
+          }
         }
       }
 
@@ -165,7 +189,11 @@ export class AgentLoop {
       return {
         content: fullContent,
         tool_calls: toolCalls,
-        usage: {},
+        usage: usage || {
+          prompt_tokens: estimatePromptTokens(messages),
+          completion_tokens: estimateTokens(fullContent),
+          estimated: true,
+        },
       };
     } catch (err) {
       spinner.stop();

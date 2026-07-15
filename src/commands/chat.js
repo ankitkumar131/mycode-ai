@@ -15,6 +15,8 @@ export function registerChatCommand(program) {
     .command('chat')
     .description('Start an interactive AI conversation')
     .option('-m, --message <msg>', 'Send a single message instead of starting REPL')
+    .option('-y, --yes', 'Automatically apply file writes without confirmation')
+    .option('--no-exec', 'Disable command execution')
     .option('--no-tools', 'Disable tool usage (pure chat)')
     .action(async (options) => {
       try {
@@ -24,7 +26,7 @@ export function registerChatCommand(program) {
         }
 
         if (options.message) {
-          await singleMessage(options.message);
+          await singleMessage(options.message, options);
         } else {
           await startRepl(options);
         }
@@ -38,12 +40,18 @@ export function registerChatCommand(program) {
 /**
  * Send a single message and exit.
  */
-async function singleMessage(message) {
+async function singleMessage(message, options = {}) {
+  const config = loadConfig();
   const providers = getProvidersSorted();
   const router = new ProviderRouter(providers);
   const cwd = process.cwd();
 
-  const agent = new AgentLoop(router, cwd, { mode: 'chat' });
+  const agent = new AgentLoop(router, cwd, {
+    mode: 'chat',
+    enableTools: options.tools,
+    confirmWrites: !options.yes && config.preferences.confirm_writes,
+    confirmCommands: !options.noExec && config.preferences.confirm_commands,
+  });
   await agent.run(message);
 }
 
@@ -66,8 +74,9 @@ async function startRepl(options) {
 
   const agent = new AgentLoop(router, cwd, {
     mode: 'chat',
-    confirmWrites: config.preferences.confirm_writes,
-    confirmCommands: config.preferences.confirm_commands,
+    enableTools: options.tools,
+    confirmWrites: !options.yes && config.preferences.confirm_writes,
+    confirmCommands: !options.noExec && config.preferences.confirm_commands,
   });
 
   const rl = createInterface({
@@ -113,8 +122,8 @@ async function startRepl(options) {
     rl.prompt();
   });
 
-  rl.on('close', () => {
-    process.exit(0);
+  await new Promise((resolve) => {
+    rl.once('close', resolve);
   });
 }
 
