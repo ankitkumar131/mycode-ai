@@ -8,6 +8,7 @@ import { createInterface } from 'readline';
 import { ProviderRouter } from '../providers/router.js';
 import { AgentLoop } from '../agent/loop.js';
 import { loadConfig, configExists, getProvidersSorted } from '../utils/config.js';
+import { createReadlineConfirmFns } from '../ui/prompt.js';
 import logger from '../utils/logger.js';
 
 export function registerChatCommand(program) {
@@ -72,13 +73,6 @@ async function startRepl(options) {
     chalk.dim('  Type your message and press Enter. Use /help for commands.\n')
   );
 
-  const agent = new AgentLoop(router, cwd, {
-    mode: 'chat',
-    enableTools: options.tools,
-    confirmWrites: !options.yes && config.preferences.confirm_writes,
-    confirmCommands: !options.noExec && config.preferences.confirm_commands,
-  });
-
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -86,8 +80,32 @@ async function startRepl(options) {
     terminal: true,
   });
 
+  // Create readline-based confirm functions to avoid inquirer stdin conflicts
+  const rlConfirmFns = createReadlineConfirmFns(rl);
+
+  const agent = new AgentLoop(router, cwd, {
+    mode: 'chat',
+    enableTools: options.tools,
+    confirmWrites: !options.yes && config.preferences.confirm_writes,
+    confirmCommands: !options.noExec && config.preferences.confirm_commands,
+    // Pass the readline-based confirm functions
+    rlConfirmFns,
+  });
+
+  // Track whether we're currently processing to ignore input during processing
+  let isProcessing = false;
+
   // Handle Ctrl+C gracefully
   rl.on('SIGINT', () => {
+    if (isProcessing) {
+      // Abort current agent loop
+      agent.abort();
+      isProcessing = false;
+      console.log();
+      logger.warn('Aborted current request.');
+      rl.prompt();
+      return;
+    }
     console.log();
     logger.info('Goodbye! 👋');
     rl.close();
@@ -96,7 +114,7 @@ async function startRepl(options) {
 
   rl.prompt();
 
-  rl.on('line', async (line) => {
+  rl.on('line', (line) => {
     const input = line.trim();
 
     if (!input) {
@@ -104,24 +122,42 @@ async function startRepl(options) {
       return;
     }
 
-    // Handle slash commands
-    if (input.startsWith('/')) {
-      await handleSlashCommand(input, agent, rl, router);
-      rl.prompt();
+    // Ignore input while processing
+    if (isProcessing) {
       return;
     }
 
-    // Process the message
-    try {
-      await agent.run(input);
-    } catch (err) {
-      logger.error(err.message);
+    // Handle slash commands
+    if (input.startsWith('/')) {
+      handleSlashCommand(input, agent, rl, router)
+        .then(() => rl.prompt())
+        .catch((err) => {
+          logger.error(err.message);
+          rl.prompt();
+        });
+      return;
     }
 
-    console.log();
-    rl.prompt();
+    // Process the message — pause readline to prevent stdin conflicts
+    isProcessing = true;
+    rl.pause();
+
+    agent
+      .run(input)
+      .then(() => {
+        console.log();
+      })
+      .catch((err) => {
+        logger.error(err.message);
+      })
+      .finally(() => {
+        isProcessing = false;
+        rl.resume();
+        rl.prompt();
+      });
   });
 
+  // Keep the process alive until readline is closed
   await new Promise((resolve) => {
     rl.once('close', resolve);
   });

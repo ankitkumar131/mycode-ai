@@ -1,4 +1,4 @@
-import { renderBox } from '../ui/renderer.js';
+import chalk from 'chalk';
 
 function parseVersion(version) {
   return String(version || '')
@@ -55,15 +55,16 @@ export async function maybeCheckForUpdates(pkg) {
     return;
   }
 
-  renderBox(
-    'Update available',
-    [
-      `Current version: ${pkg.version}`,
-      `Latest version:  ${latestVersion}`,
-      '',
-      'Update with:',
-      `npm install -g ${pkg.name}@latest`,
-    ].join('\n'),
-    '#FBBF24'
-  );
+  const updateCmd = `npm install -g ${pkg.name}@latest`;
+
+  console.log();
+  console.log(chalk.hex('#FBBF24')('  ┌──────────────────────────────────────────────────┐'));
+  console.log(chalk.hex('#FBBF24')('  │') + chalk.hex('#FBBF24').bold('  🆕 Update available!') + ' '.repeat(28) + chalk.hex('#FBBF24')('│'));
+  console.log(chalk.hex('#FBBF24')('  │') + '                                                  ' + chalk.hex('#FBBF24')('│'));
+  console.log(chalk.hex('#FBBF24')('  │') + `  ${chalk.dim('Current:')} ${chalk.hex('#F87171')(pkg.version)}` + ' '.repeat(Math.max(0, 39 - pkg.version.length)) + chalk.hex('#FBBF24')('│'));
+  console.log(chalk.hex('#FBBF24')('  │') + `  ${chalk.dim('Latest:')}  ${chalk.hex('#34D399').bold(latestVersion)}` + ' '.repeat(Math.max(0, 39 - latestVersion.length)) + chalk.hex('#FBBF24')('│'));
+  console.log(chalk.hex('#FBBF24')('  │') + '                                                  ' + chalk.hex('#FBBF24')('│'));
+  console.log(chalk.hex('#FBBF24')('  │') + `  ${chalk.dim('Run:')} ${chalk.bgHex('#1E293B').hex('#34D399').bold(` ${updateCmd} `)}` + ' '.repeat(Math.max(0, 7)) + chalk.hex('#FBBF24')('│'));
+  console.log(chalk.hex('#FBBF24')('  └──────────────────────────────────────────────────┘'));
+  console.log();
 }

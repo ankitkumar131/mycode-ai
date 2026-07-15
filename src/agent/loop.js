@@ -9,7 +9,7 @@
 import { getToolDefinitions, executeTool, isWriteTool } from '../tools/registry.js';
 import { ConversationContext } from './context.js';
 import { buildSystemPrompt } from './system-prompt.js';
-import { createSpinner, createToolSpinner } from '../ui/spinner.js';
+import { createSpinner, createToolSpinner, createCodegenSpinner } from '../ui/spinner.js';
 import { renderMarkdown } from '../ui/renderer.js';
 import { confirmFileWrite, confirmCommand } from '../ui/prompt.js';
 import logger from '../utils/logger.js';
@@ -37,7 +37,7 @@ export class AgentLoop {
   /**
    * @param {ProviderRouter} router - The provider router for AI requests
    * @param {string} cwd - Current working directory
-   * @param {object} options - { mode, confirmWrites, confirmCommands }
+   * @param {object} options - { mode, confirmWrites, confirmCommands, rlConfirmFns }
    */
   constructor(router, cwd, options = {}) {
     this.router = router;
@@ -46,6 +46,9 @@ export class AgentLoop {
     this.enableTools = options.enableTools !== false;
     this.confirmWrites = options.confirmWrites !== false;
     this.confirmCommands = options.confirmCommands !== false;
+
+    // Store readline-based confirm functions if provided (for chat REPL)
+    this._rlConfirmFns = options.rlConfirmFns || null;
 
     this.context = new ConversationContext();
     this.context.setSystemPrompt(buildSystemPrompt(cwd, { mode: this.mode }));
@@ -124,16 +127,18 @@ export class AgentLoop {
         console.log();
       }
 
-      // Show usage info
+      // Show usage info — always show, using estimates if needed
       const promptTokens = response.usage?.prompt_tokens;
       const completionTokens = response.usage?.completion_tokens;
-      const hasUsage = Number.isFinite(promptTokens) || Number.isFinite(completionTokens);
+      const isEstimated = response.usage?.estimated === true;
 
-      if (hasUsage) {
-        logger.info(
-          `Tokens: ${Number.isFinite(promptTokens) ? promptTokens : '?'} in / ${Number.isFinite(completionTokens) ? completionTokens : '?'} out`
-        );
-      }
+      const inDisplay = Number.isFinite(promptTokens) ? promptTokens : estimatePromptTokens(messages);
+      const outDisplay = Number.isFinite(completionTokens) ? completionTokens : estimateTokens(response.content || '');
+
+      const prefix = (isEstimated || !Number.isFinite(promptTokens)) ? '~' : '';
+      logger.info(
+        `Tokens: ${prefix}${inDisplay.toLocaleString()} in / ${prefix}${outDisplay.toLocaleString()} out`
+      );
 
       return response.content || '';
     }
@@ -154,6 +159,7 @@ export class AgentLoop {
     const toolCalls = [];
     let streamStarted = false;
     let usage = null;
+    let codegenSpinner = null;
 
     try {
       const stream = this.router.stream(messages, tools);
@@ -172,12 +178,40 @@ export class AgentLoop {
             spinner.stop();
             streamStarted = true;
           }
+          // Stop codegen spinner if it was running
+          if (codegenSpinner) {
+            codegenSpinner.stop();
+            codegenSpinner = null;
+          }
           toolCalls.push(chunk.tool_call);
+        } else if (chunk.type === 'tool_call_delta') {
+          // Show progress indicator for tool call argument generation
+          if (!streamStarted) {
+            spinner.stop();
+            streamStarted = true;
+          }
+          if (!codegenSpinner) {
+            codegenSpinner = createCodegenSpinner();
+            codegenSpinner.start();
+          }
+          // Update progress text
+          const toolName = chunk.name || 'tool';
+          const bytesReceived = chunk.argumentsLength || 0;
+          if (bytesReceived > 0) {
+            const kb = (bytesReceived / 1024).toFixed(1);
+            codegenSpinner.text = `${chalk.hex('#38BDF8')('✍')} Generating ${chalk.hex('#38BDF8').bold(toolName)} args... ${chalk.dim(`${kb} KB received`)}`;
+          }
         } else if (chunk.type === 'finish') {
           if (chunk.usage) {
             usage = chunk.usage;
           }
         }
+      }
+
+      // Stop codegen spinner if still running
+      if (codegenSpinner) {
+        codegenSpinner.stop();
+        codegenSpinner = null;
       }
 
       if (streamStarted && fullContent) {
@@ -196,6 +230,9 @@ export class AgentLoop {
         },
       };
     } catch (err) {
+      if (codegenSpinner) {
+        codegenSpinner.stop();
+      }
       spinner.stop();
       throw err;
     }
@@ -220,10 +257,15 @@ export class AgentLoop {
       const toolOptions = {};
       if (isWriteTool(name)) {
         if (this.confirmWrites && (name === 'writeFile' || name === 'editFile')) {
-          toolOptions.confirmFn = confirmFileWrite;
+          // Use readline-based confirm in chat mode to avoid stdin conflicts
+          toolOptions.confirmFn = this._rlConfirmFns
+            ? this._rlConfirmFns.confirmFileWrite
+            : confirmFileWrite;
         }
         if (this.confirmCommands && name === 'executeCommand') {
-          toolOptions.confirmFn = confirmCommand;
+          toolOptions.confirmFn = this._rlConfirmFns
+            ? this._rlConfirmFns.confirmCommand
+            : confirmCommand;
         }
       }
 

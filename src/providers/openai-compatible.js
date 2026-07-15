@@ -119,6 +119,13 @@ export class OpenAICompatibleProvider extends BaseProvider {
             if (tc.id) toolCallAccumulator[idx].id = tc.id;
             if (tc.function?.name) toolCallAccumulator[idx].function.name += tc.function.name;
             if (tc.function?.arguments) toolCallAccumulator[idx].function.arguments += tc.function.arguments;
+
+            // Emit progress delta so UI can show generation progress
+            yield {
+              type: 'tool_call_delta',
+              name: toolCallAccumulator[idx].function.name,
+              argumentsLength: toolCallAccumulator[idx].function.arguments.length,
+            };
           }
         }
 

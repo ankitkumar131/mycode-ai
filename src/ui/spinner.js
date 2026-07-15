@@ -50,6 +50,18 @@ export function createSetupSpinner(message) {
 }
 
 /**
+ * Create a spinner for code generation (tool call argument streaming).
+ * @returns {object} Ora spinner instance
+ */
+export function createCodegenSpinner() {
+  return ora({
+    text: `${chalk.hex('#38BDF8')('✍')} Generating code...`,
+    spinner: 'dots2',
+    color: 'cyan',
+  });
+}
+
+/**
  * Update a spinner to show provider switch.
  * @param {object} spinner - Existing spinner
  * @param {string} newProvider - New provider label
