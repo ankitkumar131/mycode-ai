@@ -1,6 +1,6 @@
 {
   "name": "@ankitkumar131/mycode-ai",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Multi-provider AI coding agent for the terminal. Like Claude Code, but provider-agnostic with automatic failover.",
   "type": "module",
   "bin": {
