@@ -123,12 +123,13 @@ async function startAgentRepl(options) {
     if (trimmed.startsWith('/')) {
       const agentCommands = [
         { cmd: '/help', desc: 'Show this help' },
+        { cmd: '/model', desc: 'View or switch the active provider/model' },
+        { cmd: '/stats', desc: 'Show session token usage and command stats' },
+        { cmd: '/about', desc: 'Show version, shell, OS, and active model info' },
         { cmd: '/clear', desc: 'Clear conversation' },
-        { cmd: '/status', desc: 'Provider status' },
-        { cmd: '/history', desc: 'Show commands executed this session' },
         { cmd: '/run', desc: 'Execute a shell command directly' },
-        { cmd: '/shell', desc: 'Show shell and OS info' },
-        { cmd: '/exit', desc: 'Exit agent' }
+        { cmd: '/exit', desc: 'Exit agent' },
+        { cmd: '/quit', desc: 'Exit agent' }
       ];
 
       const hits = agentCommands.filter((c) => c.cmd.startsWith(trimmed));
@@ -254,11 +255,11 @@ async function handleAgentSlashCommand(input, agent, rl, router, commandHistory,
       console.log(chalk.hex('#A78BFA').bold('  Agent Commands'));
       console.log(chalk.dim('  ───────────────────────'));
       console.log('  /help             — Show this help');
+      console.log('  /model [name]     — View or switch the active provider/model');
+      console.log('  /stats            — Show session token usage and command stats');
+      console.log('  /about            — Show version, shell, OS, and active model info');
       console.log('  /clear            — Clear conversation');
-      console.log('  /status           — Provider status');
-      console.log('  /history          — Show commands executed this session');
       console.log('  /run <command>    — Execute a shell command directly');
-      console.log('  /shell            — Show shell and OS info');
       console.log('  /exit             — Exit agent');
       console.log();
       break;
@@ -268,29 +269,87 @@ async function handleAgentSlashCommand(input, agent, rl, router, commandHistory,
       logger.success('Conversation cleared.');
       break;
 
-    case '/status':
-      console.log();
+    case '/model': {
+      const targetModel = parts.slice(1).join(' ').trim();
       const stats = router.getStats();
-      for (const stat of stats) {
-        const status = stat.available
-          ? chalk.hex('#34D399')('●')
-          : chalk.hex('#F87171')('●');
-        console.log(`  ${status} ${stat.name} — ${stat.successes} ok, ${stat.failures} errors`);
-      }
-      console.log();
-      break;
 
-    case '/history':
-      console.log();
-      if (commandHistory.count() === 0) {
-        logger.info('No commands executed in this session.');
-      } else {
-        console.log(chalk.hex('#A78BFA').bold('  Command History'));
+      if (!targetModel) {
+        console.log();
+        console.log(chalk.hex('#A78BFA').bold('  Available Models'));
         console.log(chalk.dim('  ───────────────────────'));
+        const activeLabel = router.getCurrentProvider().getLabel();
+        
+        for (const stat of stats) {
+          const label = `${stat.name}/${stat.model}`;
+          const isActive = label === activeLabel || stat.model === router.getCurrentProvider().model;
+          
+          if (isActive) {
+            console.log(`  ${chalk.hex('#34D399')('●')} ${chalk.bold(label)} ${chalk.hex('#34D399')('(active)')}`);
+          } else {
+            console.log(`    ${label}`);
+          }
+        }
+        console.log();
+        console.log(chalk.dim('  To switch model: /model <name>'));
+        console.log();
+      } else {
+        const success = router.setActiveProvider(targetModel);
+        if (success) {
+          logger.success(`Switched active model to: ${router.getCurrentProvider().getLabel()}`);
+        } else {
+          logger.warn(`Could not find model matching "${targetModel}". Type "/model" to see available options.`);
+        }
+      }
+      break;
+    }
+
+    case '/stats': {
+      console.log();
+      console.log(chalk.hex('#A78BFA').bold('  Session Stats'));
+      console.log(chalk.dim('  ───────────────────────'));
+      
+      const ctx = agent.getContext();
+      console.log(`  Messages:         ${ctx.getMessageCount()}`);
+      console.log(`  Estimated tokens: ~${ctx.getTokenCount().toLocaleString()}`);
+      
+      const activeP = router.getCurrentProvider();
+      console.log(`  Active model:     ${activeP.getLabel()}`);
+      
+      if (commandHistory.count() > 0) {
+        console.log();
+        console.log(chalk.hex('#A78BFA').bold('  Commands Run'));
+        console.log(chalk.dim('  ─────────────'));
         console.log(commandHistory.formatSummary());
       }
       console.log();
       break;
+    }
+
+    case '/about': {
+      const isWindows = platform() === 'win32';
+      const shell = isWindows ? 'cmd.exe' : '/bin/sh';
+      const osLabel = isWindows ? 'Windows' : platform() === 'darwin' ? 'macOS' : 'Linux';
+
+      console.log();
+      console.log(chalk.hex('#A78BFA').bold('  About MyCode'));
+      console.log(chalk.dim('  ───────────────────────'));
+      console.log(`  Version:      v${pkg.version}`);
+      console.log(`  Active model: ${router.getCurrentProvider().getLabel()}`);
+      console.log(`  OS:           ${osLabel} (${platform()})`);
+      console.log(`  Shell:        ${shell}`);
+      console.log(`  CWD:          ${cwd}`);
+
+      try {
+        const { execSync } = await import('child_process');
+        const nodeV = execSync('node -v', { encoding: 'utf-8' }).trim();
+        console.log(`  Node.js:      ${nodeV}`);
+      } catch {
+        // ignore
+      }
+
+      console.log();
+      break;
+    }
 
     case '/run': {
       const command = parts.slice(1).join(' ');
@@ -319,30 +378,6 @@ async function handleAgentSlashCommand(input, agent, rl, router, commandHistory,
         output: result.output,
       });
 
-      break;
-    }
-
-    case '/shell': {
-      const isWindows = platform() === 'win32';
-      const shell = isWindows ? 'cmd.exe' : '/bin/sh';
-      const osLabel = isWindows ? 'Windows' : platform() === 'darwin' ? 'macOS' : 'Linux';
-
-      console.log();
-      console.log(chalk.hex('#A78BFA').bold('  Shell Info'));
-      console.log(chalk.dim('  ───────────────────────'));
-      console.log(`  OS:     ${osLabel} (${platform()})`);
-      console.log(`  Shell:  ${shell}`);
-      console.log(`  CWD:    ${cwd}`);
-
-      try {
-        const { execSync } = await import('child_process');
-        const nodeV = execSync('node -v', { encoding: 'utf-8' }).trim();
-        console.log(`  Node:   ${nodeV}`);
-      } catch {
-        // ignore
-      }
-
-      console.log();
       break;
     }
 
