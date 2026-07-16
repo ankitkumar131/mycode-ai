@@ -173,7 +173,7 @@ export class AgentLoop {
         console.log();
       }
 
-      // Show usage info — always show, using estimates if needed
+      // Show usage info — compact Gemini-style footer
       const promptTokens = response.usage?.prompt_tokens;
       const completionTokens = response.usage?.completion_tokens;
       const isEstimated = response.usage?.estimated === true;
@@ -181,10 +181,7 @@ export class AgentLoop {
       const inDisplay = Number.isFinite(promptTokens) ? promptTokens : estimatePromptTokens(messages);
       const outDisplay = Number.isFinite(completionTokens) ? completionTokens : estimateTokens(response.content || '');
 
-      const prefix = (isEstimated || !Number.isFinite(promptTokens)) ? '~' : '';
-      logger.info(
-        `Tokens: ${prefix}${inDisplay.toLocaleString()} in / ${prefix}${outDisplay.toLocaleString()} out`
-      );
+      logger.tokens(inDisplay, outDisplay, isEstimated || !Number.isFinite(promptTokens));
 
       return response.content || '';
     }
@@ -419,26 +416,19 @@ export class AgentLoop {
         lastResult: result.slice(0, 2000), // Keep a truncated copy
       });
 
-      // Show completion
+      // ── Gemini-style compact tool display ──
       if (isCommand) {
-        // Command output renderer already showed everything
-      } else if (needsConfirm) {
-        console.log(
-          `${chalk.hex('#34D399')('✔')} ${chalk.hex('#38BDF8').bold(name)} ${chalk.dim('completed')}`
-        );
+        // Command output renderer already showed everything — nothing else needed
       } else {
-        toolSpinner.succeed(
-          `${chalk.hex('#38BDF8').bold(name)} ${chalk.dim('completed')}`
-        );
-      }
-
-      // Show tool result (abbreviated for non-command tools)
-      if (!isCommand) {
-        if (result.length < 500) {
-          console.log(chalk.dim(result));
-        } else {
-          console.log(chalk.dim(result.slice(0, 300) + '... (truncated)'));
+        // Stop spinner cleanly
+        if (toolSpinner) {
+          toolSpinner.stop();
         }
+
+        // Extract a useful detail string from args
+        const detail = this._getToolDetail(name, args);
+        logger.tool(name, detail);
+        logger.toolResult(name, result);
       }
 
       // Add tool result to context
@@ -447,6 +437,36 @@ export class AgentLoop {
         tool_call_id: toolCall.id,
         content: result,
       });
+    }
+  }
+
+  /**
+   * Extract a human-readable detail string from tool args.
+   * Used for Gemini-style compact tool display:
+   *   📄 Read src/index.js
+   *   ✏️ Wrote config.json
+   *   🔍 Searched "TODO" in src/
+   */
+  _getToolDetail(name, args) {
+    switch (name) {
+      case 'readFile':
+        return args.path || '';
+      case 'writeFile':
+        return args.path || '';
+      case 'editFile':
+        return args.path || args.filePath || '';
+      case 'listDirectory':
+        return args.path || args.directory || '.';
+      case 'searchFiles':
+        return args.query
+          ? `"${args.query}" in ${args.path || args.directory || '.'}`
+          : args.path || '';
+      case 'gitStatus':
+        return '';
+      case 'executeCommand':
+        return args.command || '';
+      default:
+        return JSON.stringify(args).slice(0, 60);
     }
   }
 

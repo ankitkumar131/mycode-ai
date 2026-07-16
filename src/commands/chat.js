@@ -11,6 +11,7 @@
 
 import chalk from 'chalk';
 import { createInterface } from 'readline';
+import { readFileSync } from 'fs';
 import { platform } from 'os';
 import { ProviderRouter } from '../providers/router.js';
 import { AgentLoop } from '../agent/loop.js';
@@ -19,6 +20,8 @@ import { executeCommand } from '../tools/command-executor.js';
 import { loadConfig, configExists, getProvidersSorted } from '../utils/config.js';
 import { createReadlineConfirmFns } from '../ui/prompt.js';
 import logger from '../utils/logger.js';
+
+const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
 
 export function registerChatCommand(program) {
   program
@@ -78,17 +81,19 @@ async function startRepl(options) {
   const commandHistory = new CommandHistory();
 
   // Display header
-  logger.header();
+  const firstProvider = providers[0];
+  const modelLabel = firstProvider ? `${firstProvider.name} (${firstProvider.model})` : '';
+  logger.header(pkg.version, modelLabel);
   logger.info(`Working directory: ${cwd}`);
   logger.info(`Providers: ${providers.map((p) => p.name).join(' → ')}`);
   console.log(
-    chalk.dim('  Type your message and press Enter. Use /help for commands.\n')
+    chalk.hex('#6B7280')('  Type your message and press Enter. Use /help for commands.\n')
   );
 
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: chalk.hex('#7C3AED').bold('❯ '),
+    prompt: chalk.hex('#60A5FA').bold('✦ ❯ '),
     terminal: true,
   });
 

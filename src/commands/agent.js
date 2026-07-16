@@ -12,6 +12,7 @@
 
 import chalk from 'chalk';
 import { createInterface } from 'readline';
+import { readFileSync } from 'fs';
 import { platform } from 'os';
 import { ProviderRouter } from '../providers/router.js';
 import { AgentLoop } from '../agent/loop.js';
@@ -20,6 +21,8 @@ import { executeCommand } from '../tools/command-executor.js';
 import { configExists, getProvidersSorted, loadConfig } from '../utils/config.js';
 import { createReadlineConfirmFns } from '../ui/prompt.js';
 import logger from '../utils/logger.js';
+
+const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
 
 export function registerAgentCommand(program) {
   program
@@ -57,7 +60,9 @@ async function runAgentTask(task, options) {
   const router = new ProviderRouter(providers);
   const commandHistory = new CommandHistory();
 
-  logger.header();
+  const firstProvider = providers[0];
+  const modelLabel = firstProvider ? `${firstProvider.name} (${firstProvider.model})` : '';
+  logger.header(pkg.version, modelLabel);
   logger.info(`Working directory: ${cwd}`);
   logger.info(`Task: ${task}`);
   logger.divider();
@@ -101,10 +106,12 @@ async function startAgentRepl(options) {
   const router = new ProviderRouter(providers);
   const commandHistory = new CommandHistory();
 
-  logger.header();
-  console.log(chalk.hex('#7C3AED').bold('  🤖 Agent Mode'));
-  console.log(chalk.dim('  The AI can read, write, search, and execute commands.'));
-  console.log(chalk.dim('  File writes and commands will ask for confirmation.\n'));
+  const firstProvider = providers[0];
+  const modelLabel = firstProvider ? `${firstProvider.name} (${firstProvider.model})` : '';
+  logger.header(pkg.version, modelLabel);
+  console.log(chalk.hex('#A78BFA').bold('  🤖 Agent Mode'));
+  console.log(chalk.hex('#6B7280')('  The AI can read, write, search, and execute commands.'));
+  console.log(chalk.hex('#6B7280')('  File writes and commands will ask for confirmation.\n'));
   logger.info(`Working directory: ${cwd}`);
   logger.info(`Providers: ${providers.map((p) => p.name).join(' → ')}`);
   console.log();
@@ -112,7 +119,7 @@ async function startAgentRepl(options) {
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: chalk.hex('#F59E0B').bold('🤖 ❯ '),
+    prompt: chalk.hex('#A78BFA').bold('✦ 🤖 ❯ '),
     terminal: true,
   });
 

@@ -1,38 +1,56 @@
 /**
  * Spinner / Loading Indicator
- * Shows which provider is being called and handles failover messaging.
+ * Gemini CLI-inspired: uses ✦ sparkle icon with a clean, minimal animation.
  */
 
 import ora from 'ora';
 import chalk from 'chalk';
 
+const BRAND = {
+  sparkle: '#60A5FA',
+  accent: '#A78BFA',
+  tool: '#38BDF8',
+  dim: '#6B7280',
+  warning: '#FBBF24',
+};
+
 /**
- * Create a branded spinner for provider requests.
- * @param {string} providerLabel - e.g., "OpenRouter (gpt-5)"
+ * Create a Gemini-style thinking spinner.
+ * Shows: ✦ model_name
+ * @param {string} providerLabel - e.g., "gpt-4o (OpenRouter)"
  * @returns {object} Ora spinner instance
  */
 export function createSpinner(providerLabel = '') {
   const label = providerLabel
-    ? `${chalk.hex('#A78BFA')('⚡')} Thinking with ${chalk.hex('#A78BFA').bold(providerLabel)}...`
-    : `${chalk.hex('#A78BFA')('⚡')} Thinking...`;
+    ? `${chalk.hex(BRAND.sparkle)('✦')} ${chalk.hex(BRAND.sparkle).bold(providerLabel)}`
+    : `${chalk.hex(BRAND.sparkle)('✦')} ${chalk.hex(BRAND.sparkle)('Thinking...')}`;
 
   return ora({
     text: label,
-    spinner: 'dots2',
-    color: 'magenta',
+    spinner: {
+      interval: 120,
+      frames: ['  ✦', '  ✧', '  ✦', '  ✧', '  ◆', '  ✦'],
+    },
+    color: 'blue',
+    prefixText: '',
   });
 }
 
 /**
- * Create a spinner for tool execution.
+ * Create a compact spinner for tool execution.
+ * Shows: ⬡ toolName
  * @param {string} toolName - Name of the tool being executed
  * @returns {object} Ora spinner instance
  */
 export function createToolSpinner(toolName) {
   return ora({
-    text: `${chalk.hex('#38BDF8')('🔧')} Running ${chalk.hex('#38BDF8').bold(toolName)}...`,
-    spinner: 'dots',
-    color: 'cyan',
+    text: `${chalk.hex(BRAND.accent)('⬡')} ${chalk.hex(BRAND.accent)(toolName)}`,
+    spinner: {
+      interval: 100,
+      frames: ['  ⬡', '  ⬢', '  ⬡', '  ⬢'],
+    },
+    color: 'magenta',
+    prefixText: '',
   });
 }
 
@@ -43,21 +61,26 @@ export function createToolSpinner(toolName) {
  */
 export function createSetupSpinner(message) {
   return ora({
-    text: chalk.dim(message),
-    spinner: 'line',
+    text: chalk.hex(BRAND.dim)(message),
+    spinner: 'dots',
     color: 'white',
+    prefixText: '  ',
   });
 }
 
 /**
- * Create a spinner for code generation (tool call argument streaming).
+ * Create a spinner for code generation (streaming tool call args).
  * @returns {object} Ora spinner instance
  */
 export function createCodegenSpinner() {
   return ora({
-    text: `${chalk.hex('#38BDF8')('✍')} Generating code...`,
-    spinner: 'dots2',
+    text: `${chalk.hex(BRAND.tool)('✦')} ${chalk.hex(BRAND.tool)('Generating...')}`,
+    spinner: {
+      interval: 100,
+      frames: ['  ✦', '  ✧', '  ✦', '  ✧'],
+    },
     color: 'cyan',
+    prefixText: '',
   });
 }
 
@@ -67,6 +90,6 @@ export function createCodegenSpinner() {
  * @param {string} newProvider - New provider label
  */
 export function showProviderSwitch(spinner, newProvider) {
-  spinner.text = `${chalk.hex('#FB923C')('↻')} Switching to ${chalk.hex('#FB923C').bold(newProvider)}...`;
+  spinner.text = `${chalk.hex(BRAND.warning)('↻')} ${chalk.hex(BRAND.warning)(`Switching to ${chalk.bold(newProvider)}...`)}`;
   spinner.color = 'yellow';
 }
