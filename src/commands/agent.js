@@ -218,6 +218,46 @@ async function startAgentRepl(options) {
       return;
     }
 
+    // Handle direct shell commands (e.g. !git status)
+    if (input.startsWith('!')) {
+      const command = input.slice(1).trim();
+      if (!command) {
+        rl.prompt();
+        return;
+      }
+      isProcessing = true;
+      rl.pause();
+
+      console.log();
+      logger.info(`Running: ${chalk.bold(command)}`);
+
+      executeCommand(command, {
+        cwd,
+        timeoutMs: 120_000,
+        stream: true,
+      })
+        .then((result) => {
+          commandHistory.add({
+            command,
+            cwd,
+            exitCode: result.exitCode,
+            signal: result.signal,
+            durationMs: result.durationMs,
+            status: result.status,
+            output: result.output,
+          });
+        })
+        .catch((err) => {
+          logger.error(err.message);
+        })
+        .finally(() => {
+          isProcessing = false;
+          rl.resume();
+          rl.prompt();
+        });
+      return;
+    }
+
     // Process the task
     isProcessing = true;
     rl.pause();

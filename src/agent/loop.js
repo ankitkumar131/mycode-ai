@@ -20,6 +20,7 @@ import { buildSystemPrompt } from './system-prompt.js';
 import { createSpinner, createToolSpinner, createCodegenSpinner } from '../ui/spinner.js';
 import { renderMarkdown } from '../ui/renderer.js';
 import { confirmFileWrite, confirmCommand } from '../ui/prompt.js';
+import { resolveContextReferences } from '../utils/context-resolver.js';
 import logger from '../utils/logger.js';
 import chalk from 'chalk';
 
@@ -101,7 +102,13 @@ export class AgentLoop {
    * @returns {Promise<string>} The final text response
    */
   async run(userMessage) {
-    this.context.addMessage({ role: 'user', content: userMessage });
+    const { resolvedPrompt, filesInjected } = resolveContextReferences(userMessage, this.cwd);
+
+    if (filesInjected.length > 0) {
+      logger.info(`Injected context for ${filesInjected.length} file(s): ${filesInjected.join(', ')}`);
+    }
+
+    this.context.addMessage({ role: 'user', content: resolvedPrompt });
     this._iterationCount = 0;
     this._aborted = false;
     // Reset dedup tracking for each new user message
