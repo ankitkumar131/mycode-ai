@@ -1,0 +1,94 @@
+================================================================================
+  MyCode AI — Multi-Provider AI Coding Agent for the Terminal
+================================================================================
+
+PROJECT TITLE
+-------------
+MyCode AI (package: @ankitkumar131/mycode-ai, v0.2.4)
+
+A command-line AI coding assistant that lives in your terminal. Think of it as
+a provider-agnostic alternative to Claude Code: it can chat with you, explain
+code, fix errors, edit files, and run an autonomous coding agent — all while
+letting you plug in whichever AI backend you prefer.
+
+
+WHAT PROBLEM IT SOLVES
+----------------------
+Most AI coding tools lock you into a single provider. If that provider hits a
+rate limit, goes down, or you run out of credits, your workflow stops. MyCode
+AI removes that single point of failure by supporting multiple providers at
+once and automatically failing over to a backup when the primary one fails.
+
+
+KEY FEATURES
+------------
+1. Multi-Provider Support
+   Works with OpenRouter, NVIDIA NIM, Ollama (local/free), OpenAI, and any
+   OpenAI-compatible endpoint.
+
+2. Automatic Failover (the headline feature)
+   Providers are assigned priorities. If the top-priority provider fails
+   (rate limit, server error, auth issue), MyCode seamlessly switches to the
+   next one and notifies you in the terminal.
+
+3. Interactive Chat
+   "mycode chat" gives you a conversational assistant with tool access so it
+   can read files, search your project, and run commands (with confirmation).
+
+4. Autonomous Agent
+   "mycode agent" can read and understand a codebase, write/edit files, search
+   across the project, execute shell commands, and use git to track changes.
+
+5. Focused Utilities
+   - mycode explain <file>  : get an AI explanation of any file
+   - mycode fix <file|error>: AI-powered error diagnosis and fixing
+   - mycode edit <file> "instruction": apply AI-powered edits to a file
+
+6. Safety First
+   - File writes require confirmation and show a diff preview
+   - Command execution requires confirmation
+   - Dangerous commands (e.g. rm -rf /) are blocked
+   - A --yes flag is available to auto-approve for experienced users
+
+7. Project Instructions
+   Add a MYCODE.md file to your project root (like Claude's CLAUDE.md) to give
+   the AI project-specific guidance.
+
+
+HOW IT IS ORGANIZED
+-------------------
+- bin/mycode.js        : CLI entry point (the "mycode" command)
+- src/                 : Core source code (providers, agent, tools, config)
+- tests/               : Test suite (run with: node --test tests/*.test.js)
+- package.json         : Project metadata, dependencies, and scripts
+- README.md            : Full usage documentation
+
+Dependencies include: chalk (colored output), commander (CLI parsing),
+diff (diff previews), glob (file search), inquirer (prompts), marked +
+marked-terminal (rendering markdown in the terminal), ollama and openai
+(provider SDKs), ora (spinners), and tree-kill (process management).
+
+
+QUICK START
+-----------
+    npm install -g @ankitkumar131/mycode-ai   # install globally
+    mycode init                               # configure your AI providers
+    mycode chat                               # start coding with AI
+
+Configuration is stored at ~/.mycode/settings.json and can be managed with:
+    mycode config list     # view providers
+    mycode config test     # test connections
+    mycode config remove   # remove a provider
+    mycode config path     # show config file path
+
+
+REQUIREMENTS
+------------
+- Node.js >= 18.0.0
+- One or more configured AI providers (Ollama is free and runs locally)
+
+
+LICENSE
+-------
+MIT
+================================================================================
