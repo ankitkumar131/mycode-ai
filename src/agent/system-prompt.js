@@ -2,17 +2,23 @@
  * System Prompt Builder
  * Constructs the system prompt for the AI agent, including context about
  * the current project, available tools, and user instructions.
+ *
+ * Enhanced with:
+ * - Command execution best practices (timeouts, exit codes, stderr)
+ * - OS/shell awareness
+ * - Command history context (what was already run this session)
  */
 
 import { existsSync, readFileSync, statSync, readdirSync } from 'fs';
 import { join, relative } from 'path';
 import { execSync } from 'child_process';
+import { platform } from 'os';
 import { getToolNames } from '../tools/registry.js';
 
 /**
  * Build the full system prompt for the AI agent.
  * @param {string} cwd - Current working directory
- * @param {object} options - { mode: 'chat'|'agent'|'explain'|'fix'|'edit' }
+ * @param {object} options - { mode, commandHistory }
  * @returns {string} The complete system prompt
  */
 export function buildSystemPrompt(cwd, options = {}) {
@@ -25,7 +31,11 @@ export function buildSystemPrompt(cwd, options = {}) {
   // Tool usage instructions (only for agent/chat modes)
   if (mode === 'agent' || mode === 'chat') {
     parts.push(getToolInstructions());
+    parts.push(getCommandExecutionGuide());
   }
+
+  // OS and shell context
+  parts.push(getEnvironmentContext());
 
   // Project context
   parts.push(getProjectContext(cwd));
@@ -40,6 +50,14 @@ export function buildSystemPrompt(cwd, options = {}) {
   const gitContext = getGitContext(cwd);
   if (gitContext) {
     parts.push(gitContext);
+  }
+
+  // Command history (if available)
+  if (options.commandHistory) {
+    const historyContext = options.commandHistory.getContextSummary(10);
+    if (historyContext) {
+      parts.push(historyContext);
+    }
   }
 
   return parts.join('\n\n');
@@ -93,6 +111,59 @@ IMPORTANT:
 - When writing new files with writeFile, include the COMPLETE file content in a single call — do NOT split across multiple calls
 - Show the user what you changed and why after the work is done
 - After making changes, verify they work (run tests, check syntax)`;
+}
+
+/**
+ * Guide the AI on best practices for command execution.
+ */
+function getCommandExecutionGuide() {
+  return `## Command Execution Guide
+
+When using the executeCommand tool:
+
+**Timeouts:**
+- Quick commands (git status, ls, echo): use timeout=15
+- Normal commands (git commit, node script.js): use default (no timeout param needed, 120s)
+- Long commands (npm install, builds, test suites): use timeout=300 or timeout=0 for unlimited
+- The system has smart defaults, so you usually don't need to set timeout explicitly
+
+**Exit codes and stderr:**
+- Always check the exit code in the result. Exit code 0 = success, non-zero = failure.
+- stderr output doesn't always mean an error — many tools (npm, git) write progress info to stderr.
+- If a command fails, read the error output carefully before retrying or trying a different approach.
+
+**Best practices:**
+- Run one command at a time rather than chaining with && (easier to diagnose failures)
+- Check if a tool/binary exists before running complex commands (e.g., \`node -v\`, \`git --version\`)
+- Avoid re-running commands that already succeeded in this session (check command history above)
+- Use relative paths when possible for portability
+- For npm/yarn/pnpm installs, the timeout is auto-extended — no need to set timeout=0`;
+}
+
+/**
+ * OS and shell context so the AI knows what commands are available.
+ */
+function getEnvironmentContext() {
+  const os = platform();
+  const isWindows = os === 'win32';
+
+  let nodeVersion = 'unknown';
+  try {
+    nodeVersion = execSync('node -v', { encoding: 'utf-8', timeout: 5000 }).trim();
+  } catch {
+    // ignore
+  }
+
+  const shell = isWindows ? 'cmd.exe' : '/bin/sh';
+  const osLabel = isWindows ? 'Windows' : os === 'darwin' ? 'macOS' : 'Linux';
+
+  return `## Environment
+- OS: ${osLabel} (${os})
+- Shell: ${shell}
+- Node.js: ${nodeVersion}
+${isWindows
+    ? '- Use Windows commands: dir (not ls), type (not cat), del (not rm), echo %VAR% (not $VAR)'
+    : '- Use Unix commands: ls, cat, rm, echo $VAR'}`;
 }
 
 function getProjectContext(cwd) {

@@ -1,11 +1,45 @@
 /**
  * Confirmation Prompts
  * Interactive confirmation dialogs for file writes and command execution.
+ * Enhanced with color-coded safety banners and "always allow" session memory.
  */
 
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { renderDiff } from './renderer.js';
+import { platform } from 'os';
+
+// ── Session-level "always allow" memory (not persisted across runs) ──────────
+
+const _alwaysAllowed = new Set();
+
+/**
+ * Check if a command pattern is in the "always allow" list.
+ * @param {string} command
+ * @returns {boolean}
+ */
+function isAlwaysAllowed(command) {
+  const base = command.split(' ')[0].toLowerCase();
+  return _alwaysAllowed.has(base) || _alwaysAllowed.has(command.toLowerCase());
+}
+
+/**
+ * Add a command pattern to the "always allow" list.
+ * @param {string} command
+ */
+function addAlwaysAllow(command) {
+  const base = command.split(' ')[0].toLowerCase();
+  _alwaysAllowed.add(base);
+}
+
+// ── Safety level colors and labels ──────────────────────────────────────────
+
+const SAFETY_COLORS = {
+  blocked:   { bg: '#7F1D1D', fg: '#FCA5A5', icon: '🚫', label: 'BLOCKED' },
+  dangerous: { bg: '#7F1D1D', fg: '#FCA5A5', icon: '⛔', label: 'DANGEROUS' },
+  elevated:  { bg: '#78350F', fg: '#FDE68A', icon: '⚠️',  label: 'ELEVATED' },
+  normal:    { bg: '#1E3A5F', fg: '#93C5FD', icon: '✔',  label: 'NORMAL' },
+};
 
 /**
  * Ask for confirmation before writing a file.
@@ -40,31 +74,98 @@ export async function confirmFileWrite(filePath, diffText = null) {
 
 /**
  * Ask for confirmation before executing a shell command.
+ * Enhanced with color-coded safety banners and "always allow" option.
+ *
  * @param {string} command - The command to execute
  * @param {string} cwd - Working directory
+ * @param {import('../tools/command-safety.js').SafetyResult} [safety] - Safety classification
  * @returns {Promise<boolean>} Whether the user confirmed
  */
-export async function confirmCommand(command, cwd) {
-  console.log();
-  console.log(
-    chalk.hex('#F87171')('⚠ Command execution requested:')
-  );
-  console.log(
-    chalk.hex('#1E293B').bgHex('#E2E8F0')(` $ ${command} `)
-  );
-  console.log(chalk.dim(`  in: ${cwd}`));
+export async function confirmCommand(command, cwd, safety = null) {
+  const level = safety?.level || 'normal';
+  const colors = SAFETY_COLORS[level] || SAFETY_COLORS.normal;
+
+  // Check "always allow" first (only for normal/elevated commands)
+  if ((level === 'normal' || level === 'elevated') && isAlwaysAllowed(command)) {
+    return true;
+  }
+
   console.log();
 
-  const { confirmed } = await inquirer.prompt([
+  // ── Safety banner ──
+  if (level === 'dangerous') {
+    console.log(
+      chalk.bgHex(colors.bg).hex(colors.fg).bold(` ${colors.icon} ${colors.label} `) +
+      chalk.hex(colors.fg)(` ${safety.reason}`)
+    );
+    console.log(
+      chalk.hex('#F87171')('  This command may cause irreversible changes.')
+    );
+  } else if (level === 'elevated') {
+    console.log(
+      chalk.bgHex(colors.bg).hex(colors.fg).bold(` ${colors.icon} ${colors.label} `) +
+      chalk.hex(colors.fg)(` ${safety.reason}`)
+    );
+  }
+
+  // ── Command display ──
+  console.log();
+  console.log(
+    chalk.hex('#475569')('  ┌─ ') +
+    chalk.hex('#E2E8F0').bold(`$ ${command}`)
+  );
+  console.log(
+    chalk.hex('#475569')('  └─ ') +
+    chalk.dim(`cwd: ${cwd}`)
+  );
+
+  // ── Warnings ──
+  if (safety?.warnings?.length > 0) {
+    console.log();
+    for (const warning of safety.warnings) {
+      console.log(chalk.hex('#FBBF24')(`  ⚠ ${warning}`));
+    }
+  }
+
+  console.log();
+
+  // ── Prompt ──
+  // For dangerous commands: default to NO, no "always allow"
+  if (level === 'dangerous') {
+    const { confirmed } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirmed',
+        message: chalk.hex('#F87171').bold('Execute this DANGEROUS command?'),
+        default: false,
+      },
+    ]);
+    return confirmed;
+  }
+
+  // For normal/elevated: offer "always allow" option
+  const { action } = await inquirer.prompt([
     {
-      type: 'confirm',
-      name: 'confirmed',
-      message: chalk.hex('#F87171')('Execute this command?'),
-      default: false, // Default to NO for safety
+      type: 'list',
+      name: 'action',
+      message: chalk.hex('#38BDF8')('Execute this command?'),
+      choices: [
+        { name: chalk.hex('#34D399')('Yes — execute once'), value: 'yes' },
+        {
+          name: chalk.hex('#34D399')(`Yes, always allow "${command.split(' ')[0]}" this session`),
+          value: 'always',
+        },
+        { name: chalk.hex('#F87171')('No — skip'), value: 'no' },
+      ],
     },
   ]);
 
-  return confirmed;
+  if (action === 'always') {
+    addAlwaysAllow(command);
+    return true;
+  }
+
+  return action === 'yes';
 }
 
 /**
@@ -154,12 +255,10 @@ export function createReadlineConfirmFns(rl) {
   function askYesNo(question, defaultYes = true) {
     const hint = defaultYes ? 'Y/n' : 'y/N';
     return new Promise((resolve) => {
-      // Explicitly resume readline — it may be paused by the chat REPL
       rl.resume();
       rl.question(
         chalk.hex('#FBBF24')(`${question} (${hint}) `),
         (answer) => {
-          // Pause again so the chat REPL's line handler doesn't fire
           rl.pause();
           const trimmed = answer.trim().toLowerCase();
           if (trimmed === '') {
@@ -188,17 +287,54 @@ export function createReadlineConfirmFns(rl) {
     return askYesNo('Apply this change?', true);
   }
 
-  async function rlConfirmCommand(command, cwd) {
+  async function rlConfirmCommand(command, cwd, safety = null) {
+    const level = safety?.level || 'normal';
+    const colors = SAFETY_COLORS[level] || SAFETY_COLORS.normal;
+
+    // Check "always allow" (only for normal/elevated)
+    if ((level === 'normal' || level === 'elevated') && isAlwaysAllowed(command)) {
+      return true;
+    }
+
+    console.log();
+
+    // Safety banner
+    if (level === 'dangerous') {
+      console.log(
+        chalk.bgHex(colors.bg).hex(colors.fg).bold(` ${colors.icon} ${colors.label} `) +
+        chalk.hex(colors.fg)(` ${safety.reason}`)
+      );
+      console.log(chalk.hex('#F87171')('  This command may cause irreversible changes.'));
+    } else if (level === 'elevated') {
+      console.log(
+        chalk.bgHex(colors.bg).hex(colors.fg).bold(` ${colors.icon} ${colors.label} `) +
+        chalk.hex(colors.fg)(` ${safety.reason}`)
+      );
+    }
+
+    // Command display
     console.log();
     console.log(
-      chalk.hex('#F87171')('⚠ Command execution requested:')
+      chalk.hex('#475569')('  ┌─ ') +
+      chalk.hex('#E2E8F0').bold(`$ ${command}`)
     );
     console.log(
-      chalk.hex('#1E293B').bgHex('#E2E8F0')(` $ ${command} `)
+      chalk.hex('#475569')('  └─ ') +
+      chalk.dim(`cwd: ${cwd}`)
     );
-    console.log(chalk.dim(`  in: ${cwd}`));
+
+    // Warnings
+    if (safety?.warnings?.length > 0) {
+      console.log();
+      for (const warning of safety.warnings) {
+        console.log(chalk.hex('#FBBF24')(`  ⚠ ${warning}`));
+      }
+    }
+
     console.log();
-    return askYesNo('Execute this command?', false);
+
+    const defaultYes = level !== 'dangerous';
+    return askYesNo('Execute this command?', defaultYes);
   }
 
   return {

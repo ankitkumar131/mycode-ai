@@ -1,12 +1,21 @@
 /**
  * Command: mycode chat
  * Interactive REPL-style conversation with the AI.
+ *
+ * Enhanced with:
+ * - /history — show commands executed this session
+ * - /run <command> — execute a shell command directly (bypass AI)
+ * - /shell — show current shell info
+ * - CommandHistory integration
  */
 
 import chalk from 'chalk';
 import { createInterface } from 'readline';
+import { platform } from 'os';
 import { ProviderRouter } from '../providers/router.js';
 import { AgentLoop } from '../agent/loop.js';
+import { CommandHistory } from '../tools/command-history.js';
+import { executeCommand } from '../tools/command-executor.js';
 import { loadConfig, configExists, getProvidersSorted } from '../utils/config.js';
 import { createReadlineConfirmFns } from '../ui/prompt.js';
 import logger from '../utils/logger.js';
@@ -65,6 +74,9 @@ async function startRepl(options) {
   const router = new ProviderRouter(providers);
   const cwd = process.cwd();
 
+  // Create shared command history for this session
+  const commandHistory = new CommandHistory();
+
   // Display header
   logger.header();
   logger.info(`Working directory: ${cwd}`);
@@ -90,6 +102,8 @@ async function startRepl(options) {
     confirmCommands: !options.noExec && config.preferences.confirm_commands,
     // Pass the readline-based confirm functions
     rlConfirmFns,
+    // Pass command history
+    commandHistory,
   });
 
   // Track whether we're currently processing to ignore input during processing
@@ -98,7 +112,7 @@ async function startRepl(options) {
   // Handle Ctrl+C gracefully
   rl.on('SIGINT', () => {
     if (isProcessing) {
-      // Abort current agent loop
+      // Abort current agent loop (which forwards to running commands)
       agent.abort();
       isProcessing = false;
       console.log();
@@ -129,7 +143,7 @@ async function startRepl(options) {
 
     // Handle slash commands
     if (input.startsWith('/')) {
-      handleSlashCommand(input, agent, rl, router)
+      handleSlashCommand(input, agent, rl, router, commandHistory, cwd)
         .then(() => rl.prompt())
         .catch((err) => {
           logger.error(err.message);
@@ -166,7 +180,7 @@ async function startRepl(options) {
 /**
  * Handle REPL slash commands.
  */
-async function handleSlashCommand(input, agent, rl, router) {
+async function handleSlashCommand(input, agent, rl, router, commandHistory, cwd) {
   const parts = input.split(' ');
   const cmd = parts[0].toLowerCase();
 
@@ -175,12 +189,15 @@ async function handleSlashCommand(input, agent, rl, router) {
       console.log();
       console.log(chalk.hex('#A78BFA').bold('  Chat Commands'));
       console.log(chalk.dim('  ───────────────────────'));
-      console.log('  /help       — Show this help');
-      console.log('  /clear      — Clear conversation history');
-      console.log('  /status     — Show provider status');
-      console.log('  /providers  — List configured providers');
-      console.log('  /tokens     — Show token usage');
-      console.log('  /exit       — Exit chat');
+      console.log('  /help             — Show this help');
+      console.log('  /clear            — Clear conversation history');
+      console.log('  /status           — Show provider status');
+      console.log('  /providers        — List configured providers');
+      console.log('  /tokens           — Show token usage');
+      console.log('  /history          — Show commands executed this session');
+      console.log('  /run <command>    — Execute a shell command directly');
+      console.log('  /shell            — Show shell and OS info');
+      console.log('  /exit             — Exit chat');
       console.log();
       break;
 
@@ -221,6 +238,74 @@ async function handleSlashCommand(input, agent, rl, router) {
         `Messages: ${ctx.getMessageCount()} | Estimated tokens: ~${ctx.getTokenCount().toLocaleString()}`
       );
       break;
+
+    case '/history':
+      console.log();
+      if (commandHistory.count() === 0) {
+        logger.info('No commands executed in this session.');
+      } else {
+        console.log(chalk.hex('#A78BFA').bold('  Command History'));
+        console.log(chalk.dim('  ───────────────────────'));
+        console.log(commandHistory.formatSummary());
+      }
+      console.log();
+      break;
+
+    case '/run': {
+      const command = parts.slice(1).join(' ');
+      if (!command) {
+        logger.warn('Usage: /run <command>');
+        logger.info('Example: /run git status');
+        break;
+      }
+
+      console.log();
+      logger.info(`Running: ${chalk.bold(command)}`);
+
+      // Execute directly — bypass AI, no confirmation needed
+      const result = await executeCommand(command, {
+        cwd,
+        timeoutMs: 120_000,
+        stream: true,
+      });
+
+      // Record in history
+      commandHistory.add({
+        command,
+        cwd,
+        exitCode: result.exitCode,
+        signal: result.signal,
+        durationMs: result.durationMs,
+        status: result.status,
+        output: result.output,
+      });
+
+      break;
+    }
+
+    case '/shell': {
+      const isWindows = platform() === 'win32';
+      const shell = isWindows ? 'cmd.exe' : '/bin/sh';
+      const osLabel = isWindows ? 'Windows' : platform() === 'darwin' ? 'macOS' : 'Linux';
+
+      console.log();
+      console.log(chalk.hex('#A78BFA').bold('  Shell Info'));
+      console.log(chalk.dim('  ───────────────────────'));
+      console.log(`  OS:     ${osLabel} (${platform()})`);
+      console.log(`  Shell:  ${shell}`);
+      console.log(`  CWD:    ${cwd}`);
+
+      try {
+        const { execSync } = await import('child_process');
+        const nodeV = execSync('node -v', { encoding: 'utf-8' }).trim();
+        console.log(`  Node:   ${nodeV}`);
+      } catch {
+        // ignore
+      }
+
+      console.log();
+      break;
+    }
 
     case '/exit':
     case '/quit':

@@ -4,6 +4,12 @@
  * Implements the Observe → Reason → Act → Feedback cycle.
  * The agent iterates: sends messages to the AI, executes tool calls,
  * feeds results back, and repeats until the task is complete.
+ *
+ * Enhanced for production-grade command execution:
+ * - No spinner during command streaming (output takes over the terminal)
+ * - Ctrl+C forwarding to running commands via AbortController
+ * - CommandHistory integration for tracking executed commands
+ * - Structured result handling from the command executor
  */
 
 import { getToolDefinitions, executeTool, isWriteTool } from '../tools/registry.js';
@@ -37,7 +43,7 @@ export class AgentLoop {
   /**
    * @param {ProviderRouter} router - The provider router for AI requests
    * @param {string} cwd - Current working directory
-   * @param {object} options - { mode, confirmWrites, confirmCommands, rlConfirmFns }
+   * @param {object} options - { mode, confirmWrites, confirmCommands, rlConfirmFns, commandHistory }
    */
   constructor(router, cwd, options = {}) {
     this.router = router;
@@ -50,11 +56,22 @@ export class AgentLoop {
     // Store readline-based confirm functions if provided (for chat REPL)
     this._rlConfirmFns = options.rlConfirmFns || null;
 
+    // Command history for tracking executed commands
+    this._commandHistory = options.commandHistory || null;
+
     this.context = new ConversationContext();
-    this.context.setSystemPrompt(buildSystemPrompt(cwd, { mode: this.mode }));
+    this.context.setSystemPrompt(
+      buildSystemPrompt(cwd, {
+        mode: this.mode,
+        commandHistory: this._commandHistory,
+      })
+    );
 
     this._iterationCount = 0;
     this._aborted = false;
+
+    // AbortController for forwarding Ctrl+C to running commands
+    this._currentAbortController = null;
   }
 
   /**
@@ -240,6 +257,8 @@ export class AgentLoop {
 
   /**
    * Execute tool calls requested by the AI.
+   * Enhanced: handles executeCommand specially — no spinner during streaming,
+   * Ctrl+C forwarding, and CommandHistory integration.
    */
   async _handleToolCalls(toolCalls) {
     for (const toolCall of toolCalls) {
@@ -253,6 +272,8 @@ export class AgentLoop {
         logger.warn(`Failed to parse tool arguments for ${name}`);
       }
 
+      const isCommand = name === 'executeCommand';
+
       // Determine if this tool needs user confirmation
       const toolOptions = {};
       let needsConfirm = false;
@@ -265,7 +286,7 @@ export class AgentLoop {
             : confirmFileWrite;
           toolOptions.confirmFn = baseFn;
         }
-        if (this.confirmCommands && name === 'executeCommand') {
+        if (this.confirmCommands && isCommand) {
           needsConfirm = true;
           const baseFn = this._rlConfirmFns
             ? this._rlConfirmFns.confirmCommand
@@ -274,23 +295,41 @@ export class AgentLoop {
         }
       }
 
-      // Start spinner
-      const toolSpinner = createToolSpinner(name);
-      toolSpinner.start();
+      // Pass command history for executeCommand
+      if (isCommand && this._commandHistory) {
+        toolOptions.commandHistory = this._commandHistory;
+      }
+
+      // Create an AbortController for Ctrl+C forwarding during command execution
+      if (isCommand) {
+        this._currentAbortController = new AbortController();
+        toolOptions.abortSignal = this._currentAbortController.signal;
+      }
+
+      // Start spinner — but NOT for executeCommand (its own output renderer takes over)
+      let toolSpinner = null;
+      if (!isCommand) {
+        toolSpinner = createToolSpinner(name);
+        toolSpinner.start();
+      }
 
       // CRITICAL: Stop the spinner BEFORE any tool that needs user confirmation.
-      // Ora's animation loop writes ANSI escape codes that overwrite the terminal line,
-      // making it impossible to see or respond to confirmation prompts.
-      // This is how Claude Code, Gemini CLI, etc. handle it — all animations stop
-      // before interactive prompts.
-      if (needsConfirm) {
+      if (needsConfirm && toolSpinner) {
         toolSpinner.stop();
       }
 
       const result = await executeTool(name, args, this.cwd, toolOptions);
 
+      // Clean up abort controller
+      if (isCommand) {
+        this._currentAbortController = null;
+      }
+
       // Show completion
-      if (needsConfirm) {
+      if (isCommand) {
+        // Command output renderer already showed everything — just a subtle log
+        // (no spinner to stop/succeed)
+      } else if (needsConfirm) {
         // Spinner was already stopped; just log the result
         console.log(
           `${chalk.hex('#34D399')('✔')} ${chalk.hex('#38BDF8').bold(name)} ${chalk.dim('completed')}`
@@ -301,11 +340,13 @@ export class AgentLoop {
         );
       }
 
-      // Show tool result
-      if (result.length < 500) {
-        console.log(chalk.dim(result));
-      } else {
-        console.log(chalk.dim(result.slice(0, 300) + '... (truncated)'));
+      // Show tool result (abbreviated for non-command tools)
+      if (!isCommand) {
+        if (result.length < 500) {
+          console.log(chalk.dim(result));
+        } else {
+          console.log(chalk.dim(result.slice(0, 300) + '... (truncated)'));
+        }
       }
 
       // Add tool result to context
@@ -319,8 +360,14 @@ export class AgentLoop {
 
   /**
    * Abort the current loop.
+   * If a command is running, forward the abort to it first.
    */
   abort() {
+    // If a command is currently running, abort it
+    if (this._currentAbortController) {
+      this._currentAbortController.abort();
+      this._currentAbortController = null;
+    }
     this._aborted = true;
   }
 
@@ -329,5 +376,12 @@ export class AgentLoop {
    */
   getContext() {
     return this.context;
+  }
+
+  /**
+   * Get the command history instance (if available).
+   */
+  getCommandHistory() {
+    return this._commandHistory;
   }
 }
