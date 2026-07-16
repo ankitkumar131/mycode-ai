@@ -10,6 +10,8 @@
  * - Ctrl+C forwarding to running commands via AbortController
  * - CommandHistory integration for tracking executed commands
  * - Structured result handling from the command executor
+ * - Tool call deduplication (prevents AI from running same command twice)
+ * - Failed command retry limiting (max 2 retries for identical commands)
  */
 
 import { getToolDefinitions, executeTool, isWriteTool } from '../tools/registry.js';
@@ -22,6 +24,7 @@ import logger from '../utils/logger.js';
 import chalk from 'chalk';
 
 const MAX_ITERATIONS = 25; // Safety limit to prevent infinite loops
+const MAX_IDENTICAL_RETRIES = 2; // Max times the same failing command can be retried
 
 function estimateTokens(text) {
   if (!text) return 0;
@@ -37,6 +40,19 @@ function estimatePromptTokens(messages) {
 
     return total + 4 + estimateTokens(message.role) + estimateTokens(content);
   }, 0);
+}
+
+/**
+ * Create a dedup key for a tool call (tool name + sorted args).
+ */
+function makeToolCallKey(name, args) {
+  try {
+    // Normalize args to a deterministic string
+    const sortedArgs = JSON.stringify(args, Object.keys(args).sort());
+    return `${name}::${sortedArgs}`;
+  } catch {
+    return `${name}::${JSON.stringify(args)}`;
+  }
 }
 
 export class AgentLoop {
@@ -72,6 +88,11 @@ export class AgentLoop {
 
     // AbortController for forwarding Ctrl+C to running commands
     this._currentAbortController = null;
+
+    // ── Deduplication state ──
+    // Tracks tool calls executed in the current run() to detect duplicates
+    // Key: makeToolCallKey(name, args) → { count, lastResult }
+    this._executedToolCalls = new Map();
   }
 
   /**
@@ -83,6 +104,8 @@ export class AgentLoop {
     this.context.addMessage({ role: 'user', content: userMessage });
     this._iterationCount = 0;
     this._aborted = false;
+    // Reset dedup tracking for each new user message
+    this._executedToolCalls.clear();
 
     return this._loop();
   }
@@ -116,6 +139,12 @@ export class AgentLoop {
         spinner.fail(err.message);
         logger.error(err.message);
         return `Error: ${err.message}`;
+      }
+
+      // ── Deduplicate tool calls within the same response ──
+      // Some AI providers return duplicate tool calls in a single response.
+      if (response.tool_calls && response.tool_calls.length > 1) {
+        response.tool_calls = this._deduplicateToolCalls(response.tool_calls);
       }
 
       // Add assistant response to context
@@ -166,6 +195,27 @@ export class AgentLoop {
     }
 
     return '';
+  }
+
+  /**
+   * Deduplicate tool calls within a single AI response.
+   * Some providers (especially free-tier ones) return the same tool call 2+ times.
+   */
+  _deduplicateToolCalls(toolCalls) {
+    const seen = new Set();
+    const unique = [];
+
+    for (const tc of toolCalls) {
+      const key = `${tc.function.name}::${tc.function.arguments}`;
+      if (seen.has(key)) {
+        logger.warn(`Skipping duplicate tool call: ${tc.function.name}`);
+        continue;
+      }
+      seen.add(key);
+      unique.push(tc);
+    }
+
+    return unique;
   }
 
   /**
@@ -258,7 +308,7 @@ export class AgentLoop {
   /**
    * Execute tool calls requested by the AI.
    * Enhanced: handles executeCommand specially — no spinner during streaming,
-   * Ctrl+C forwarding, and CommandHistory integration.
+   * Ctrl+C forwarding, CommandHistory integration, and deduplication.
    */
   async _handleToolCalls(toolCalls) {
     for (const toolCall of toolCalls) {
@@ -270,6 +320,38 @@ export class AgentLoop {
       } catch {
         args = {};
         logger.warn(`Failed to parse tool arguments for ${name}`);
+      }
+
+      // ── Cross-iteration deduplication ──
+      // Prevent the AI from running the exact same tool call across loop iterations.
+      const toolKey = makeToolCallKey(name, args);
+      const existing = this._executedToolCalls.get(toolKey);
+
+      if (existing) {
+        // For commands that already succeeded, return the cached result
+        if (existing.succeeded) {
+          logger.warn(`Skipping repeated tool call: ${name} (already succeeded)`);
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: existing.lastResult +
+              '\n\n⚠️ NOTE: This is a cached result. This exact tool call already succeeded earlier. Do NOT re-run it.',
+          });
+          continue;
+        }
+
+        // For commands that already failed, limit retries
+        if (existing.count >= MAX_IDENTICAL_RETRIES) {
+          logger.warn(`Blocking repeated failing tool call: ${name} (failed ${existing.count} times)`);
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: `⚠️ BLOCKED: This exact command has already failed ${existing.count} times. ` +
+              `Do NOT retry the same command. Try a DIFFERENT approach instead.\n\n` +
+              `Last error:\n${existing.lastResult}`,
+          });
+          continue;
+        }
       }
 
       const isCommand = name === 'executeCommand';
@@ -325,12 +407,22 @@ export class AgentLoop {
         this._currentAbortController = null;
       }
 
+      // ── Track this tool call for deduplication ──
+      const succeeded = isCommand
+        ? result.includes('Completed successfully') || result.includes('✔')
+        : !result.startsWith('Error');
+
+      const prev = this._executedToolCalls.get(toolKey);
+      this._executedToolCalls.set(toolKey, {
+        count: (prev?.count || 0) + 1,
+        succeeded,
+        lastResult: result.slice(0, 2000), // Keep a truncated copy
+      });
+
       // Show completion
       if (isCommand) {
-        // Command output renderer already showed everything — just a subtle log
-        // (no spinner to stop/succeed)
+        // Command output renderer already showed everything
       } else if (needsConfirm) {
-        // Spinner was already stopped; just log the result
         console.log(
           `${chalk.hex('#34D399')('✔')} ${chalk.hex('#38BDF8').bold(name)} ${chalk.dim('completed')}`
         );
@@ -363,7 +455,6 @@ export class AgentLoop {
    * If a command is running, forward the abort to it first.
    */
   abort() {
-    // If a command is currently running, abort it
     if (this._currentAbortController) {
       this._currentAbortController.abort();
       this._currentAbortController = null;

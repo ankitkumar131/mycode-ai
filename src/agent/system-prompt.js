@@ -110,34 +110,66 @@ IMPORTANT:
 - Keep pre-change commentary short and avoid long planning when the request is clear
 - When writing new files with writeFile, include the COMPLETE file content in a single call — do NOT split across multiple calls
 - Show the user what you changed and why after the work is done
-- After making changes, verify they work (run tests, check syntax)`;
+- After making changes, verify they work (run tests, check syntax)
+
+**Prefer built-in tools over executeCommand:**
+- To read a file → use readFile (NOT "type file.txt" or "cat file")
+- To list files → use listDirectory (NOT "dir" or "ls")
+- To search code → use searchFiles (NOT "grep" or "findstr")
+- To check git → use gitStatus (NOT "git status")
+- Only use executeCommand for things the built-in tools CANNOT do (npm install, builds, tests, running scripts)`;
 }
 
 /**
  * Guide the AI on best practices for command execution.
  */
 function getCommandExecutionGuide() {
+  const isWindows = platform() === 'win32';
+
+  const windowsRules = `
+**⚠️ CRITICAL — Windows cmd.exe Rules (YOU MUST FOLLOW THESE):**
+- The shell is cmd.exe, NOT bash/sh. Unix commands DO NOT WORK.
+- DO NOT use: tail, head, grep, awk, sed, wc, xargs, tee, tr — these do not exist on Windows
+- DO NOT use semicolons (;) to chain commands — cmd.exe does not support semicolons
+- DO NOT use Unix-style redirections like 2>&1 | command — use separate commands instead
+- DO NOT use $() or backticks for command substitution — they don't work in cmd.exe
+- DO NOT use single quotes — cmd.exe only understands double quotes
+- Use && to chain commands (not ;)
+- Use "dir" instead of "ls", "type" instead of "cat", "del" instead of "rm"
+- Use "echo %VAR%" instead of "echo $VAR" for environment variables
+- Use "where" instead of "which" to find executables
+- Use "findstr" instead of "grep" for text search
+- Run ONE simple command at a time — do NOT chain 3+ commands together
+
+**WRONG (will fail):**
+- \`where python 2>nul || echo "no python"; node -e "console.log('ok')"\` ← semicolons don't work
+- \`npm install 2>&1 | tail -5\` ← tail doesn't exist on Windows
+- \`echo $(node -v)\` ← command substitution doesn't work in cmd.exe
+
+**RIGHT:**
+- \`where python\` (one command at a time)
+- \`npm install\` (simple, no piping)
+- \`node -v\` (direct execution)`;
+
+  const unixRules = `
+**Shell: /bin/sh (Unix)**
+- Standard Unix commands are available (ls, cat, grep, awk, sed, etc.)
+- Use && or ; to chain commands
+- Use $() for command substitution`;
+
   return `## Command Execution Guide
 
 When using the executeCommand tool:
+${isWindows ? windowsRules : unixRules}
 
-**Timeouts:**
-- Quick commands (git status, ls, echo): use timeout=15
-- Normal commands (git commit, node script.js): use default (no timeout param needed, 120s)
-- Long commands (npm install, builds, test suites): use timeout=300 or timeout=0 for unlimited
-- The system has smart defaults, so you usually don't need to set timeout explicitly
-
-**Exit codes and stderr:**
-- Always check the exit code in the result. Exit code 0 = success, non-zero = failure.
-- stderr output doesn't always mean an error — many tools (npm, git) write progress info to stderr.
-- If a command fails, read the error output carefully before retrying or trying a different approach.
-
-**Best practices:**
-- Run one command at a time rather than chaining with && (easier to diagnose failures)
-- Check if a tool/binary exists before running complex commands (e.g., \`node -v\`, \`git --version\`)
-- Avoid re-running commands that already succeeded in this session (check command history above)
-- Use relative paths when possible for portability
-- For npm/yarn/pnpm installs, the timeout is auto-extended — no need to set timeout=0`;
+**General Rules (ALL platforms):**
+- Run ONE command at a time — it's easier to diagnose failures
+- NEVER retry the same failing command — try a different approach instead
+- If a command fails, read the error carefully and adapt
+- Check exit codes: 0 = success, non-zero = failure
+- stderr doesn't always mean error — npm/git write progress to stderr
+- For npm/yarn installs, use timeout=300 (the system auto-extends too)
+- Prefer built-in tools (readFile, listDirectory, searchFiles) over shell commands for file operations`;
 }
 
 /**
@@ -159,11 +191,8 @@ function getEnvironmentContext() {
 
   return `## Environment
 - OS: ${osLabel} (${os})
-- Shell: ${shell}
-- Node.js: ${nodeVersion}
-${isWindows
-    ? '- Use Windows commands: dir (not ls), type (not cat), del (not rm), echo %VAR% (not $VAR)'
-    : '- Use Unix commands: ls, cat, rm, echo $VAR'}`;
+- Shell: ${shell} ${isWindows ? '(NOT bash — Unix commands will NOT work)' : ''}
+- Node.js: ${nodeVersion}`;
 }
 
 function getProjectContext(cwd) {
