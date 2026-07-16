@@ -90,10 +90,53 @@ async function startRepl(options) {
     chalk.hex('#6B7280')('  Type your message and press Enter. Use /help for commands.\n')
   );
 
-  const rl = createInterface({
+  let rl;
+
+  const completer = (line) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('/')) {
+      const chatCommands = [
+        { cmd: '/help', desc: 'Show this help' },
+        { cmd: '/clear', desc: 'Clear conversation history' },
+        { cmd: '/status', desc: 'Show provider status' },
+        { cmd: '/providers', desc: 'List configured providers' },
+        { cmd: '/tokens', desc: 'Show token usage' },
+        { cmd: '/history', desc: 'Show commands executed this session' },
+        { cmd: '/run', desc: 'Execute a shell command directly' },
+        { cmd: '/shell', desc: 'Show shell and OS info' },
+        { cmd: '/exit', desc: 'Exit chat' }
+      ];
+
+      const hits = chatCommands.filter((c) => c.cmd.startsWith(trimmed));
+      if (hits.length === 0) {
+        return [[], line];
+      }
+
+      if (hits.length === 1) {
+        return [[hits[0].cmd + ' '], line];
+      }
+
+      // Print completions beautifully
+      console.log();
+      for (const h of hits) {
+        console.log(`  ${chalk.hex('#60A5FA').bold(h.cmd.padEnd(12))} — ${chalk.hex('#9CA3AF')(h.desc)}`);
+      }
+      console.log();
+
+      if (rl) {
+        rl.prompt();
+      }
+
+      return [[], line];
+    }
+    return [[], line];
+  };
+
+  rl = createInterface({
     input: process.stdin,
     output: process.stdout,
     prompt: chalk.hex('#60A5FA').bold('✦ ❯ '),
+    completer,
     terminal: true,
   });
 

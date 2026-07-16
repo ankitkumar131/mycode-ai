@@ -116,10 +116,51 @@ async function startAgentRepl(options) {
   logger.info(`Providers: ${providers.map((p) => p.name).join(' → ')}`);
   console.log();
 
-  const rl = createInterface({
+  let rl;
+
+  const completer = (line) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('/')) {
+      const agentCommands = [
+        { cmd: '/help', desc: 'Show this help' },
+        { cmd: '/clear', desc: 'Clear conversation' },
+        { cmd: '/status', desc: 'Provider status' },
+        { cmd: '/history', desc: 'Show commands executed this session' },
+        { cmd: '/run', desc: 'Execute a shell command directly' },
+        { cmd: '/shell', desc: 'Show shell and OS info' },
+        { cmd: '/exit', desc: 'Exit agent' }
+      ];
+
+      const hits = agentCommands.filter((c) => c.cmd.startsWith(trimmed));
+      if (hits.length === 0) {
+        return [[], line];
+      }
+
+      if (hits.length === 1) {
+        return [[hits[0].cmd + ' '], line];
+      }
+
+      // Print completions beautifully
+      console.log();
+      for (const h of hits) {
+        console.log(`  ${chalk.hex('#A78BFA').bold(h.cmd.padEnd(12))} — ${chalk.hex('#9CA3AF')(h.desc)}`);
+      }
+      console.log();
+
+      if (rl) {
+        rl.prompt();
+      }
+
+      return [[], line];
+    }
+    return [[], line];
+  };
+
+  rl = createInterface({
     input: process.stdin,
     output: process.stdout,
     prompt: chalk.hex('#A78BFA').bold('✦ 🤖 ❯ '),
+    completer,
     terminal: true,
   });
 
