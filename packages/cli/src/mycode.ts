@@ -24,8 +24,32 @@ async function checkForUpdate(): Promise<void> {
     if (res.ok) {
       const data = await res.json() as { version?: string };
       if (data.version && data.version !== localVersion) {
-        console.error(chalk.yellow(`Update available: ${localVersion} \u2192 ${data.version}`));
-        console.error(chalk.yellow(`Run 'npm install -g ${pkgName}' to update\n`));
+        const title = `Update available: ${chalk.dim(localVersion)} \u2192 ${chalk.green(data.version)}`;
+        const command = `npm install -g ${pkgName}`;
+        const cmdText = `Run ${chalk.cyan(command)} to update`;
+
+        const line1 = `Update available: ${localVersion} \u2192 ${data.version}`;
+        const line2 = `Run ${command} to update`;
+        const padding = 4;
+        const contentWidth = Math.max(line1.length, line2.length);
+        const boxWidth = contentWidth + padding * 2;
+
+        const borderTop = '┌' + '─'.repeat(boxWidth) + '┐';
+        const borderBottom = '└' + '─'.repeat(boxWidth) + '┘';
+        const emptyLine = '│' + ' '.repeat(boxWidth) + '│';
+
+        const padLine = (textWithAnsi: string, plainTextLength: number) => {
+          const leftPad = padding;
+          const rightPad = boxWidth - leftPad - plainTextLength;
+          return '│' + ' '.repeat(leftPad) + textWithAnsi + ' '.repeat(rightPad) + '│';
+        };
+
+        console.error('\n' + chalk.yellow(borderTop));
+        console.error(chalk.yellow(emptyLine));
+        console.error(chalk.yellow(padLine(title, line1.length)));
+        console.error(chalk.yellow(padLine(cmdText, line2.length)));
+        console.error(chalk.yellow(emptyLine));
+        console.error(chalk.yellow(borderBottom) + '\n');
       }
     }
   } catch {
