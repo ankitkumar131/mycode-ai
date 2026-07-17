@@ -2,6 +2,10 @@
 import { chatCommand } from './commands/chat.js';
 import { initCommand } from './commands/init.js';
 import { configCommand } from './commands/config.js';
+import { explainCommand } from './commands/explain.js';
+import { fixCommand } from './commands/fix.js';
+import { editCommand } from './commands/edit.js';
+import { agentCommand } from './commands/agent.js';
 
 const [, , cmd, ...args] = process.argv;
 
@@ -17,15 +21,31 @@ async function main() {
     case undefined:
       await chatCommand();
       break;
+    case 'explain':
+      await explainCommand(args[0]);
+      break;
+    case 'fix':
+      await fixCommand(args[0]);
+      break;
+    case 'edit':
+      await editCommand(args[0], args.slice(1).join(' '));
+      break;
+    case 'agent':
+      await agentCommand(args.join(' '));
+      break;
     case '--help':
     case '-h':
       console.log(`Usage: mycode <command>
 
 Commands:
-  init          Setup configuration
-  config        Manage providers
-  chat          Start interactive chat
-  --help, -h    Show this help`);
+  init              Setup configuration
+  config            Manage providers
+  chat              Start interactive chat
+  explain <file>    Get AI explanation of a file
+  fix <file|error>  Diagnose and fix errors
+  edit <file> ...   Edit a file with AI
+  agent [task]      Full autonomous coding agent
+  --help, -h        Show this help`);
       break;
     default:
       console.error(`Unknown command: ${cmd}`);

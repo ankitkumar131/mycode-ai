@@ -1,11 +1,12 @@
 import { createInterface } from 'readline/promises';
-import { ConfigManager, AgentSession, ProviderRouter, ToolCall, ToolResult } from '@mycode/core';
+import { ConfigManager, AgentSession, ProviderRouter, ToolCall, ToolResult, type SafetyResult } from '@mycode/core';
 import chalk from 'chalk';
 import { renderMarkdown } from '../ui/renderer.js';
 import { createSpinner, createToolSpinner } from '../ui/spinner.js';
+import { confirmCommand } from '../ui/prompt.js';
 import { Ora } from 'ora';
 
-export async function chatCommand(options: { model?: string; provider?: string } = {}): Promise<void> {
+export async function agentCommand(task?: string): Promise<void> {
   const config = new ConfigManager();
   const cfg = config.configExists() ? await config.load() : config.get();
 
@@ -16,10 +17,15 @@ export async function chatCommand(options: { model?: string; provider?: string }
 
   const router = new ProviderRouter(cfg.providers);
   let currentSpinner: Ora | null = null;
+  const promptRl = createInterface({ input: process.stdin, output: process.stdout });
 
   const session = new AgentSession({
     providerRouter: router,
-    maxIterations: 25,
+    cwd: process.cwd(),
+    maxIterations: 50,
+    confirmFn: async (target, context, safety) => {
+      return confirmCommand(promptRl, target, process.cwd(), safety as any ?? null);
+    },
     onText() {
       if (currentSpinner) {
         currentSpinner.stop();
@@ -31,8 +37,10 @@ export async function chatCommand(options: { model?: string; provider?: string }
         currentSpinner.stop();
         currentSpinner = null;
       }
-      currentSpinner = createToolSpinner(toolCall.name);
-      currentSpinner.start();
+      if (toolCall.name !== 'exec-command') {
+        currentSpinner = createToolSpinner(toolCall.name);
+        currentSpinner.start();
+      }
     },
     onToolResult(result: ToolResult) {
       if (currentSpinner) {
@@ -54,22 +62,42 @@ export async function chatCommand(options: { model?: string; provider?: string }
     },
   });
 
+  if (task) {
+    console.log(chalk.cyan(`Agent: ${task}\n`));
+    currentSpinner = createSpinner('Working...');
+    currentSpinner.start();
+
+    try {
+      const result = await session.run(task);
+      if (currentSpinner) {
+        currentSpinner.stop();
+        currentSpinner = null;
+      }
+      console.log();
+      console.log(renderMarkdown(result));
+    } catch (err: any) {
+      if (currentSpinner) {
+        currentSpinner.fail(chalk.red(err.message));
+        currentSpinner = null;
+      } else {
+        console.error(chalk.red('\nError:'), err.message);
+      }
+    }
+    return;
+  }
+
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  console.log(chalk.cyan('\nMyCode Chat \u2014 /exit to quit, /clear to clear\n'));
+  console.log(chalk.cyan('\nAgent Mode \u2014 /exit to quit\n'));
 
   while (true) {
-    const input = await rl.question(chalk.green('> '));
+    const input = await rl.question(chalk.magenta('agent> '));
     const trimmed = input.trim();
 
     if (!trimmed) continue;
     if (trimmed === '/exit' || trimmed === '/quit') break;
-    if (trimmed === '/clear') {
-      console.clear();
-      continue;
-    }
 
     console.log();
-    currentSpinner = createSpinner();
+    currentSpinner = createSpinner('Working...');
     currentSpinner.start();
 
     try {
