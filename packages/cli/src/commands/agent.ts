@@ -1,4 +1,3 @@
-import * as readline from 'readline';
 import { createInterface } from 'readline/promises';
 import { ConfigManager, AgentSession, ProviderRouter } from '@mycode/core';
 import chalk from 'chalk';
@@ -9,13 +8,10 @@ import { decodeEntities } from '../utils/html.js';
 import { confirmCommand } from '../ui/prompt.js';
 
 async function question(prompt: string): Promise<string> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise<string>((resolve) => {
-    rl.question(prompt, (answer) => {
-      rl.close();
-      resolve(answer);
-    });
-  });
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await rl.question(prompt);
+  rl.close();
+  return answer;
 }
 
 export async function agentCommand(task?: string): Promise<void> {

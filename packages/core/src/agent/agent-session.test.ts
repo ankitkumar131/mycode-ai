@@ -39,6 +39,7 @@ vi.mock('./context.js', () => ({
     return {
       addSystem: vi.fn((c: string) => messages.push({ role: 'system', content: c })),
       addUser: vi.fn((c: string) => messages.push({ role: 'user', content: c })),
+      addAssistant: vi.fn((c: string) => messages.push({ role: 'assistant', content: c })),
       addAssistantWithTools: vi.fn(),
       addToolResult: vi.fn(),
       getHistory: vi.fn(() => messages),

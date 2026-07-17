@@ -1,4 +1,4 @@
-import * as readline from 'readline';
+import { createInterface } from 'readline/promises';
 import { ConfigManager, AgentSession, ProviderRouter } from '@mycode/core';
 import chalk from 'chalk';
 import { renderMarkdown } from '../ui/renderer.js';
@@ -7,13 +7,10 @@ import { Ora } from 'ora';
 import { decodeEntities } from '../utils/html.js';
 
 async function question(prompt: string): Promise<string> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise<string>((resolve) => {
-    rl.question(prompt, (answer) => {
-      rl.close();
-      resolve(answer);
-    });
-  });
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await rl.question(prompt);
+  rl.close();
+  return answer;
 }
 
 export async function chatCommand(options: { model?: string; provider?: string } = {}): Promise<void> {
