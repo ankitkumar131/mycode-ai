@@ -1,0 +1,14 @@
+src/
+node_modules/
+__tests__/
+**/__snapshots__/
+**/*.test.ts
+**/*.spec.ts
+tsconfig.json
+.eslintrc*
+.prettierrc*
+.gitignore
+.npmignore
+*.tgz
+.vscode/
+.idea/

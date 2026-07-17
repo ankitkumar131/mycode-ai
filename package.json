@@ -4,6 +4,19 @@
   "private": true,
   "description": "Multi-provider AI coding agent for the terminal. Like Claude Code, but provider-agnostic with automatic failover.",
   "type": "module",
+  "bin": {
+    "mycode": "./bin/mycode.js"
+  },
+  "files": [
+    "bin",
+    "packages/cli/dist",
+    "packages/core/dist",
+    "packages/sdk/dist",
+    "packages/a2a-server/dist",
+    "packages/devtools/dist",
+    "packages/test-utils/dist",
+    "scripts"
+  ],
   "workspaces": [
     "packages/cli",
     "packages/core",
@@ -26,7 +39,16 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "start": "node packages/cli/dist/mycode.js",
-    "dev": "node --watch packages/cli/dist/mycode.js"
+    "dev": "node --watch packages/cli/dist/mycode.js",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anomalyco/mycode.git"
+  },
+  "homepage": "https://github.com/anomalyco/mycode#readme",
+  "bugs": {
+    "url": "https://github.com/anomalyco/mycode/issues"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -45,6 +67,9 @@
   ],
   "author": "",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
