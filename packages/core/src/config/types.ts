@@ -4,8 +4,11 @@ export interface MyCodeConfig {
   version: string;
   providers: ProviderConfig[];
   preferences: {
+    theme?: string;
     confirmWrites: boolean;
     confirmCommands: boolean;
+    maxContextFiles?: number;
+    logConversations?: boolean;
   };
   mcp?: {
     servers: Array<{
@@ -14,6 +17,5 @@ export interface MyCodeConfig {
       args?: string[];
     }>;
   };
-  theme?: string;
   vimMode?: boolean;
 }

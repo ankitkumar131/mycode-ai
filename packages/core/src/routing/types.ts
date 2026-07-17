@@ -15,3 +15,18 @@ export interface ProviderStats {
   status: 'active' | 'fallback' | 'error';
   latency?: number;
 }
+
+export interface ProviderHealth {
+  successCount: number;
+  failureCount: number;
+  lastError?: string;
+  isAvailable: boolean;
+}
+
+export type SafetyLevel = 'blocked' | 'dangerous' | 'elevated' | 'normal';
+
+export interface SafetyResult {
+  level: SafetyLevel;
+  reason?: string;
+  warnings?: string[];
+}

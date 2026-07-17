@@ -1,20 +1,28 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { homedir } from 'os';
+import { join } from 'path';
 import type { MyCodeConfig } from './types.js';
 
 export class ConfigManager {
   private config: MyCodeConfig | null = null;
 
-  async load(): Promise<MyCodeConfig> {
-    return this.getDefault();
+  private getConfigDir(): string {
+    return join(homedir(), '.mycode');
   }
 
-  get(): MyCodeConfig {
-    return this.config ?? this.getDefault();
+  private getConfigFile(): string {
+    return join(this.getConfigDir(), 'settings.json');
   }
 
-  async save(config: MyCodeConfig): Promise<void> {}
-
-  getConfigPath(): string {
-    return '';
+  private ensureDir(): void {
+    const dir = this.getConfigDir();
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    const logsDir = join(dir, 'logs');
+    if (!existsSync(logsDir)) {
+      mkdirSync(logsDir, { recursive: true });
+    }
   }
 
   private getDefault(): MyCodeConfig {
@@ -22,9 +30,93 @@ export class ConfigManager {
       version: '1',
       providers: [],
       preferences: {
+        theme: 'dark',
         confirmWrites: true,
         confirmCommands: true,
+        maxContextFiles: 20,
+        logConversations: true,
       },
     };
+  }
+
+  async load(): Promise<MyCodeConfig> {
+    this.ensureDir();
+    const configFile = this.getConfigFile();
+
+    if (!existsSync(configFile)) {
+      this.config = this.getDefault();
+      return this.config;
+    }
+
+    try {
+      const raw = readFileSync(configFile, 'utf-8');
+      const parsed = JSON.parse(raw);
+      this.config = {
+        ...this.getDefault(),
+        ...parsed,
+        preferences: {
+          ...this.getDefault().preferences,
+          ...(parsed.preferences || {}),
+        },
+      };
+      return this.config;
+    } catch {
+      this.config = this.getDefault();
+      return this.config;
+    }
+  }
+
+  get(): MyCodeConfig {
+    if (!this.config) {
+      this.config = this.getDefault();
+    }
+    return this.config;
+  }
+
+  async save(config: MyCodeConfig): Promise<void> {
+    this.ensureDir();
+    writeFileSync(this.getConfigFile(), JSON.stringify(config, null, 2), 'utf-8');
+    this.config = config;
+  }
+
+  getConfigPath(): string {
+    return this.getConfigFile();
+  }
+
+  getConfigDirPath(): string {
+    return this.getConfigDir();
+  }
+
+  getLogsDir(): string {
+    return join(this.getConfigDir(), 'logs');
+  }
+
+  async addProvider(provider: MyCodeConfig['providers'][0]): Promise<void> {
+    const config = await this.load();
+    config.providers.push(provider);
+    await this.save(config);
+  }
+
+  async removeProvider(name: string): Promise<boolean> {
+    const config = await this.load();
+    const before = config.providers.length;
+    config.providers = config.providers.filter(
+      (p) => p.name.toLowerCase() !== name.toLowerCase()
+    );
+    if (config.providers.length < before) {
+      await this.save(config);
+      return true;
+    }
+    return false;
+  }
+
+  async updatePreferences(prefs: Partial<MyCodeConfig['preferences']>): Promise<void> {
+    const config = await this.load();
+    config.preferences = { ...config.preferences, ...prefs };
+    await this.save(config);
+  }
+
+  configExists(): boolean {
+    return existsSync(this.getConfigFile());
   }
 }

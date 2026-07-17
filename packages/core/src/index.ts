@@ -2,12 +2,36 @@
 
 // Agent
 export { AgentSession } from './agent/agent-session.js';
+export type { SessionConfig } from './agent/agent-session.js';
 export { EventTranslator } from './agent/event-translator.js';
-export type { AgentOptions, AgentEvent } from './agent/types.js';
+export { ConversationContext } from './agent/context.js';
+export type { AgentOptions, AgentEvent, Message as AgentMessage } from './agent/types.js';
 
 // Tools
 export { ToolRegistry } from './tools/tool-registry.js';
-export type { ToolDefinition, ToolHandler } from './tools/types.js';
+export { classifyCommand, isBlocked, getSafetyLabel } from './tools/command-safety.js';
+export { CommandHistory } from './tools/command-history.js';
+export { executeCommand } from './tools/command-executor.js';
+export type {
+  ToolDefinition,
+  ToolHandler,
+  ToolModule,
+  ToolFunctionDefinition,
+  ToolExecuteOptions,
+  SafetyLevel,
+  SafetyResult,
+  CommandRecord,
+  ExecutionResult,
+} from './tools/types.js';
+
+// Tool definitions
+export { readFileTool } from './tools/definitions/read-file.js';
+export { writeFileTool } from './tools/definitions/write-file.js';
+export { editFileTool } from './tools/definitions/edit-file.js';
+export { listDirTool } from './tools/definitions/list-dir.js';
+export { searchFilesTool } from './tools/definitions/search-files.js';
+export { gitStatusTool } from './tools/definitions/git-status.js';
+export { execCommandTool } from './tools/definitions/exec-command.js';
 
 // Skills
 export { SkillLoader } from './skills/skill-loader.js';
