@@ -1,0 +1,30 @@
+{
+  "name": "@mycode/core",
+  "version": "1.0.0-alpha",
+  "private": true,
+  "description": "MyCode Core — Agent engine, tools, skills, MCP, and provider system",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build.mjs --package core",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "openai": "^4.60.0",
+    "ollama": "^0.5.0",
+    "glob": "^11.0.0",
+    "chalk": "^5.3.0",
+    "diff": "^7.0.0",
+    "marked": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}

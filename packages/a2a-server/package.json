@@ -1,0 +1,23 @@
+{
+  "name": "@mycode/a2a-server",
+  "version": "1.0.0-alpha",
+  "private": true,
+  "description": "MyCode Agent-to-Agent protocol server",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build.mjs --package a2a-server",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mycode/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}

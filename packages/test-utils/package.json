@@ -1,0 +1,20 @@
+{
+  "name": "@mycode/test-utils",
+  "version": "1.0.0-alpha",
+  "private": true,
+  "description": "Shared test utilities for MyCode packages",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build.mjs --package test-utils",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "paths": {
+      "@mycode/core": ["../core/src"],
+      "@mycode/core/*": ["../core/src/*"],
+      "@mycode/sdk": ["../sdk/src"],
+      "@mycode/sdk/*": ["../sdk/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "references": [
+    { "path": "../core" },
+    { "path": "../sdk" }
+  ]
+}

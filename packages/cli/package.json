@@ -1,0 +1,44 @@
+{
+  "name": "@mycode/cli",
+  "version": "1.0.0-alpha",
+  "private": true,
+  "description": "MyCode CLI — Terminal UI and entry point",
+  "type": "module",
+  "bin": {
+    "mycode": "./dist/mycode.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build.mjs --package cli",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mycode/core": "*",
+    "@mycode/sdk": "*",
+    "ink": "^5.0.0",
+    "ink-gradient": "^3.0.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.0.0",
+    "cli-spinners": "^3.0.0",
+    "chalk": "^5.3.0",
+    "marked": "^14.0.0",
+    "lowlight": "^3.0.0",
+    "highlight.js": "^11.0.0",
+    "diff": "^7.0.0",
+    "tinygradient": "^1.0.0",
+    "@xterm/headless": "^5.0.0",
+    "node-pty": "^1.0.0",
+    "ora": "^8.1.0",
+    "tree-kill": "^1.2.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "ink-testing-library": "^4.0.0"
+  }
+}

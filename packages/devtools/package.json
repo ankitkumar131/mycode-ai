@@ -1,0 +1,20 @@
+{
+  "name": "@mycode/devtools",
+  "version": "1.0.0-alpha",
+  "private": true,
+  "description": "MyCode developer tooling",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build.mjs --package devtools",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}
