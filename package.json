@@ -1,6 +1,6 @@
 {
   "name": "mycode-ai",
-  "version": "1.0.0-alpha",
+  "version": "1.0.0",
   "private": true,
   "description": "Multi-provider AI coding agent for the terminal. Like Claude Code, but provider-agnostic with automatic failover.",
   "type": "module",
