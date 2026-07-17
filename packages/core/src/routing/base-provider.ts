@@ -6,8 +6,8 @@ export abstract class BaseProvider {
   abstract get canRead(): boolean;
   abstract get canWrite(): boolean;
 
-  abstract chat(messages: unknown[], tools?: unknown[]): Promise<unknown>;
-  abstract stream(messages: unknown[], tools?: unknown[]): AsyncGenerator<unknown>;
+  abstract chat(messages: unknown[], tools?: unknown[], options?: any): Promise<any>;
+  abstract stream(messages: unknown[], tools?: unknown[], options?: any): AsyncGenerator<any>;
 
   recordSuccess(): void {
     this._health.successCount++;

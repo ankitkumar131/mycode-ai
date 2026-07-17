@@ -14,34 +14,25 @@ const targetPackage = pkgIndex !== -1 ? args[pkgIndex + 1] : null;
 
 const packages = targetPackage ? [targetPackage] : ['core', 'sdk', 'cli', 'a2a-server', 'devtools', 'test-utils'];
 
+const NODE_BUILTINS = [
+  'assert', 'assert/strict', 'async_hooks', 'buffer', 'child_process', 'cluster',
+  'console', 'constants', 'crypto', 'dgram', 'diagnostics_channel', 'dns',
+  'dns/promises', 'domain', 'events', 'fs', 'fs/promises', 'http', 'http2',
+  'https', 'inspector', 'module', 'net', 'os', 'path', 'path/posix',
+  'path/win32', 'perf_hooks', 'process', 'punycode', 'querystring',
+  'readline', 'readline/promises', 'repl', 'stream', 'stream/consumers',
+  'stream/promises', 'stream/web', 'string_decoder', 'timers',
+  'timers/promises', 'tls', 'trace_events', 'tty', 'url', 'util',
+  'util/types', 'v8', 'vm', 'worker_threads', 'zlib',
+];
+
 async function buildPackage(pkg) {
   const pkgDir = join(root, 'packages', pkg);
   const pkgJson = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf-8'));
 
   console.log(`Building @mycode/${pkg}...`);
 
-  const entryPoints = [];
-
-  // Find all .ts and .tsx entry points
-  const srcDir = join(pkgDir, 'src');
-  if (existsSync(srcDir)) {
-    // Always include index.ts as main entry if it exists
-    const mainEntry = join(srcDir, 'index.ts');
-    if (existsSync(mainEntry)) {
-      entryPoints.push(mainEntry);
-    } else {
-      // Fallback: use the directory itself
-      entryPoints.push(join(srcDir, 'index.ts'));
-    }
-  }
-
   // Build configuration
-  const external = [
-    ...Object.keys(pkgJson.dependencies || {}),
-    ...Object.keys(pkgJson.peerDependencies || {}),
-  ];
-
-  // Handle workspace references
   const allDeps = {
     ...pkgJson.dependencies,
     ...pkgJson.peerDependencies,
@@ -52,54 +43,50 @@ async function buildPackage(pkg) {
     (d) => !d.startsWith('@mycode/'),
   );
 
+  const external = [...NODE_BUILTINS, ...externalDeps];
+
+  const sharedOpts = {
+    platform: 'node',
+    target: 'node20',
+    format: 'esm',
+    sourcemap: true,
+    external,
+    tsconfig: join(pkgDir, 'tsconfig.json'),
+    logLevel: 'info',
+  };
+
   try {
     await esbuild.build({
+      ...sharedOpts,
       entryPoints: [join(pkgDir, 'src', 'index.ts')],
       outfile: join(pkgDir, 'dist', 'index.js'),
       bundle: true,
-      platform: 'node',
-      target: 'node20',
-      format: 'esm',
-      sourcemap: true,
-      external: externalDeps,
-      tsconfig: join(pkgDir, 'tsconfig.json'),
-      logLevel: 'info',
     });
 
     // Also build the CLI binary entry point if it exists
     const binEntry = join(pkgDir, 'src', 'mycode.ts');
     if (existsSync(binEntry)) {
+      // For CLI binary: transpile only (no bundle), use ESM, externalize everything
+      const binExternal = [...Object.keys(allDeps || {}).filter(d => d.startsWith('@mycode/')), ...NODE_BUILTINS, ...externalDeps];
       await esbuild.build({
+        ...sharedOpts,
         entryPoints: [binEntry],
         outfile: join(pkgDir, 'dist', 'mycode.js'),
         bundle: true,
         platform: 'node',
-        target: 'node20',
         format: 'esm',
-        sourcemap: true,
-        external: externalDeps,
-        tsconfig: join(pkgDir, 'tsconfig.json'),
-        banner: {
-          js: '#!/usr/bin/env node',
-        },
-        logLevel: 'info',
+        external: binExternal,
       });
 
-      // Make it executable (on Unix) - on Windows we rely on the shebang
-      try {
-        const outfile = join(pkgDir, 'dist', 'mycode.js');
-        const content = readFileSync(outfile, 'utf-8');
-        if (!content.startsWith('#!/usr/bin/env node')) {
-          writeFileSync(outfile, '#!/usr/bin/env node\n' + content);
-        }
-      } catch {
-        // ignore on Windows
-      }
+      // Ensure single shebang
+      const jsOut = join(pkgDir, 'dist', 'mycode.js');
+      const jsContent = readFileSync(jsOut, 'utf-8');
+      writeFileSync(jsOut, '#!/usr/bin/env node\n' + jsContent.replace(/^#!.*\n/, ''));
     }
 
-    console.log(`✓ @mycode/${pkg} built successfully`);
+    console.log(`  \u2713 @mycode/${pkg} built successfully`);
   } catch (err) {
-    console.error(`✗ @mycode/${pkg} build failed:`, err.message);
+    console.error(`  \u2717 @mycode/${pkg} build failed:`, err.message);
     process.exitCode = 1;
   }
 }

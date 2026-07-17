@@ -2,17 +2,12 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
+    "noEmit": true,
     "paths": {
-      "@mycode/core": ["../core/src"],
-      "@mycode/core/*": ["../core/src/*"],
-      "@mycode/sdk": ["../sdk/src"],
-      "@mycode/sdk/*": ["../sdk/src/*"]
+      "@mycode/core": ["../core/src/index.ts"],
+      "@mycode/sdk": ["../sdk/src/index.ts"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "references": [
-    { "path": "../core" },
-    { "path": "../sdk" }
-  ]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "../core/src/**/*.ts", "../sdk/src/**/*.ts"]
+
 }

@@ -59,7 +59,7 @@ export class ConfigManager {
           ...(parsed.preferences || {}),
         },
       };
-      return this.config;
+      return this.config as MyCodeConfig;
     } catch {
       this.config = this.getDefault();
       return this.config;

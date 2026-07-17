@@ -79,7 +79,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
         params.tools = tools;
         params.tool_choice = options.tool_choice ?? 'auto';
       }
-      const stream = await this.client.chat.completions.create(params);
+      const stream: any = await this.client.chat.completions.create(params);
       const toolCallAccumulator: Record<number, any> = {};
 
       for await (const chunk of stream) {

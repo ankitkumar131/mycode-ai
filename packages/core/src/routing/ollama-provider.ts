@@ -72,17 +72,17 @@ export class OllamaProvider extends BaseProvider {
       if (tools.length > 0 && this.supportsTools()) {
         params.tools = tools;
       }
-      const response = await this.client.chat(params);
+      const response: any = await this.client.chat(params);
       this.recordSuccess();
       return {
-        content: response.message.content || '',
-        tool_calls: this.normalizeToolCalls(response.message.tool_calls || []),
+        content: response.message?.content || '',
+        tool_calls: this.normalizeToolCalls(response.message?.tool_calls || []),
         usage: {
           prompt_tokens: response.prompt_eval_count || 0,
           completion_tokens: response.eval_count || 0,
           total_tokens: (response.prompt_eval_count || 0) + (response.eval_count || 0),
         },
-        finish_reason: response.message.tool_calls?.length ? 'tool_calls' : 'stop',
+        finish_reason: response.message?.tool_calls?.length ? 'tool_calls' : 'stop',
       };
     } catch (err: any) {
       this.recordFailure();
@@ -105,7 +105,7 @@ export class OllamaProvider extends BaseProvider {
       if (tools.length > 0 && this.supportsTools()) {
         params.tools = tools;
       }
-      const stream = await this.client.chat(params);
+      const stream: any = await this.client.chat(params);
 
       for await (const chunk of stream) {
         if (chunk.message?.content) {
