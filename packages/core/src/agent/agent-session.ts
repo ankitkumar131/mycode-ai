@@ -157,7 +157,6 @@ export class AgentSession {
             continue;
           }
 
-          this._toolCallCounts.set(toolName, count + 1);
           this._executedToolCalls.add(callKey);
 
           this.emit({ type: 'tool_call', name: toolName, args });
@@ -174,10 +173,12 @@ export class AgentSession {
             this.context.addToolResult(call.id, result, toolName);
             this.emit({ type: 'tool_result', name: toolName, result });
             this.config.onToolResult?.(toolName, result);
+            this._toolCallCounts.set(toolName, 0); // Reset failure count on success
           } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
             this.context.addToolResult(call.id, `Error: ${errMsg}`, toolName);
             this.emit({ type: 'error', message: `Tool ${toolName} failed: ${errMsg}` });
+            this._toolCallCounts.set(toolName, count + 1); // Increment failure count on error
           }
 
           // Trim context after adding tool results

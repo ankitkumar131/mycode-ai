@@ -249,4 +249,62 @@ describe('AgentSession', () => {
     const reg = session.getRegistry();
     expect(reg).toBeDefined();
   });
+
+  it('blocks tool after maximum retries on failure', async () => {
+    mockChat
+      .mockResolvedValueOnce({
+        content: 'Call failing tool',
+        toolCalls: [{ id: 'c1', type: 'function', function: { name: 'read-file', arguments: '{"f": 1}' } }],
+      })
+      .mockResolvedValueOnce({
+        content: 'Call failing tool again',
+        toolCalls: [{ id: 'c2', type: 'function', function: { name: 'read-file', arguments: '{"f": 2}' } }],
+      })
+      .mockResolvedValueOnce({
+        content: 'Call failing tool third time',
+        toolCalls: [{ id: 'c3', type: 'function', function: { name: 'read-file', arguments: '{"f": 3}' } }],
+      })
+      .mockResolvedValueOnce({
+        content: 'Call failing tool fourth time',
+        toolCalls: [{ id: 'c4', type: 'function', function: { name: 'read-file', arguments: '{"f": 4}' } }],
+      })
+      .mockResolvedValueOnce({ content: 'Done.', toolCalls: [] });
+
+    mockExecuteTool.mockRejectedValue(new Error('failing'));
+
+    const session = makeSession();
+    await session.run('Test failure');
+
+    // The tool should only be executed 3 times, because on the 4th time it should be blocked by retry limit!
+    expect(mockExecuteTool).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not block tool on success even after multiple calls', async () => {
+    mockChat
+      .mockResolvedValueOnce({
+        content: 'Call tool',
+        toolCalls: [{ id: 'c1', type: 'function', function: { name: 'read-file', arguments: '{"s": 1}' } }],
+      })
+      .mockResolvedValueOnce({
+        content: 'Call tool again',
+        toolCalls: [{ id: 'c2', type: 'function', function: { name: 'read-file', arguments: '{"s": 2}' } }],
+      })
+      .mockResolvedValueOnce({
+        content: 'Call tool third time',
+        toolCalls: [{ id: 'c3', type: 'function', function: { name: 'read-file', arguments: '{"s": 3}' } }],
+      })
+      .mockResolvedValueOnce({
+        content: 'Call tool fourth time',
+        toolCalls: [{ id: 'c4', type: 'function', function: { name: 'read-file', arguments: '{"s": 4}' } }],
+      })
+      .mockResolvedValueOnce({ content: 'Finished successfully.', toolCalls: [] });
+
+    mockExecuteTool.mockResolvedValue('success result');
+
+    const session = makeSession();
+    const result = await session.run('Test multi success');
+
+    expect(mockExecuteTool).toHaveBeenCalledTimes(4);
+    expect(result).toBe('Finished successfully.');
+  });
 });
