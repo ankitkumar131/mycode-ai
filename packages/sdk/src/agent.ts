@@ -7,7 +7,7 @@ import {
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AgentConfig, AgentEvents, RunOptions, AgentInfo } from './types.js';
+import type { AgentConfig, RunOptions, AgentInfo } from './types.js';
 import { discoverSkills } from './skills.js';
 
 export class MyCodeAgent {
@@ -70,7 +70,7 @@ export class MyCodeAgent {
       maxIterations: options?.maxIterations ?? this.config.maxIterations ?? 25,
       onText(text) { ev?.onText?.(text); },
       onToolCall(name, args) { ev?.onToolCall?.({ name, args }); },
-      onToolResult(name, result) { ev?.onToolResult?.({ toolName: name, output: result }); },
+      onToolResult(name, result) { ev?.onToolResult?.({ toolName: name, result }); },
       onError(message) { ev?.onError?.(new Error(message)); },
     });
 
@@ -89,6 +89,11 @@ export class MyCodeAgent {
       ? this.config.provider
       : process.env.MYCODE_PROVIDER || 'openai';
     const apiKey = process.env.MYCODE_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || '';
-    return [{ name: providerName, apiKey }];
+    return [{
+      name: providerName,
+      apiProvider: providerName,
+      model: this.config.model || process.env.MYCODE_MODEL || 'gpt-4o',
+      apiKey,
+    }];
   }
 }

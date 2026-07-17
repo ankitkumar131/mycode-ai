@@ -102,7 +102,7 @@ function renderBlock(token: Token): string {
     case 'blockquote': {
       const t = token as any;
       const blocks = t.tokens.map((st: Token) => renderBlock(st));
-      return blocks.join('\n').split('\n').map(l => {
+      return blocks.join('\n').split('\n').map((l: string) => {
         const trimmed = l.trim();
         return trimmed ? chalk.hex(BRAND.blockquote).italic(INDENT + trimmed) : l;
       }).join('\n') + '\n';

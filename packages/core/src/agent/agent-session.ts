@@ -33,6 +33,7 @@ export class AgentSession {
   private _abortController: AbortController;
   private _toolCallCounts: Map<string, number> = new Map();
   private _executedToolCalls: Set<string> = new Set();
+  private _initialized = false;
 
   constructor(config: SessionConfig) {
     this.config = config;
@@ -55,15 +56,18 @@ export class AgentSession {
     const model = this.config.model;
 
     try {
-      // Build system prompt
-      const tools = this.toolRegistry.getDefinitions({ filterWriteTools: false });
-      const toolNames = tools.map(t => t.function.name);
-      const systemPrompt = await SystemPromptBuilder.buildSystemPrompt(cwd, {
-        tools: toolNames,
-        model: model ?? this.config.provider,
-        provider: this.config.provider,
-      });
-      this.context.addSystem(systemPrompt);
+      // Build system prompt (only on first call)
+      if (!this._initialized) {
+        const tools = this.toolRegistry.getDefinitions({ filterWriteTools: false });
+        const toolNames = tools.map(t => t.function.name);
+        const systemPrompt = await SystemPromptBuilder.buildSystemPrompt(cwd, {
+          tools: toolNames,
+          model: model ?? this.config.provider,
+          provider: this.config.provider,
+        });
+        this.context.addSystem(systemPrompt);
+        this._initialized = true;
+      }
 
       // Add user input
       this.context.addUser(input);
@@ -81,6 +85,8 @@ export class AgentSession {
         let response: string;
         let toolCalls: Array<{ id: string; type: string; function: { name: string; arguments: string } }> | undefined;
 
+        let usage: { promptTokens: number; completionTokens: number } = { promptTokens: 0, completionTokens: 0 };
+
         try {
           const result = await router.chat(messages, toolDefs.length > 0 ? toolDefs : undefined, {
             abortSignal: this._abortController.signal,
@@ -91,6 +97,12 @@ export class AgentSession {
 
           response = result.content ?? '';
           toolCalls = result.toolCalls;
+          if (result.usage) {
+            usage = {
+              promptTokens: result.usage.prompt_tokens ?? 0,
+              completionTokens: result.usage.completion_tokens ?? 0,
+            };
+          }
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           this.config.onError?.(errMsg);
@@ -108,14 +120,12 @@ export class AgentSession {
         }
 
         if (!toolCalls || toolCalls.length === 0) {
-          this.emit({
-            type: 'finish',
-            usage: { promptTokens: 0, completionTokens: 0 },
-          });
+          this.context.addAssistant(response);
+          this.emit({ type: 'finish', usage });
+          this.config.onFinish?.(usage);
           return response;
         }
 
-        // Handle tool calls
         this.context.addAssistantWithTools(response, toolCalls);
 
         for (const call of toolCalls) {
@@ -181,9 +191,11 @@ export class AgentSession {
       }
 
       if (this._iterations >= maxIter) {
+        this.config.onFinish?.({ promptTokens: 0, completionTokens: 0 });
         return 'Reached maximum iteration limit.';
       }
 
+      this.config.onFinish?.({ promptTokens: 0, completionTokens: 0 });
       return '';
     } finally {
       this._running = false;

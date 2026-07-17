@@ -2,6 +2,22 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import type { MyCodeConfig } from './types.js';
+import type { ProviderConfig } from '../routing/types.js';
+
+const SNAKE_TO_CAMEL = new Map<string, string>([
+  ['api_key', 'apiKey'],
+  ['api_provider', 'apiProvider'],
+  ['base_url', 'baseUrl'],
+  ['max_retries', 'maxRetries'],
+]);
+
+function normalizeProvider(p: Record<string, unknown>): ProviderConfig {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(p)) {
+    out[SNAKE_TO_CAMEL.get(key) ?? key] = value;
+  }
+  return out as unknown as ProviderConfig;
+}
 
 export class ConfigManager {
   private config: MyCodeConfig | null = null;
@@ -54,6 +70,7 @@ export class ConfigManager {
       this.config = {
         ...this.getDefault(),
         ...parsed,
+        providers: (parsed.providers || []).map(normalizeProvider),
         preferences: {
           ...this.getDefault().preferences,
           ...(parsed.preferences || {}),

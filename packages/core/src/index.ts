@@ -16,6 +16,8 @@ export type {
   ToolDefinition,
   ToolHandler,
   ToolModule,
+  ToolCall,
+  ToolResult,
   ToolFunctionDefinition,
   ToolExecuteOptions,
   SafetyLevel,

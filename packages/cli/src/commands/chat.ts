@@ -1,9 +1,20 @@
-import { createInterface } from 'readline/promises';
-import { ConfigManager, AgentSession, ProviderRouter, ToolCall, ToolResult } from '@mycode/core';
+import * as readline from 'readline';
+import { ConfigManager, AgentSession, ProviderRouter } from '@mycode/core';
 import chalk from 'chalk';
 import { renderMarkdown } from '../ui/renderer.js';
 import { createSpinner, createToolSpinner } from '../ui/spinner.js';
 import { Ora } from 'ora';
+import { decodeEntities } from '../utils/html.js';
+
+async function question(prompt: string): Promise<string> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise<string>((resolve) => {
+    rl.question(prompt, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
 
 export async function chatCommand(options: { model?: string; provider?: string } = {}): Promise<void> {
   const config = new ConfigManager();
@@ -26,23 +37,23 @@ export async function chatCommand(options: { model?: string; provider?: string }
         currentSpinner = null;
       }
     },
-    onToolCall(toolCall: ToolCall) {
+    onToolCall(toolName: string) {
       if (currentSpinner) {
         currentSpinner.stop();
         currentSpinner = null;
       }
-      currentSpinner = createToolSpinner(toolCall.name);
+      currentSpinner = createToolSpinner(toolName);
       currentSpinner.start();
     },
-    onToolResult(result: ToolResult) {
+    onToolResult(name: string) {
       if (currentSpinner) {
-        currentSpinner.succeed(chalk.dim(result.toolName));
+        currentSpinner.succeed(chalk.dim(name));
         currentSpinner = null;
       }
     },
-    onError(error: Error) {
+    onError(message: string) {
       if (currentSpinner) {
-        currentSpinner.fail(chalk.red(error.message));
+        currentSpinner.fail(chalk.red(message));
         currentSpinner = null;
       }
     },
@@ -54,11 +65,15 @@ export async function chatCommand(options: { model?: string; provider?: string }
     },
   });
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
   console.log(chalk.cyan('\nMyCode Chat \u2014 /exit to quit, /clear to clear\n'));
 
   while (true) {
-    const input = await rl.question(chalk.green('> '));
+    let input: string;
+    try {
+      input = await question(chalk.green('> '));
+    } catch {
+      break;
+    }
     const trimmed = input.trim();
 
     if (!trimmed) continue;
@@ -74,13 +89,19 @@ export async function chatCommand(options: { model?: string; provider?: string }
 
     try {
       const result = await session.run(trimmed);
+      console.error('\n[DEBUG] session.run() returned:', JSON.stringify(result.slice(0, 200)));
       if (currentSpinner) {
         currentSpinner.stop();
         currentSpinner = null;
       }
       console.log();
-      console.log(renderMarkdown(result));
+      if (result && result.trim()) {
+        console.log(decodeEntities(renderMarkdown(result)));
+      } else {
+        console.error('[DEBUG] result was empty');
+      }
     } catch (err: any) {
+      console.error('\n[DEBUG] session.run() threw:', err.message);
       if (currentSpinner) {
         currentSpinner.fail(chalk.red(err.message));
         currentSpinner = null;
@@ -89,6 +110,4 @@ export async function chatCommand(options: { model?: string; provider?: string }
       }
     }
   }
-
-  rl.close();
 }

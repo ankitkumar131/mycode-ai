@@ -1,10 +1,22 @@
+import * as readline from 'readline';
 import { createInterface } from 'readline/promises';
-import { ConfigManager, AgentSession, ProviderRouter, ToolCall, ToolResult, type SafetyResult } from '@mycode/core';
+import { ConfigManager, AgentSession, ProviderRouter } from '@mycode/core';
 import chalk from 'chalk';
 import { renderMarkdown } from '../ui/renderer.js';
 import { createSpinner, createToolSpinner } from '../ui/spinner.js';
-import { confirmCommand } from '../ui/prompt.js';
 import { Ora } from 'ora';
+import { decodeEntities } from '../utils/html.js';
+import { confirmCommand } from '../ui/prompt.js';
+
+async function question(prompt: string): Promise<string> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise<string>((resolve) => {
+    rl.question(prompt, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
 
 export async function agentCommand(task?: string): Promise<void> {
   const config = new ConfigManager();
@@ -32,25 +44,25 @@ export async function agentCommand(task?: string): Promise<void> {
         currentSpinner = null;
       }
     },
-    onToolCall(toolCall: ToolCall) {
+    onToolCall(toolName: string) {
       if (currentSpinner) {
         currentSpinner.stop();
         currentSpinner = null;
       }
-      if (toolCall.name !== 'exec-command') {
-        currentSpinner = createToolSpinner(toolCall.name);
+      if (toolName !== 'exec-command') {
+        currentSpinner = createToolSpinner(toolName);
         currentSpinner.start();
       }
     },
-    onToolResult(result: ToolResult) {
+    onToolResult(name: string) {
       if (currentSpinner) {
-        currentSpinner.succeed(chalk.dim(result.toolName));
+        currentSpinner.succeed(chalk.dim(name));
         currentSpinner = null;
       }
     },
-    onError(error: Error) {
+    onError(message: string) {
       if (currentSpinner) {
-        currentSpinner.fail(chalk.red(error.message));
+        currentSpinner.fail(chalk.red(message));
         currentSpinner = null;
       }
     },
@@ -74,7 +86,7 @@ export async function agentCommand(task?: string): Promise<void> {
         currentSpinner = null;
       }
       console.log();
-      console.log(renderMarkdown(result));
+      console.log(decodeEntities(renderMarkdown(result)));
     } catch (err: any) {
       if (currentSpinner) {
         currentSpinner.fail(chalk.red(err.message));
@@ -86,11 +98,15 @@ export async function agentCommand(task?: string): Promise<void> {
     return;
   }
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
   console.log(chalk.cyan('\nAgent Mode \u2014 /exit to quit\n'));
 
   while (true) {
-    const input = await rl.question(chalk.magenta('agent> '));
+    let input: string;
+    try {
+      input = await question(chalk.magenta('agent> '));
+    } catch {
+      break;
+    }
     const trimmed = input.trim();
 
     if (!trimmed) continue;
@@ -107,7 +123,7 @@ export async function agentCommand(task?: string): Promise<void> {
         currentSpinner = null;
       }
       console.log();
-      console.log(renderMarkdown(result));
+      console.log(decodeEntities(renderMarkdown(result)));
     } catch (err: any) {
       if (currentSpinner) {
         currentSpinner.fail(chalk.red(err.message));
@@ -117,6 +133,4 @@ export async function agentCommand(task?: string): Promise<void> {
       }
     }
   }
-
-  rl.close();
 }

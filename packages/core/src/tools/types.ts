@@ -29,6 +29,16 @@ export interface ToolDefinition {
 
 export type ToolHandler = (args: Record<string, unknown>) => Promise<string>;
 
+export interface ToolCall {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+export interface ToolResult {
+  toolName: string;
+  result: string;
+}
+
 export type SafetyLevel = 'blocked' | 'dangerous' | 'elevated' | 'normal';
 
 export interface SafetyResult {

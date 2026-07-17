@@ -54,9 +54,11 @@ export class OpenAICompatibleProvider extends BaseProvider {
       const response = await this.client.chat.completions.create(params);
       this.recordSuccess();
       const choice = response.choices[0];
+      const rawToolCalls = choice.message.tool_calls || [];
+      console.error('[DEBUG] finish_reason:', choice.finish_reason, 'tool_calls count:', rawToolCalls.length);
       return {
         content: choice.message.content || '',
-        tool_calls: choice.message.tool_calls || [],
+        toolCalls: rawToolCalls,
         usage: response.usage || {},
         finish_reason: choice.finish_reason,
       };

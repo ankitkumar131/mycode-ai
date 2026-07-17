@@ -66,7 +66,7 @@ async function buildPackage(pkg) {
     // Also build the CLI binary entry point if it exists
     const binEntry = join(pkgDir, 'src', 'mycode.ts');
     if (existsSync(binEntry)) {
-      // For CLI binary: transpile only (no bundle), use ESM, externalize everything
+      // For CLI binary: externalize all workspace and npm deps (resolve from node_modules at runtime)
       const binExternal = [...Object.keys(allDeps || {}).filter(d => d.startsWith('@mycode/')), ...NODE_BUILTINS, ...externalDeps];
       await esbuild.build({
         ...sharedOpts,
@@ -82,6 +82,31 @@ async function buildPackage(pkg) {
       const jsOut = join(pkgDir, 'dist', 'mycode.js');
       const jsContent = readFileSync(jsOut, 'utf-8');
       writeFileSync(jsOut, '#!/usr/bin/env node\n' + jsContent.replace(/^#!.*\n/, ''));
+    }
+
+    // Build standalone CLI bundle (self-contained, for global installs)
+    if (pkg === 'cli') {
+      const standaloneOut = join(pkgDir, 'dist', 'mycode-standalone.cjs');
+      try {
+        await esbuild.build({
+          entryPoints: [binEntry],
+          outfile: standaloneOut,
+          bundle: true,
+          platform: 'node',
+          target: 'node20',
+          format: 'cjs',
+          external: NODE_BUILTINS,
+          tsconfig: join(pkgDir, 'tsconfig.json'),
+          logLevel: 'info',
+        });
+        // Add shebang
+        const content = readFileSync(standaloneOut, 'utf-8');
+        writeFileSync(standaloneOut, '#!/usr/bin/env node\n' + content.replace(/^#!.*\n/, ''));
+        console.log(`  \u2713 @mycode/${pkg} standalone bundle built`);
+      } catch (err) {
+        console.error(`  \u2717 @mycode/${pkg} standalone bundle failed:`, err.message);
+        process.exitCode = 1;
+      }
     }
 
     console.log(`  \u2713 @mycode/${pkg} built successfully`);
