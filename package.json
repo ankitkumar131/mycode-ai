@@ -1,5 +1,5 @@
 {
-  "name": "mycode-ai",
+  "name": "@ankitkumar131/mycode-ai",
   "version": "1.0.0",
   "private": false,
   "description": "Multi-provider AI coding agent for the terminal. Like Claude Code, but provider-agnostic with automatic failover.",
