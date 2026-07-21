@@ -1,4 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('@mycode/core', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@mycode/core')>();
+  return {
+    ...mod,
+    AgentSession: vi.fn().mockImplementation((opts: any) => ({
+      run: vi.fn().mockImplementation(async (input: string) => {
+        opts?.onText?.('Mock answer');
+        return 'Mock answer';
+      }),
+    })),
+  };
+});
+
 import { MyCodeAgent } from '../agent.js';
 import { skillDir, discoverSkills, createSkill, loadSkillConfig } from '../skills.js';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -11,7 +25,7 @@ describe('MyCodeAgent', () => {
     const agent = new MyCodeAgent();
     const info = agent.getInfo();
     expect(info.version).toBe('1.0.0-alpha');
-    expect(info.tools).toBe(7);
+    expect(info.tools).toBe(11);
   });
 
   it('creates with custom config', () => {
@@ -52,6 +66,7 @@ describe('MyCodeAgent', () => {
       },
     });
     expect(Array.isArray(events)).toBe(true);
+    expect(events).toContain('text:Mock answer');
   });
 });
 

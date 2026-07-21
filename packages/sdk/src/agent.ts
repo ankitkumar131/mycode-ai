@@ -2,6 +2,7 @@ import {
   AgentSession,
   ConfigManager,
   ProviderRouter,
+  ToolRegistry,
   type ProviderConfig,
 } from '@mycode/core';
 import { readFile } from 'node:fs/promises';
@@ -48,11 +49,12 @@ export class MyCodeAgent {
   }
 
   getInfo(): AgentInfo {
+    const registry = new ToolRegistry();
     return {
       version: '1.0.0-alpha',
       model: this.config.model || 'default',
       provider: typeof this.config.provider === 'string' ? this.config.provider : 'auto',
-      tools: 7,
+      tools: registry.getDefinitions().length,
       skills: this.config.skills?.length || 0,
       uptime: Date.now() - this.startTime,
     };

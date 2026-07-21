@@ -12,8 +12,14 @@ const MAX_TEXT_LENGTH = 80_000;
 async function extractPdfText(filePath: string): Promise<{ text: string; pages: number; info: Record<string, string> }> {
   const buffer = readFileSync(filePath);
 
+  // Suppress pdf.js polyfill console warnings during pdf parsing
+  const origWarn = console.warn;
+  const origError = console.error;
+
   try {
-    // Dynamic import to avoid hard dependency at compile time
+    console.warn = () => {};
+    console.error = () => {};
+
     const pdfModule = await (import('pdf-parse' as any) as Promise<any>);
     const pdfParse = pdfModule.default || pdfModule;
     const data = await pdfParse(buffer);
@@ -38,6 +44,9 @@ async function extractPdfText(filePath: string): Promise<{ text: string; pages: 
       };
     }
     throw err;
+  } finally {
+    console.warn = origWarn;
+    console.error = origError;
   }
 }
 

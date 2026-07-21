@@ -16,20 +16,19 @@ import { createSpinner, createToolSpinner } from '../ui/spinner.js';
 import { COLORS, S, ICONS, TOOL_ICONS } from '../ui/themes/theme.js';
 import { handleSlashCommand, getCompletions, type SlashCommandContext } from './slash-commands.js';
 import { decodeEntities } from '../utils/html.js';
+import { getLocalPackageInfo } from '../utils/update-check.js';
 
 function getVersion(): string {
-  try {
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const pkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8'));
-    return pkg.version || '0.0.0';
-  } catch {
-    return '0.0.0';
-  }
+  return getLocalPackageInfo().version;
 }
 
 function formatProviderLabel(provider: any): string {
   if (!provider) return 'Default';
-  return `${provider.name}/${provider.model}`;
+  const name = provider.name || '';
+  const model = provider.model || '';
+  if (!model || name === model) return name || 'Default';
+  if (model.startsWith(name + '/') || model.startsWith(name + ':')) return model;
+  return `${name}/${model}`;
 }
 
 function resolveFileReferences(input: string, cwd: string): { text: string; files: string[] } {
@@ -324,6 +323,13 @@ function getToolDetail(name: string, result: string): string {
         const [, start, end, total] = match;
         return start === '1' && end === total ? `${total} lines` : `lines ${start}–${end} of ${total}`;
       }
+      return '';
+    }
+    case 'readPDF':
+    case 'readDocument':
+    case 'read-document': {
+      const match = result.match(/Length: (\d+) characters/) || result.match(/Pages: (\d+)/);
+      if (match) return `${match[1]} chars`;
       return '';
     }
     case 'listDirectory':

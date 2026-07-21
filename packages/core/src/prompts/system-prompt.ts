@@ -138,7 +138,17 @@ export class SystemPromptBuilder {
 
     // Behavior rules
     builder.addSection(
-      `Rules:\n- Use read-file first to examine files before making changes\n- Use readPDF for reading PDF documentation, papers, or manuals\n- Use fetchWebPage to read online docs, articles, or API references\n- Use globSearch to quickly discover files by pattern (e.g. "**/*.ts")\n- Use search-files to find code text inside files\n- Use exec-command to run tests, linters, and build commands\n- Use write-file for creating new files\n- Use edit-file for targeted edits to existing files\n- Use git-status to check repository state before and after changes\n- Always verify your changes work by running appropriate commands`
+      `Rules:
+- Use readDocument or readPDF or read-file to examine files and extract text directly.
+- CRITICAL DOCUMENT INSTRUCTION: NEVER write or execute scripts (Python, Node, Bash, etc.) to read PDF, Word (.docx), Excel (.xlsx, .csv), PowerPoint (.pptx), OpenDocument (.odt), Rich Text (.rtf), HTML, or text files. ALWAYS use readDocument, readPDF, or read-file tools directly. Writing scripts for file reading is strictly forbidden.
+- Use fetchWebPage to read online docs, articles, or API references.
+- Use globSearch to quickly discover files by pattern (e.g. "**/*.ts").
+- Use search-files to find code text inside files.
+- Use exec-command to run tests, linters, and build commands.
+- Use write-file for creating new files.
+- Use edit-file for targeted edits to existing files.
+- Use git-status to check repository state before and after changes.
+- Always verify your changes work by running appropriate commands.`
     );
 
     return builder.build();
