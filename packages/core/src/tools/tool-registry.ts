@@ -7,6 +7,7 @@ import { searchFilesTool } from './definitions/search-files.js';
 import { gitStatusTool } from './definitions/git-status.js';
 import { execCommandTool } from './definitions/exec-command.js';
 import { readPdfTool } from './definitions/read-pdf.js';
+import { readDocumentTool } from './definitions/read-document.js';
 import { fetchWebPageTool } from './definitions/web-fetch.js';
 import { globSearchTool } from './definitions/glob-search.js';
 import type { ToolDefinition, ToolHandler } from './types.js';
@@ -20,6 +21,7 @@ const ALL_TOOLS: ToolModule[] = [
   gitStatusTool,
   execCommandTool,
   readPdfTool,
+  readDocumentTool,
   fetchWebPageTool,
   globSearchTool,
 ];
@@ -34,6 +36,8 @@ const ALIASES: Record<string, string> = {
   'gitStatus': 'git-status',
   'executeCommand': 'exec-command',
   'readPdf': 'readPDF',
+  'readDocument': 'readDocument',
+  'read-document': 'readDocument',
   'fetchWebPage': 'fetchWebPage',
   'globSearch': 'globSearch',
 };
@@ -78,7 +82,6 @@ export class ToolRegistry {
   }
 
   getDefinitions(options?: { filterWriteTools?: boolean }): ToolFunctionDefinition[] {
-    // Return unique definitions by function name
     const seen = new Set<string>();
     let defs: ToolFunctionDefinition[] = [];
 

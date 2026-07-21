@@ -36,6 +36,7 @@ export { searchFilesTool } from './tools/definitions/search-files.js';
 export { gitStatusTool } from './tools/definitions/git-status.js';
 export { execCommandTool } from './tools/definitions/exec-command.js';
 export { readPdfTool } from './tools/definitions/read-pdf.js';
+export { readDocumentTool } from './tools/definitions/read-document.js';
 export { fetchWebPageTool } from './tools/definitions/web-fetch.js';
 export { globSearchTool } from './tools/definitions/glob-search.js';
 

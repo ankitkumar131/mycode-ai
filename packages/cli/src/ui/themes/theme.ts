@@ -116,6 +116,8 @@ export interface ToolMeta {
 export const TOOL_ICONS: Record<string, ToolMeta> = {
   readFile: { icon: '📄', verb: 'Read', color: COLORS.brandLight },
   readPDF: { icon: '📕', verb: 'Read PDF', color: COLORS.accentPink },
+  readDocument: { icon: '📑', verb: 'Read Document', color: COLORS.accentPink },
+  'read-document': { icon: '📑', verb: 'Read Document', color: COLORS.accentPink },
   writeFile: { icon: '✏️', verb: 'Wrote', color: COLORS.accent },
   editFile: { icon: '✏️', verb: 'Edited', color: COLORS.accent },
   listDirectory: { icon: '📁', verb: 'Listed', color: COLORS.accentGold },
@@ -158,13 +160,8 @@ export const SPINNER_FRAMES = {
       `  ${chalk.hex(COLORS.tool)(ICONS.sparkleAlt)}`,
     ],
   },
-} as const;
+};
 
-// ── Utility functions ──────────────────────────────────────────────────────
-
-/**
- * Format a duration in milliseconds to a human-readable string.
- */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
@@ -173,24 +170,15 @@ export function formatDuration(ms: number): string {
   return `${mins}m ${secs}s`;
 }
 
-/**
- * Get terminal width capped at a reasonable max.
- */
 export function getWidth(max = 100): number {
   return Math.min(process.stdout.columns || 80, max);
 }
 
-/**
- * Create a horizontal rule.
- */
 export function hr(width?: number): string {
   const w = width ?? getWidth(60);
   return S.dim(ICONS.dash.repeat(w));
 }
 
-/**
- * Indent every line of text.
- */
 export function indent(text: string, spaces = 2): string {
   const pad = ' '.repeat(spaces);
   return text.split('\n').map(l => l ? `${pad}${l}` : l).join('\n');
