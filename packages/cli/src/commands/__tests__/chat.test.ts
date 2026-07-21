@@ -12,43 +12,61 @@ vi.mock('@mycode/core', () => {
       get: () => ({ providers: [] }),
     })),
     AgentSession: MockSession,
-    ProviderRouter: vi.fn(),
+    ProviderRouter: vi.fn().mockImplementation(() => ({
+      getCurrentProvider: () => ({ name: 'test', model: 'gpt-4o' }),
+    })),
   };
 });
 
-vi.mock('readline/promises', () => {
+vi.mock('readline', () => {
   const mockQuestion = vi.fn();
   const mockClose = vi.fn();
   const mockResume = vi.fn();
   const mockPause = vi.fn();
+  const listeners: Record<string, Function[]> = {};
 
   const rl = {
     question: mockQuestion,
-    close: mockClose,
+    close: vi.fn(() => {
+      listeners['close']?.forEach(fn => fn());
+    }),
     resume: mockResume,
     pause: mockPause,
+    prompt: vi.fn(),
+    on: vi.fn((event: string, fn: Function) => {
+      listeners[event] = listeners[event] || [];
+      listeners[event].push(fn);
+      if (event === 'line') {
+        setTimeout(() => {
+          fn('/exit');
+        }, 10);
+      }
+    }),
+    once: vi.fn((event: string, fn: Function) => {
+      listeners[event] = listeners[event] || [];
+      listeners[event].push(fn);
+    }),
   };
 
   return {
     createInterface: vi.fn(() => rl),
+    default: {
+      createInterface: vi.fn(() => rl),
+    },
   };
 });
 
 import { chatCommand } from '../chat.js';
-import * as readline from 'readline/promises';
 
 describe('chatCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
-    const rl = (readline as any).createInterface();
-    rl.question
-      .mockResolvedValueOnce('/exit');
   });
 
   it('exits on /exit command', async () => {
     await chatCommand();
-    expect(readline.createInterface).toHaveBeenCalled();
+    const { createInterface } = await import('readline');
+    expect(createInterface).toHaveBeenCalled();
   });
 
   it('requires providers to be configured', async () => {

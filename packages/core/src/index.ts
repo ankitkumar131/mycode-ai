@@ -12,6 +12,7 @@ export { ToolRegistry } from './tools/tool-registry.js';
 export { classifyCommand, isBlocked, getSafetyLabel } from './tools/command-safety.js';
 export { CommandHistory } from './tools/command-history.js';
 export { executeCommand } from './tools/command-executor.js';
+export { detectFileType, isBinaryFile } from './tools/file-detector.js';
 export type {
   ToolDefinition,
   ToolHandler,
@@ -34,6 +35,9 @@ export { listDirTool } from './tools/definitions/list-dir.js';
 export { searchFilesTool } from './tools/definitions/search-files.js';
 export { gitStatusTool } from './tools/definitions/git-status.js';
 export { execCommandTool } from './tools/definitions/exec-command.js';
+export { readPdfTool } from './tools/definitions/read-pdf.js';
+export { fetchWebPageTool } from './tools/definitions/web-fetch.js';
+export { globSearchTool } from './tools/definitions/glob-search.js';
 
 // Skills
 export { SkillLoader } from './skills/skill-loader.js';

@@ -6,6 +6,9 @@ import { listDirTool } from './definitions/list-dir.js';
 import { searchFilesTool } from './definitions/search-files.js';
 import { gitStatusTool } from './definitions/git-status.js';
 import { execCommandTool } from './definitions/exec-command.js';
+import { readPdfTool } from './definitions/read-pdf.js';
+import { fetchWebPageTool } from './definitions/web-fetch.js';
+import { globSearchTool } from './definitions/glob-search.js';
 import type { ToolDefinition, ToolHandler } from './types.js';
 
 const ALL_TOOLS: ToolModule[] = [
@@ -16,9 +19,26 @@ const ALL_TOOLS: ToolModule[] = [
   searchFilesTool,
   gitStatusTool,
   execCommandTool,
+  readPdfTool,
+  fetchWebPageTool,
+  globSearchTool,
 ];
 
-const WRITE_TOOLS = new Set(['write-file', 'edit-file']);
+// Aliases for camelCase / kebab-case tool invocation matching
+const ALIASES: Record<string, string> = {
+  'readFile': 'read-file',
+  'writeFile': 'write-file',
+  'editFile': 'edit-file',
+  'listDirectory': 'list-dir',
+  'searchFiles': 'search-files',
+  'gitStatus': 'git-status',
+  'executeCommand': 'exec-command',
+  'readPdf': 'readPDF',
+  'fetchWebPage': 'fetchWebPage',
+  'globSearch': 'globSearch',
+};
+
+const WRITE_TOOLS = new Set(['write-file', 'edit-file', 'writeFile', 'editFile']);
 
 export class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -29,6 +49,13 @@ export class ToolRegistry {
       const name = mod.definition.function.name;
       this.modules.set(name, mod);
     }
+    // Also register camelCase aliases
+    for (const [alias, canonical] of Object.entries(ALIASES)) {
+      const mod = this.modules.get(canonical);
+      if (mod) {
+        this.modules.set(alias, mod);
+      }
+    }
   }
 
   register(name: string, definition: ToolDefinition): void {
@@ -36,7 +63,7 @@ export class ToolRegistry {
   }
 
   get(name: string): ToolDefinition | undefined {
-    return this.tools.get(name) ?? this.modules.get(name) as unknown as ToolDefinition | undefined;
+    return this.tools.get(name) ?? (this.modules.get(name) as unknown as ToolDefinition | undefined);
   }
 
   getAll(): ToolDefinition[] {
@@ -51,7 +78,18 @@ export class ToolRegistry {
   }
 
   getDefinitions(options?: { filterWriteTools?: boolean }): ToolFunctionDefinition[] {
-    let defs = Array.from(this.modules.values()).map(m => m.definition);
+    // Return unique definitions by function name
+    const seen = new Set<string>();
+    let defs: ToolFunctionDefinition[] = [];
+
+    for (const mod of this.modules.values()) {
+      const name = mod.definition.function.name;
+      if (!seen.has(name)) {
+        seen.add(name);
+        defs.push(mod.definition);
+      }
+    }
+
     if (options?.filterWriteTools) {
       defs = defs.filter(d => !WRITE_TOOLS.has(d.function.name));
     }
@@ -68,7 +106,8 @@ export class ToolRegistry {
       abortSignal?: AbortSignal;
     }
   ): Promise<string> {
-    const mod = this.modules.get(name);
+    const canonicalName = ALIASES[name] || name;
+    const mod = this.modules.get(canonicalName) || this.modules.get(name);
     if (mod) {
       return await mod.execute(args, cwd, execOptions);
     }
@@ -82,11 +121,13 @@ export class ToolRegistry {
   }
 
   isValidTool(name: string): boolean {
-    return this.modules.has(name) || this.tools.has(name);
+    const canonicalName = ALIASES[name] || name;
+    return this.modules.has(canonicalName) || this.modules.has(name) || this.tools.has(name);
   }
 
   isWriteTool(name: string): boolean {
-    return WRITE_TOOLS.has(name);
+    const canonicalName = ALIASES[name] || name;
+    return WRITE_TOOLS.has(canonicalName) || WRITE_TOOLS.has(name);
   }
 
   getToolNames(): string[] {
@@ -96,6 +137,7 @@ export class ToolRegistry {
   }
 
   getTool(name: string): ToolModule | undefined {
-    return this.modules.get(name);
+    const canonicalName = ALIASES[name] || name;
+    return this.modules.get(canonicalName) || this.modules.get(name);
   }
 }

@@ -1,13 +1,15 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { ToolModule } from '../types.js';
+import { detectFileType } from '../file-detector.js';
+import { readPdfTool } from './read-pdf.js';
 
 export const readFileTool: ToolModule = {
   definition: {
     type: 'function',
     function: {
       name: 'read-file',
-      description: 'Read the contents of a file at the given path',
+      description: 'Read the contents of a file at the given path. Automatically handles text files, PDFs, and binary file warnings.',
       parameters: {
         type: 'object',
         properties: {
@@ -29,7 +31,7 @@ export const readFileTool: ToolModule = {
     },
   },
 
-  async execute(args, cwd) {
+  async execute(args, cwd, options) {
     const filePath = typeof args.path === 'string' ? args.path : '';
     const offset = typeof args.offset === 'number' ? args.offset : undefined;
     const limit = typeof args.limit === 'number' ? args.limit : undefined;
@@ -39,6 +41,18 @@ export const readFileTool: ToolModule = {
     }
 
     const resolvedPath = resolve(cwd, filePath);
+
+    // Detect file type first
+    const fileInfo = detectFileType(resolvedPath);
+
+    if (fileInfo.category === 'pdf') {
+      // Auto-delegate to readPdfTool
+      return await readPdfTool.execute({ path: filePath }, cwd, options);
+    }
+
+    if (fileInfo.category !== 'text') {
+      return `[Binary file detected: ${fileInfo.category} (${fileInfo.mimeType}, ${fileInfo.sizeLabel})]\nCannot render raw binary file as text.`;
+    }
 
     try {
       const content = await readFile(resolvedPath, 'utf-8');

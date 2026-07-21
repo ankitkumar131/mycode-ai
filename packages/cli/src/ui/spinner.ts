@@ -1,50 +1,100 @@
-import ora, { Ora } from 'ora';
-import chalk from 'chalk';
+/**
+ * Gemini CLI-style Spinners
+ * ✦ ✧ ◆ sparkle animation for thinking, ⬡ ⬢ for tools.
+ */
 
-const BRAND = {
-  sparkle: '#60A5FA',
-  accent: '#A78BFA',
-  tool: '#38BDF8',
-  dim: '#6B7280',
-  warning: '#FBBF24',
+import ora, { type Ora } from 'ora';
+import chalk from 'chalk';
+import { COLORS, ICONS, S } from './themes/theme.js';
+
+export const SPINNER_FRAMES = {
+  thinking: {
+    interval: 120,
+    frames: [
+      `  ${chalk.hex(COLORS.sparkle)(ICONS.sparkle)}`,
+      `  ${chalk.hex(COLORS.thinking)(ICONS.sparkleAlt)}`,
+      `  ${chalk.hex(COLORS.sparkle)(ICONS.sparkle)}`,
+      `  ${chalk.hex(COLORS.thinking)(ICONS.sparkleAlt)}`,
+      `  ${chalk.hex(COLORS.accent)(ICONS.diamond)}`,
+      `  ${chalk.hex(COLORS.sparkle)(ICONS.sparkle)}`,
+    ],
+  },
+  tool: {
+    interval: 100,
+    frames: [
+      `  ${chalk.hex(COLORS.accent)(ICONS.hexEmpty)}`,
+      `  ${chalk.hex(COLORS.accent)(ICONS.hexFull)}`,
+      `  ${chalk.hex(COLORS.accent)(ICONS.hexEmpty)}`,
+      `  ${chalk.hex(COLORS.accent)(ICONS.hexFull)}`,
+    ],
+  },
+  codegen: {
+    interval: 100,
+    frames: [
+      `  ${chalk.hex(COLORS.tool)(ICONS.sparkle)}`,
+      `  ${chalk.hex(COLORS.tool)(ICONS.sparkleAlt)}`,
+      `  ${chalk.hex(COLORS.tool)(ICONS.sparkle)}`,
+      `  ${chalk.hex(COLORS.tool)(ICONS.sparkleAlt)}`,
+    ],
+  },
 };
 
+/**
+ * Create a thinking spinner with model name.
+ */
 export function createSpinner(providerLabel = ''): Ora {
   const label = providerLabel
-    ? `${chalk.hex(BRAND.sparkle)('\u2726')} ${chalk.hex(BRAND.sparkle).bold(providerLabel)}`
-    : `${chalk.hex(BRAND.sparkle)('\u2726')} ${chalk.hex(BRAND.sparkle)('Thinking...')}`;
+    ? `${S.brand(ICONS.sparkle)} ${S.accentBold(providerLabel)}`
+    : `${S.brand(ICONS.sparkle)} ${S.brand('Thinking...')}`;
 
   return ora({
     text: label,
-    spinner: {
-      interval: 120,
-      frames: ['  \u2726', '  \u2727', '  \u2726', '  \u2727', '  \u25C6', '  \u2726'],
-    },
+    spinner: SPINNER_FRAMES.thinking,
     color: 'blue',
+    prefixText: '',
   });
 }
 
+/**
+ * Create a tool execution spinner.
+ */
 export function createToolSpinner(toolName: string): Ora {
   return ora({
-    text: `${chalk.hex(BRAND.accent)('\u2B21')} ${chalk.hex(BRAND.accent)(toolName)}`,
-    spinner: {
-      interval: 100,
-      frames: ['  \u2B21', '  \u2B22', '  \u2B21', '  \u2B22'],
-    },
+    text: `${S.accent(ICONS.hexEmpty)} ${S.accent(toolName)}`,
+    spinner: SPINNER_FRAMES.tool,
     color: 'magenta',
+    prefixText: '',
   });
 }
 
+/**
+ * Create a code generation progress spinner.
+ */
+export function createCodegenSpinner(): Ora {
+  return ora({
+    text: `${S.cyan(ICONS.sparkle)} ${S.cyan('Generating...')}`,
+    spinner: SPINNER_FRAMES.codegen,
+    color: 'cyan',
+    prefixText: '',
+  });
+}
+
+/**
+ * Create a setup/initialization spinner.
+ */
 export function createSetupSpinner(message: string): Ora {
   return ora({
-    text: chalk.hex(BRAND.dim)(message),
+    text: S.dim(message),
     spinner: 'dots',
     color: 'white',
     prefixText: '  ',
   });
 }
 
-export function showProviderSwitch(spinner: Ora, newProvider: string): void {
-  spinner.text = `${chalk.hex(BRAND.warning)('\u21BB')} ${chalk.hex(BRAND.warning)(`Switching to ${chalk.bold(newProvider)}...`)}`;
+/**
+ * Update a spinner to show provider switch notification.
+ */
+export function showProviderSwitch(spinner: Ora, from: string, to: string, reason: string): void {
+  spinner.text = `${S.warning(ICONS.switch)} ${S.warning(`Switching ${chalk.bold(from)} → ${chalk.bold(to)}`)} ${S.dim(`(${reason})`)}`;
   spinner.color = 'yellow';
 }

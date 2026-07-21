@@ -32,7 +32,7 @@ export class SystemPromptBuilder {
     const modelInfo = options?.model ? ` (${options.model})` : '';
     const providerInfo = options?.provider ? ` via ${options.provider}` : '';
     builder.addSection(
-      `You are MyCode, an AI coding agent${modelInfo}${providerInfo}. You help users with software engineering tasks by reading, writing, and searching files, and executing commands.`
+      `You are MyCode, an AI coding agent${modelInfo}${providerInfo}. You help users with software engineering tasks by reading, writing, and searching files, fetching web documentation, and executing shell commands.`
     );
 
     // OS and environment
@@ -72,19 +72,6 @@ export class SystemPromptBuilder {
       } catch {
         // ignore
       }
-    } else {
-      const tomlPath = resolve(cwd, 'Cargo.toml');
-      if (existsSync(tomlPath)) {
-        try {
-          const toml = readFileSync(tomlPath, 'utf-8');
-          const nameMatch = toml.match(/^name\s*=\s*"([^"]+)"/m);
-          if (nameMatch) {
-            projectParts.push(`Rust project: ${nameMatch[1]}`);
-          }
-        } catch {
-          // ignore
-        }
-      }
     }
 
     if (projectParts.length > 0) {
@@ -105,20 +92,6 @@ export class SystemPromptBuilder {
       }
     } catch {
       // not a git repo
-    }
-
-    try {
-      const remote = execSync('git remote get-url origin 2>nul', {
-        cwd,
-        encoding: 'utf-8',
-        timeout: 5000,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      }).trim();
-      if (remote) {
-        gitParts.push(`Remote: ${remote}`);
-      }
-    } catch {
-      // no remote
     }
 
     try {
@@ -165,7 +138,7 @@ export class SystemPromptBuilder {
 
     // Behavior rules
     builder.addSection(
-      `Rules:\n- Use read-file first to examine files before making changes\n- Use search-files to find relevant code\n- Use exec-command to run tests, linters, and build commands\n- Use write-file for creating new files\n- Use edit-file for targeted edits to existing files\n- Use git-status to check repository state before and after changes\n- Always verify your changes work by running appropriate commands`
+      `Rules:\n- Use read-file first to examine files before making changes\n- Use readPDF for reading PDF documentation, papers, or manuals\n- Use fetchWebPage to read online docs, articles, or API references\n- Use globSearch to quickly discover files by pattern (e.g. "**/*.ts")\n- Use search-files to find code text inside files\n- Use exec-command to run tests, linters, and build commands\n- Use write-file for creating new files\n- Use edit-file for targeted edits to existing files\n- Use git-status to check repository state before and after changes\n- Always verify your changes work by running appropriate commands`
     );
 
     return builder.build();
