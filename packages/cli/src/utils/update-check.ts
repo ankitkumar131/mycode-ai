@@ -37,20 +37,33 @@ export function getLocalPackageInfo(): { name: string; version: string } {
   try {
     const __dirname = dirname(fileURLToPath(import.meta.url));
 
-    // Search upwards for package.json
     const candidates = [
-      resolve(__dirname, '../package.json'),
+      resolve(__dirname, '../../../package.json'), // Root package.json
       resolve(__dirname, '../../package.json'),
-      resolve(__dirname, '../../../package.json'),
+      resolve(__dirname, '../package.json'),
     ];
 
+    // Priority 1: Check for root published package
     for (const p of candidates) {
       if (existsSync(p)) {
         const pkg = JSON.parse(readFileSync(p, 'utf-8'));
-        if (pkg.name) {
+        if (pkg.name === PUBLISHED_PACKAGE_NAME || pkg.name === '@ankitkumar131/mycode-ai') {
           return {
-            name: pkg.name === '@mycode/cli' ? PUBLISHED_PACKAGE_NAME : pkg.name,
-            version: pkg.version || '1.0.0',
+            name: PUBLISHED_PACKAGE_NAME,
+            version: pkg.version || '1.0.7',
+          };
+        }
+      }
+    }
+
+    // Priority 2: Any package.json with valid version
+    for (const p of candidates) {
+      if (existsSync(p)) {
+        const pkg = JSON.parse(readFileSync(p, 'utf-8'));
+        if (pkg.version && !pkg.version.includes('alpha')) {
+          return {
+            name: PUBLISHED_PACKAGE_NAME,
+            version: pkg.version,
           };
         }
       }
@@ -59,7 +72,7 @@ export function getLocalPackageInfo(): { name: string; version: string } {
     // Fallback
   }
 
-  return { name: PUBLISHED_PACKAGE_NAME, version: '1.0.0' };
+  return { name: PUBLISHED_PACKAGE_NAME, version: '1.0.7' };
 }
 
 /**
@@ -111,7 +124,7 @@ function renderUpdateBox(currentVersion: string, latestVersion: string, packageN
     return '│' + ' '.repeat(padding) + textWithAnsi + ' '.repeat(Math.max(0, rightPad)) + '│';
   };
 
-  const y = chalk.hex('#FBBF24'); // Gold border
+  const y = chalk.hex('#FBBF24');
 
   console.log();
   console.log(y(borderTop));

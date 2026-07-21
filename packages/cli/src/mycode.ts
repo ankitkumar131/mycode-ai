@@ -6,7 +6,7 @@ import { explainCommand } from './commands/explain.js';
 import { fixCommand } from './commands/fix.js';
 import { editCommand } from './commands/edit.js';
 import { agentCommand } from './commands/agent.js';
-import { checkForUpdate } from './utils/update-check.js';
+import { checkForUpdate, getLocalPackageInfo } from './utils/update-check.js';
 
 const [, , cmd, ...args] = process.argv;
 
@@ -36,6 +36,12 @@ async function main() {
     case 'agent':
       await agentCommand(args.join(' '));
       break;
+    case '--version':
+    case '-v': {
+      const { name, version } = getLocalPackageInfo();
+      console.log(`MyCode CLI v${version} (${name})`);
+      break;
+    }
     case '--help':
     case '-h':
       console.log(`Usage: mycode <command>
@@ -48,16 +54,18 @@ Commands:
   fix <file|error>  Diagnose and fix errors
   edit <file> ...   Edit a file with AI
   agent [task]      Full autonomous coding agent
+  --version, -v     Show CLI version
   --help, -h        Show this help`);
       break;
     default:
       console.error(`Unknown command: ${cmd}`);
       console.error(`Run 'mycode --help' for usage.`);
-      process.exit(1);
+      process.exitCode = 1;
+      break;
   }
 }
 
 main().catch((err) => {
   console.error('Fatal:', err.message);
-  process.exit(1);
+  process.exitCode = 1;
 });
