@@ -8,6 +8,9 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 
+const rootPkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
+const currentVersion = rootPkg.version;
+
 const args = process.argv.slice(2);
 const pkgIndex = args.indexOf('--package');
 const targetPackage = pkgIndex !== -1 ? args[pkgIndex + 1] : null;
@@ -26,19 +29,34 @@ const NODE_BUILTINS = [
   'util/types', 'v8', 'vm', 'worker_threads', 'zlib',
 ];
 
+function syncWorkspaceVersions() {
+  for (const pkg of ['core', 'sdk', 'cli', 'a2a-server', 'devtools', 'test-utils']) {
+    const pkgPath = join(root, 'packages', pkg, 'package.json');
+    if (existsSync(pkgPath)) {
+      try {
+        const pkgJson = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+        if (pkgJson.version !== currentVersion) {
+          pkgJson.version = currentVersion;
+          writeFileSync(pkgPath, JSON.stringify(pkgJson, null, 2) + '\n');
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
 async function buildPackage(pkg) {
   const pkgDir = join(root, 'packages', pkg);
   const pkgJson = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf-8'));
 
-  console.log(`Building @mycode/${pkg}...`);
+  console.log(`Building @mycode/${pkg} (v${currentVersion})...`);
 
-  // Build configuration
   const allDeps = {
     ...pkgJson.dependencies,
     ...pkgJson.peerDependencies,
   };
 
-  // Filter out @mycode/* workspace deps (they'll be resolved via node_modules after install)
   const externalDeps = Object.keys(allDeps || {}).filter(
     (d) => !d.startsWith('@mycode/'),
   );
@@ -53,6 +71,9 @@ async function buildPackage(pkg) {
     external,
     tsconfig: join(pkgDir, 'tsconfig.json'),
     logLevel: 'info',
+    define: {
+      'process.env.CLI_VERSION': JSON.stringify(currentVersion),
+    },
   };
 
   try {
@@ -63,10 +84,8 @@ async function buildPackage(pkg) {
       bundle: true,
     });
 
-    // Also build the CLI binary entry point if it exists
     const binEntry = join(pkgDir, 'src', 'mycode.ts');
     if (existsSync(binEntry)) {
-      // For CLI binary: externalize all workspace and npm deps (resolve from node_modules at runtime)
       const binExternal = [...Object.keys(allDeps || {}).filter(d => d.startsWith('@mycode/')), ...NODE_BUILTINS, ...externalDeps];
       await esbuild.build({
         ...sharedOpts,
@@ -78,13 +97,11 @@ async function buildPackage(pkg) {
         external: binExternal,
       });
 
-      // Ensure single shebang
       const jsOut = join(pkgDir, 'dist', 'mycode.js');
       const jsContent = readFileSync(jsOut, 'utf-8');
       writeFileSync(jsOut, '#!/usr/bin/env node\n' + jsContent.replace(/^#!.*\n/, ''));
     }
 
-    // Build standalone CLI bundle (self-contained, for global installs)
     if (pkg === 'cli') {
       const standaloneOut = join(pkgDir, 'dist', 'mycode-standalone.cjs');
       try {
@@ -98,25 +115,28 @@ async function buildPackage(pkg) {
           external: NODE_BUILTINS,
           tsconfig: join(pkgDir, 'tsconfig.json'),
           logLevel: 'info',
+          define: {
+            'process.env.CLI_VERSION': JSON.stringify(currentVersion),
+          },
         });
-        // Add shebang
         const content = readFileSync(standaloneOut, 'utf-8');
         writeFileSync(standaloneOut, '#!/usr/bin/env node\n' + content.replace(/^#!.*\n/, ''));
-        console.log(`  \u2713 @mycode/${pkg} standalone bundle built`);
+        console.log(`  ✓ @mycode/${pkg} standalone bundle built (v${currentVersion})`);
       } catch (err) {
-        console.error(`  \u2717 @mycode/${pkg} standalone bundle failed:`, err.message);
+        console.error(`  ✖ @mycode/${pkg} standalone bundle failed:`, err.message);
         process.exitCode = 1;
       }
     }
 
-    console.log(`  \u2713 @mycode/${pkg} built successfully`);
+    console.log(`  ✓ @mycode/${pkg} built successfully`);
   } catch (err) {
-    console.error(`  \u2717 @mycode/${pkg} build failed:`, err.message);
+    console.error(`  ✖ @mycode/${pkg} build failed:`, err.message);
     process.exitCode = 1;
   }
 }
 
 async function main() {
+  syncWorkspaceVersions();
   for (const pkg of packages) {
     await buildPackage(pkg);
   }

@@ -1,6 +1,6 @@
 {
   "name": "@mycode/core",
-  "version": "1.0.0-alpha",
+  "version": "1.0.9",
   "private": true,
   "description": "MyCode Core — Agent engine, tools, skills, MCP, and provider system",
   "type": "module",

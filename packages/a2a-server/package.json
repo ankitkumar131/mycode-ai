@@ -1,6 +1,6 @@
 {
   "name": "@mycode/a2a-server",
-  "version": "1.0.0-alpha",
+  "version": "1.0.9",
   "private": true,
   "description": "MyCode Agent-to-Agent protocol server",
   "type": "module",

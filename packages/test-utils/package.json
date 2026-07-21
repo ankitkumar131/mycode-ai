@@ -1,6 +1,6 @@
 {
   "name": "@mycode/test-utils",
-  "version": "1.0.0-alpha",
+  "version": "1.0.9",
   "private": true,
   "description": "Shared test utilities for MyCode packages",
   "type": "module",

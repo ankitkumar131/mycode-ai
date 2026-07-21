@@ -32,8 +32,13 @@ export function isNewerVersion(v1: string, v2: string): boolean {
 
 /**
  * Get current installed package version and name.
+ * Uses compile-time process.env.CLI_VERSION injected by esbuild, with filesystem fallback.
  */
 export function getLocalPackageInfo(): { name: string; version: string } {
+  if (process.env.CLI_VERSION) {
+    return { name: PUBLISHED_PACKAGE_NAME, version: process.env.CLI_VERSION };
+  }
+
   try {
     const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -43,24 +48,22 @@ export function getLocalPackageInfo(): { name: string; version: string } {
       resolve(__dirname, '../package.json'),
     ];
 
-    // Priority 1: Check for root published package
     for (const p of candidates) {
       if (existsSync(p)) {
         const pkg = JSON.parse(readFileSync(p, 'utf-8'));
-        if (pkg.name === PUBLISHED_PACKAGE_NAME || pkg.name === '@ankitkumar131/mycode-ai') {
+        if (pkg.version && (pkg.name === PUBLISHED_PACKAGE_NAME || pkg.name === '@ankitkumar131/mycode-ai')) {
           return {
             name: PUBLISHED_PACKAGE_NAME,
-            version: pkg.version || '1.0.7',
+            version: pkg.version,
           };
         }
       }
     }
 
-    // Priority 2: Any package.json with valid version
     for (const p of candidates) {
       if (existsSync(p)) {
         const pkg = JSON.parse(readFileSync(p, 'utf-8'));
-        if (pkg.version && !pkg.version.includes('alpha')) {
+        if (pkg.version) {
           return {
             name: PUBLISHED_PACKAGE_NAME,
             version: pkg.version,
@@ -72,7 +75,7 @@ export function getLocalPackageInfo(): { name: string; version: string } {
     // Fallback
   }
 
-  return { name: PUBLISHED_PACKAGE_NAME, version: '1.0.7' };
+  return { name: PUBLISHED_PACKAGE_NAME, version: '1.0.9' };
 }
 
 /**
