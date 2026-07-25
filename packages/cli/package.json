@@ -1,6 +1,6 @@
 {
   "name": "@mycode/cli",
-  "version": "1.0.10",
+  "version": "2.0.0",
   "private": true,
   "description": "MyCode CLI — Terminal UI and entry point",
   "type": "module",

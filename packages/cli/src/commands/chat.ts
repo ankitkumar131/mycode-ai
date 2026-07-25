@@ -15,6 +15,7 @@ import { renderMarkdown } from '../ui/renderer.js';
 import { createSpinner, createToolSpinner } from '../ui/spinner.js';
 import { COLORS, S, ICONS, TOOL_ICONS } from '../ui/themes/theme.js';
 import { handleSlashCommand, getCompletions, type SlashCommandContext } from './slash-commands.js';
+import { pickSlashCommandInteractive } from '../ui/slash-picker.js';
 import { decodeEntities } from '../utils/html.js';
 import { getLocalPackageInfo } from '../utils/update-check.js';
 
@@ -205,22 +206,29 @@ export async function chatCommand(options: { model?: string; provider?: string }
       isProcessing = true;
       rl.pause();
 
-      handleSlashCommand(input, slashCtx)
-        .then((res) => {
-          if (res?.type === 'exit') {
-            rl.close();
-            process.exit(0);
-          }
-          rl.resume();
-          rl.prompt();
-        })
+      const runSlash = async () => {
+        let cmdToRun = input;
+        if (input === '/') {
+          const picked = await pickSlashCommandInteractive('/');
+          if (!picked) return;
+          cmdToRun = picked;
+        }
+
+        const res = await handleSlashCommand(cmdToRun, slashCtx);
+        if (res?.type === 'exit') {
+          rl.close();
+          process.exit(0);
+        }
+      };
+
+      runSlash()
         .catch((err: Error) => {
           console.log(`  ${S.error(ICONS.cross)} ${err.message}`);
-          rl.resume();
-          rl.prompt();
         })
         .finally(() => {
           isProcessing = false;
+          rl.resume();
+          rl.prompt();
         });
       return;
     }

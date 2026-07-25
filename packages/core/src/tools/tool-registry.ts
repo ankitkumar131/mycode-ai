@@ -10,9 +10,7 @@ import { readPdfTool } from './definitions/read-pdf.js';
 import { readDocumentTool } from './definitions/read-document.js';
 import { fetchWebPageTool } from './definitions/web-fetch.js';
 import { globSearchTool } from './definitions/glob-search.js';
-import { delegateTool } from './definitions/delegate.js';
 import { codeExecTool } from './definitions/code-exec.js';
-import { questionTool } from './definitions/question.js';
 import { todoWriteTool } from './definitions/todowrite.js';
 import { readInstructionsTool } from './definitions/read-instructions.js';
 
@@ -28,9 +26,7 @@ const ALL_TOOLS: ToolModule[] = [
   readDocumentTool,
   fetchWebPageTool,
   globSearchTool,
-  delegateTool,
   codeExecTool,
-  questionTool,
   todoWriteTool,
   readInstructionsTool,
 ];

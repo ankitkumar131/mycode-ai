@@ -35,7 +35,7 @@ function formatProvider(p: any): string {
   return `${p.name}/${p.model}`;
 }
 
-const COMMANDS: CommandDef[] = [
+export const COMMANDS: CommandDef[] = [
   {
     name: '/help',
     aliases: ['/h', '/?'],
@@ -78,7 +78,7 @@ const COMMANDS: CommandDef[] = [
 
         const active = ctx.router.getCurrentProvider();
         for (const stat of stats) {
-          const label = `${stat.name}/${stat.model}`;
+          const label = formatProvider(stat);
           const isActive = active && stat.model === active.model;
           if (isActive) {
             console.log(`  ${chalk.hex(theme.green)('●')} ${chalk.bold(label)} ${chalk.hex(theme.green)('(active)')}`);

@@ -14,17 +14,25 @@ export class OpenAICompatibleProvider extends BaseProvider {
     baseURL?: string;
     baseUrl?: string;
     apiProvider?: string;
+    timeout?: number;
+    maxRetries?: number;
   }) {
     super();
     this._name = options.name;
     this._model = options.model;
     let url = options.baseURL || options.baseUrl;
-    if (!url && options.apiProvider === 'openrouter') {
-      url = 'https://openrouter.ai/api/v1';
+    if (!url) {
+      if (options.apiProvider === 'openrouter') {
+        url = 'https://openrouter.ai/api/v1';
+      } else if (options.apiProvider === 'nvidia_nim' || options.apiProvider === 'nvidia') {
+        url = 'https://integrate.api.nvidia.com/v1';
+      }
     }
     this.client = new OpenAI({
       apiKey: options.apiKey || 'dummy-key',
       baseURL: url,
+      timeout: options.timeout ?? 45_000,
+      maxRetries: options.maxRetries ?? 1,
     });
   }
 
@@ -44,18 +52,31 @@ export class OpenAICompatibleProvider extends BaseProvider {
     return true;
   }
 
+  private buildParams(messages: unknown[], tools: unknown[] = [], options: any = {}): any {
+    const params: any = {
+      model: this._model,
+      messages,
+      temperature: options.temperature ?? 0.3,
+      max_tokens: options.max_tokens ?? 4096,
+    };
+
+    if (options.top_p !== undefined) params.top_p = options.top_p;
+    if (options.seed !== undefined) params.seed = options.seed;
+    if (options.reasoning_effort) params.reasoning_effort = options.reasoning_effort;
+    if (options.chat_template_kwargs) params.chat_template_kwargs = options.chat_template_kwargs;
+    if (options.extra_body) params.extra_body = options.extra_body;
+
+    if (tools.length > 0) {
+      params.tools = tools;
+      params.tool_choice = options.tool_choice ?? 'auto';
+    }
+
+    return params;
+  }
+
   async chat(messages: unknown[], tools: unknown[] = [], options: any = {}): Promise<any> {
     try {
-      const params: any = {
-        model: this._model,
-        messages,
-        temperature: options.temperature ?? 0.3,
-        max_tokens: options.max_tokens ?? 16384,
-      };
-      if (tools.length > 0) {
-        params.tools = tools;
-        params.tool_choice = options.tool_choice ?? 'auto';
-      }
+      const params = this.buildParams(messages, tools, options);
       const response = await this.client.chat.completions.create(params);
       this.recordSuccess();
       const choice = response.choices[0];
@@ -74,17 +95,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
 
   async *stream(messages: unknown[], tools: unknown[] = [], options: any = {}): AsyncGenerator<any> {
     try {
-      const params: any = {
-        model: this._model,
-        messages,
-        temperature: options.temperature ?? 0.3,
-        max_tokens: options.max_tokens ?? 16384,
-        stream: true,
-      };
-      if (tools.length > 0) {
-        params.tools = tools;
-        params.tool_choice = options.tool_choice ?? 'auto';
-      }
+      const params = this.buildParams(messages, tools, options);
+      params.stream = true;
+
       const stream = await this.client.chat.completions.create(params);
       this.recordSuccess();
 

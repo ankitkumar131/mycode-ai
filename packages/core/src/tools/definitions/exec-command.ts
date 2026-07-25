@@ -1,11 +1,13 @@
 import type { ToolModule } from '../types.js';
 
+const MAX_OUTPUT_CHARS = 10_000;
+
 export const execCommandTool: ToolModule = {
   definition: {
     type: 'function',
     function: {
       name: 'exec-command',
-      description: 'Execute a shell command and return its output',
+      description: 'Execute a shell command efficiently and return its output',
       parameters: {
         type: 'object',
         properties: {
@@ -48,10 +50,7 @@ export const execCommandTool: ToolModule = {
       throw new Error(`Command blocked: ${safety.reason}`);
     }
 
-    if (
-      safety.level === 'dangerous' &&
-      options?.confirmFn
-    ) {
+    if (safety.level === 'dangerous' && options?.confirmFn) {
       const confirmed = await options.confirmFn(command, description ?? null, safety);
       if (!confirmed) {
         if (options.commandHistory) {
@@ -88,22 +87,23 @@ export const execCommandTool: ToolModule = {
       });
     }
 
-    const parts: string[] = [];
-    if (result.output) {
-      parts.push(result.output);
+    let output = result.output || '';
+    if (output.length > MAX_OUTPUT_CHARS) {
+      const firstPart = output.slice(0, 4000);
+      const lastPart = output.slice(-4000);
+      output = `${firstPart}\n... [${output.length - 8000} characters truncated for speed] ...\n${lastPart}`;
     }
-    parts.push(`\nExit code: ${result.exitCode ?? result.signal ?? 'unknown'}`);
-    parts.push(`Duration: ${(result.durationMs / 1000).toFixed(1)}s`);
 
-    if (result.timedOut) {
-      parts.push('Result: TIMED OUT');
-    } else if (result.killed) {
-      parts.push('Result: KILLED');
-    } else if (result.exitCode === 0) {
-      parts.push('Result: SUCCESS');
-    } else {
-      parts.push('Result: FAILED');
+    const parts: string[] = [];
+    if (output) {
+      parts.push(output);
     }
+    parts.push(`Exit code: ${result.exitCode ?? result.signal ?? 'unknown'} | Duration: ${(result.durationMs / 1000).toFixed(1)}s`);
+
+    if (result.timedOut) parts.push('Status: TIMED OUT');
+    else if (result.killed) parts.push('Status: KILLED');
+    else if (result.exitCode === 0) parts.push('Status: SUCCESS');
+    else parts.push('Status: FAILED');
 
     return parts.join('\n');
   },

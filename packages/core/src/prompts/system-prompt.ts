@@ -139,6 +139,7 @@ export class SystemPromptBuilder {
     // Behavior rules
     builder.addSection(
       `Rules:
+- ONLY invoke tools when explicitly needed to perform a requested file or command operation. For greetings (e.g. "hi", "hello"), questions, or conversational messages, respond directly in plain text without calling any tools.
 - Use readDocument or readPDF or read-file to examine files and extract text directly.
 - CRITICAL DOCUMENT INSTRUCTION: NEVER write or execute scripts (Python, Node, Bash, etc.) to read PDF, Word (.docx), Excel (.xlsx, .csv), PowerPoint (.pptx), OpenDocument (.odt), Rich Text (.rtf), HTML, or text files. ALWAYS use readDocument, readPDF, or read-file tools directly. Writing scripts for file reading is strictly forbidden.
 - Use fetchWebPage to read online docs, articles, or API references.

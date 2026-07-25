@@ -40,7 +40,14 @@ export class ProviderRouter {
   }
 
   private getEligibleProviders(requirements: { needsWrite?: boolean; needsRead?: boolean } = {}): BaseProvider[] {
-    return this.providers.filter((p) => {
+    // Reorder providers so the active provider (_currentIndex) is tried FIRST
+    const activeIdx = Math.max(0, Math.min(this._currentIndex, this.providers.length - 1));
+    const reordered = [
+      ...this.providers.slice(activeIdx),
+      ...this.providers.slice(0, activeIdx),
+    ];
+
+    return reordered.filter((p) => {
       const health = p.getHealth();
       if (!health.isAvailable) return false;
       if (requirements.needsWrite && !p.canWrite) return false;
@@ -142,13 +149,34 @@ export class ProviderRouter {
   }
 
   setActiveProvider(name: string): boolean {
-    const lower = name.toLowerCase();
-    const idx = this.providers.findIndex(
-      (p) =>
-        p.name.toLowerCase() === lower ||
-        p.model.toLowerCase() === lower ||
-        `${p.name}/${p.model}`.toLowerCase() === lower
-    );
+    const lower = name.toLowerCase().trim();
+    if (!lower) return false;
+
+    // 1. Exact match on name, model, or name/model
+    let idx = this.providers.findIndex((p) => {
+      const pName = p.name.toLowerCase();
+      const pModel = p.model.toLowerCase();
+      return (
+        pName === lower ||
+        pModel === lower ||
+        `${pName}/${pModel}`.toLowerCase() === lower
+      );
+    });
+
+    // 2. Fuzzy / Substring match
+    if (idx === -1) {
+      idx = this.providers.findIndex((p) => {
+        const pName = p.name.toLowerCase();
+        const pModel = p.model.toLowerCase();
+        return (
+          pName.includes(lower) ||
+          pModel.includes(lower) ||
+          lower.includes(pName) ||
+          lower.includes(pModel)
+        );
+      });
+    }
+
     if (idx !== -1) {
       this._currentIndex = idx;
       (this.providers[idx] as any)._health.isAvailable = true;

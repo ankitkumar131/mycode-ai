@@ -1,6 +1,8 @@
 const DEFAULT_MAX_TOKENS = 128_000;
 const TOKEN_ESTIMATE_RATIO = 4;
 const RESERVED_TOKENS = 4000;
+const MAX_TOOL_RESULT_CHARS = 8000;
+const MAX_TOOL_ARG_CHARS = 4000;
 
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -48,10 +50,41 @@ export class ConversationContext {
       };
     }>
   ): void {
-    this.messages.push({ role: 'assistant', content, tool_calls: toolCalls });
+    const sanitized = toolCalls.map(tc => {
+      let argsStr = tc.function.arguments;
+      if (argsStr.length > MAX_TOOL_ARG_CHARS) {
+        try {
+          const parsed = JSON.parse(argsStr);
+          if (typeof parsed.content === 'string' && parsed.content.length > 1000) {
+            parsed.content = parsed.content.slice(0, 500) + `\n... [${parsed.content.length - 1000} chars truncated for history efficiency] ...\n` + parsed.content.slice(-500);
+            argsStr = JSON.stringify(parsed);
+          }
+        } catch {
+          // If JSON parse fails, fallback to string slicing
+          argsStr = argsStr.slice(0, MAX_TOOL_ARG_CHARS) + '...}';
+        }
+      }
+      return {
+        id: tc.id,
+        type: tc.type,
+        function: {
+          name: tc.function.name,
+          arguments: argsStr,
+        },
+      };
+    });
+
+    this.messages.push({ role: 'assistant', content, tool_calls: sanitized });
   }
 
-  addToolResult(toolCallId: string, content: string, name?: string): void {
+  addToolResult(toolCallId: string, rawContent: string, name?: string): void {
+    let content = rawContent;
+    if (content.length > MAX_TOOL_RESULT_CHARS) {
+      const head = content.slice(0, 3000);
+      const tail = content.slice(-3000);
+      content = `${head}\n... [${content.length - 6000} characters truncated for context speed & efficiency] ...\n${tail}`;
+    }
+
     this.messages.push({
       role: 'tool',
       content,
