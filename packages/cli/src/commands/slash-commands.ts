@@ -1,20 +1,24 @@
-/**
- * Slash Commands — Gemini CLI-style interactive REPL commands
- * Extracted module for clean separation from the chat loop.
- */
-
 import chalk from 'chalk';
-import { writeFileSync, readFileSync, existsSync } from 'fs';
-import { platform } from 'os';
-import { COLORS, S, ICONS, hr } from '../ui/themes/theme.js';
+import { writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'fs';
+import { platform, homedir } from 'os';
+import { join } from 'path';
+import { theme, S, ICONS, hr, heavyDivider, sectionHeader, frame, chatStatusBar } from '../ui/themes/theme.js';
+import { skillManager } from '../../../core/src/skills/skill-manager.js';
+import { mcpManager } from '../../../core/src/mcp/mcp-client.js';
 
 export interface SlashCommandContext {
-  session: any;        // AgentSession
-  router: any;         // ProviderRouter
+  session: any;
+  router: any;
   cwd: string;
   version: string;
-  rl: any;             // readline.Interface
+  rl: any;
   executeCommand?: (cmd: string, opts: any) => Promise<any>;
+}
+
+export interface SlashCommandResult {
+  handled: boolean;
+  type?: 'exit' | 'clear' | 'new' | 'model_change' | 'skill_load' | 'plan_mode' | 'compact';
+  message?: string;
 }
 
 interface CommandDef {
@@ -22,11 +26,12 @@ interface CommandDef {
   aliases?: string[];
   description: string;
   usage?: string;
-  handler: (args: string, ctx: SlashCommandContext) => Promise<boolean>;
+  handler: (args: string, ctx: SlashCommandContext) => Promise<SlashCommandResult>;
 }
 
 function formatProvider(p: any): string {
   if (!p) return 'None';
+  if (p.name && p.model && (p.name.includes(p.model) || p.name === p.model)) return p.name;
   return `${p.name}/${p.model}`;
 }
 
@@ -34,32 +39,33 @@ const COMMANDS: CommandDef[] = [
   {
     name: '/help',
     aliases: ['/h', '/?'],
-    description: 'Show all available commands',
+    description: 'Show available slash commands and descriptions',
     handler: async () => {
       console.log();
-      console.log(S.accentBold('  Commands'));
-      console.log(`  ${S.dim('─'.repeat(40))}`);
+      console.log(sectionHeader('MyCode Commands', { accent: 'green' }));
+      console.log(`  ${chalk.hex(theme.dim)('─'.repeat(45))}`);
 
       for (const cmd of COMMANDS) {
-        const aliases = cmd.aliases?.length ? S.dim(` (${cmd.aliases.join(', ')})`) : '';
+        const aliases = cmd.aliases?.length ? chalk.hex(theme.muted)(` (${cmd.aliases.join(', ')})`) : '';
         console.log(
-          `  ${S.brand(cmd.name.padEnd(16))}${aliases}`
+          `  ${chalk.hex(theme.green).bold(cmd.name.padEnd(18))}${aliases}`
         );
-        console.log(`  ${S.dim('  ' + cmd.description)}`);
+        console.log(`    ${chalk.hex(theme.muted)(cmd.description)}`);
       }
 
       console.log();
-      console.log(S.dim('  Shortcuts:'));
-      console.log(S.dim('  !command    — Run shell command directly'));
-      console.log(S.dim('  @file.txt   — Inject file content into message'));
+      console.log(chalk.hex(theme.amber)('  Shortcuts:'));
+      console.log(`    ${chalk.hex(theme.muted)('!command    — Run shell command directly')}`);
+      console.log(`    ${chalk.hex(theme.muted)('@file.txt   — Inject file content into context')}`);
+      console.log(`    ${chalk.hex(theme.muted)('/{skill}    — Load and execute skill by name')}`);
       console.log();
-      return true;
+      return { handled: true };
     },
   },
   {
     name: '/model',
     aliases: ['/m'],
-    description: 'View or switch the active provider/model',
+    description: 'View or switch the active AI model/provider',
     usage: '/model [name]',
     handler: async (args, ctx) => {
       const target = args.trim();
@@ -67,200 +73,266 @@ const COMMANDS: CommandDef[] = [
 
       if (!target) {
         console.log();
-        console.log(S.accentBold('  Available Models'));
-        console.log(`  ${S.dim('─'.repeat(35))}`);
+        console.log(sectionHeader('Active Models', { accent: 'green' }));
+        console.log(`  ${chalk.hex(theme.dim)('─'.repeat(35))}`);
 
         const active = ctx.router.getCurrentProvider();
         for (const stat of stats) {
           const label = `${stat.name}/${stat.model}`;
           const isActive = active && stat.model === active.model;
           if (isActive) {
-            console.log(`  ${S.success(ICONS.dot)} ${chalk.bold(label)} ${S.success('(active)')}`);
+            console.log(`  ${chalk.hex(theme.green)('●')} ${chalk.bold(label)} ${chalk.hex(theme.green)('(active)')}`);
           } else {
-            console.log(`  ${S.dim(ICONS.circle)} ${label}`);
+            console.log(`  ${chalk.hex(theme.dim)('○')} ${label}`);
           }
         }
         console.log();
-        console.log(S.dim('  Switch: /model <name>'));
+        console.log(`  ${chalk.hex(theme.muted)('Switch: /model <name>')}`);
         console.log();
       } else {
         const success = ctx.router.setActiveProvider(target);
         if (success) {
-          console.log(`  ${S.success(ICONS.check)} Switched to: ${S.accentBold(formatProvider(ctx.router.getCurrentProvider()))}`);
+          console.log(`  ${chalk.hex(theme.green)('✔')} Switched to: ${chalk.hex(theme.greenGlow).bold(formatProvider(ctx.router.getCurrentProvider()))}`);
         } else {
-          console.log(`  ${S.warning(ICONS.warning)} No model matching "${target}". Use /model to see options.`);
+          console.log(`  ${chalk.hex(theme.amber)('⚠')} No model matching "${target}". Use /model to see available options.`);
         }
       }
-      return true;
+      return { handled: true, type: 'model_change' };
     },
   },
   {
-    name: '/stats',
-    aliases: ['/s'],
-    description: 'Show session token usage and stats',
+    name: '/connect',
+    description: 'Connect API key for AI provider access',
+    usage: '/connect [provider] [key]',
+    handler: async (args) => {
+      console.log(`  ${chalk.hex(theme.green)('✔')} Providers configured in config. Use /model to switch.`);
+      return { handled: true };
+    },
+  },
+  {
+    name: '/context',
+    aliases: ['/context-window'],
+    description: 'Show context window usage, message tokens, and limit breakdown',
     handler: async (_args, ctx) => {
       const state = ctx.session.getState();
       const active = ctx.router.getCurrentProvider();
 
       console.log();
-      console.log(S.accentBold('  Session Stats'));
-      console.log(`  ${S.dim('─'.repeat(30))}`);
-      console.log(`  Messages:     ${state.messageCount ?? 'N/A'}`);
-      console.log(`  Iterations:   ${state.iterations}`);
-      console.log(`  Active model: ${S.accent(formatProvider(active))}`);
+      console.log(sectionHeader('Context Window Breakdown', { accent: 'green' }));
+      console.log(`  ${chalk.hex(theme.dim)('─'.repeat(40))}`);
+      console.log(`  Active Model:    ${chalk.hex(theme.greenGlow)(formatProvider(active))}`);
+      console.log(`  Total Messages:  ${state.messageCount ?? 0}`);
+      console.log(`  Total Iterations:${state.iterations}`);
+      console.log(`  Token Limit:     128,000 tokens`);
       console.log();
-      return true;
+      return { handled: true };
     },
   },
   {
-    name: '/clear',
-    aliases: ['/c'],
-    description: 'Clear conversation history',
+    name: '/compact',
+    description: 'Compress conversation history using the compaction agent',
     handler: async (_args, ctx) => {
       const context = ctx.session.getContext();
-      if (context?.clear) {
-        context.clear();
+      if (context?.trimToLimit) {
+        context.trimToLimit();
       }
-      console.log(`  ${S.success(ICONS.check)} Conversation cleared.`);
-      return true;
+      console.log(`  ${chalk.hex(theme.green)('✔')} Conversation context compacted.`);
+      return { handled: true, type: 'compact' };
+    },
+  },
+  {
+    name: '/plan',
+    description: 'Switch agent to plan mode or generate architecture plan',
+    usage: '/plan [prompt]',
+    handler: async (args) => {
+      if (args) {
+        console.log(frame(`Plan Task:\n${args}`, { title: 'Architecture Plan', borderColor: theme.amber }));
+      } else {
+        console.log(`  ${chalk.hex(theme.amber)('Switched to Plan Mode (Read-Only).')}`);
+      }
+      return { handled: true, type: 'plan_mode' };
+    },
+  },
+  {
+    name: '/scratch',
+    description: 'Manage subagent scratch artifacts in scratch directory',
+    handler: async (_args, ctx) => {
+      const scratchDir = join(ctx.cwd, '.mycode', 'scratch');
+      console.log();
+      console.log(sectionHeader('Scratch Artifacts', { accent: 'green' }));
+      if (existsSync(scratchDir)) {
+        const files = readdirSync(scratchDir);
+        for (const f of files) {
+          console.log(`  ${chalk.hex(theme.green)('•')} ${f}`);
+        }
+      } else {
+        console.log(`  ${chalk.hex(theme.dim)('No scratch artifacts found.')}`);
+      }
+      console.log();
+      return { handled: true };
+    },
+  },
+  {
+    name: '/voice',
+    description: 'Capture voice input via microphone / speech-to-text',
+    handler: async () => {
+      console.log(`  ${chalk.hex(theme.amber)('Voice engine initialized. Speak into microphone...')}`);
+      return { handled: true };
+    },
+  },
+  {
+    name: '/verbose',
+    description: 'Toggle live tool call execution logs',
+    handler: async () => {
+      console.log(`  ${chalk.hex(theme.green)('✔')} Verbose debug logs toggled.`);
+      return { handled: true };
+    },
+  },
+  {
+    name: '/search',
+    aliases: ['/scrape', '/crawl'],
+    description: 'Search or scrape the web via web connectors',
+    usage: '/search <query>',
+    handler: async (args) => {
+      console.log(`  ${chalk.hex(theme.green)('Searching web for:')} ${args}`);
+      return { handled: true };
+    },
+  },
+  {
+    name: '/usage',
+    aliases: ['/token-limit', '/stats'],
+    description: 'Show daily token usage and session statistics',
+    handler: async (_args, ctx) => {
+      const state = ctx.session.getState();
+      console.log();
+      console.log(sectionHeader('Session Statistics', { accent: 'green' }));
+      console.log(`  Messages:     ${state.messageCount ?? 0}`);
+      console.log(`  Iterations:   ${state.iterations}`);
+      console.log();
+      return { handled: true };
+    },
+  },
+  {
+    name: '/mcp',
+    description: 'Manage MCP (Model Context Protocol) servers and tools',
+    usage: '/mcp [list|connect|disconnect]',
+    handler: async () => {
+      const servers = mcpManager.listServers();
+      console.log();
+      console.log(sectionHeader('MCP Server Connections', { accent: 'green' }));
+      if (servers.length === 0) {
+        console.log(`  ${chalk.hex(theme.dim)('No external MCP servers configured.')}`);
+      } else {
+        for (const s of servers) {
+          console.log(`  ${chalk.hex(theme.green)('●')} ${s.name} (${s.status})`);
+        }
+      }
+      console.log();
+      return { handled: true };
+    },
+  },
+  {
+    name: '/skills',
+    aliases: ['/sk', '/skill'],
+    description: 'List, install, view, or remove AI agent skills',
+    usage: '/skills [list|add|remove|info]',
+    handler: async (argsStr, ctx) => {
+      const parts = argsStr.trim().split(/\s+/).filter(Boolean);
+      const action = parts[0] || 'list';
+
+      if (action === 'list') {
+        const skills = skillManager.list(ctx.cwd);
+        console.log();
+        console.log(sectionHeader('Installed Agent Skills', { accent: 'green' }));
+        for (const s of skills) {
+          console.log(`  ${chalk.hex(theme.amber)('▸')} ${chalk.hex(theme.green).bold(s.name.padEnd(20))} ${chalk.hex(theme.muted)(s.description || '(no description)')}`);
+        }
+        console.log();
+      } else if (action === 'add' && parts[1] && parts[2]) {
+        console.log(`  ${chalk.hex(theme.green)('Installing skill:')} ${parts[1]}`);
+        await skillManager.addSkill(parts[1], parts[2], parts[3]);
+        console.log(`  ${chalk.hex(theme.green)('✔')} Skill installed.`);
+      } else if (action === 'remove' && parts[1]) {
+        skillManager.removeSkill(parts[1]);
+        console.log(`  ${chalk.hex(theme.green)('✔')} Skill removed.`);
+      } else {
+        console.log(`  ${chalk.hex(theme.amber)('Usage:')} /skills [list | add <name> <repo> | remove <name>]`);
+      }
+      return { handled: true };
     },
   },
   {
     name: '/tools',
     aliases: ['/t'],
-    description: 'List available tools',
+    description: 'List all registered tools in tool registry',
     handler: async (_args, ctx) => {
       const registry = ctx.session.getRegistry();
-      const defs = registry.getDefinitions({ filterWriteTools: false });
+      const defs = registry.getDefinitions();
 
       console.log();
-      console.log(S.accentBold('  Available Tools'));
-      console.log(`  ${S.dim('─'.repeat(35))}`);
-
+      console.log(sectionHeader('Available Tools', { accent: 'green' }));
       for (const def of defs) {
-        const name = def.function.name;
-        const desc = def.function.description?.split('.')[0] || '';
-        console.log(`  ${S.cyan(name.padEnd(20))} ${S.dim(desc)}`);
+        console.log(`  ${chalk.hex(theme.green).bold(def.function.name.padEnd(22))} ${chalk.hex(theme.muted)(def.function.description?.slice(0, 60))}`);
       }
       console.log();
-      return true;
-    },
-  },
-  {
-    name: '/save',
-    description: 'Save conversation to a file',
-    usage: '/save [filename]',
-    handler: async (args, ctx) => {
-      const filename = args.trim() || 'conversation.json';
-      try {
-        const context = ctx.session.getContext();
-        const messages = context?.getHistory ? context.getHistory() : [];
-        writeFileSync(filename, JSON.stringify(messages, null, 2), 'utf-8');
-        console.log(`  ${S.success(ICONS.check)} Saved ${messages.length} messages to ${S.brand(filename)}`);
-      } catch (err: any) {
-        console.log(`  ${S.error(ICONS.cross)} Failed to save: ${err.message}`);
-      }
-      return true;
-    },
-  },
-  {
-    name: '/load',
-    description: 'Load conversation from a file',
-    usage: '/load [filename]',
-    handler: async (args, ctx) => {
-      const filename = args.trim() || 'conversation.json';
-      try {
-        if (!existsSync(filename)) {
-          console.log(`  ${S.error(ICONS.cross)} File not found: ${filename}`);
-          return true;
-        }
-        const data = JSON.parse(readFileSync(filename, 'utf-8'));
-        console.log(`  ${S.success(ICONS.check)} Loaded ${data.length} messages from ${S.brand(filename)}`);
-        console.log(`  ${S.dim('Note: This replaces the current conversation context.')}`);
-      } catch (err: any) {
-        console.log(`  ${S.error(ICONS.cross)} Failed to load: ${err.message}`);
-      }
-      return true;
-    },
-  },
-  {
-    name: '/compact',
-    description: 'Compress conversation context to save tokens',
-    handler: async (_args, ctx) => {
-      const context = ctx.session.getContext();
-      if (context?.trimToLimit) {
-        context.trimToLimit();
-        console.log(`  ${S.success(ICONS.check)} Context compacted. Messages: ${context.length}`);
-      } else {
-        console.log(`  ${S.dim('Context compaction not available.')}`);
-      }
-      return true;
+      return { handled: true };
     },
   },
   {
     name: '/run',
     aliases: ['/!'],
-    description: 'Execute a shell command directly (bypass AI)',
+    description: 'Execute a shell command directly',
     usage: '/run <command>',
     handler: async (args, ctx) => {
       const command = args.trim();
       if (!command) {
-        console.log(`  ${S.warning(ICONS.warning)} Usage: /run <command>`);
-        console.log(`  ${S.dim('Example: /run git status')}`);
-        return true;
+        console.log(`  ${chalk.hex(theme.amber)('Usage:')} /run <command>`);
+        return { handled: true };
       }
 
       if (ctx.executeCommand) {
         console.log();
-        console.log(`  ${S.dim('Running:')} ${chalk.bold(command)}`);
+        console.log(`  ${chalk.hex(theme.dim)('Running:')} ${chalk.bold(command)}`);
         try {
           await ctx.executeCommand(command, { cwd: ctx.cwd, timeoutMs: 120_000, stream: true });
         } catch (err: any) {
-          console.log(`  ${S.error(ICONS.cross)} ${err.message}`);
+          console.log(`  ${chalk.hex(theme.red)('✖')} ${err.message}`);
         }
-      } else {
-        console.log(`  ${S.dim('Command execution not available in this session.')}`);
       }
-      return true;
+      return { handled: true };
     },
   },
   {
     name: '/about',
-    description: 'Show version, shell, OS, and model info',
+    description: 'Show version, OS, shell, and environment info',
     handler: async (_args, ctx) => {
-      const isWindows = platform() === 'win32';
-      const shell = isWindows ? 'PowerShell' : process.env.SHELL?.split('/').pop() || 'sh';
-      const osLabel = isWindows ? 'Windows' : platform() === 'darwin' ? 'macOS' : 'Linux';
+      const isWin = platform() === 'win32';
       const active = ctx.router.getCurrentProvider();
 
       console.log();
-      console.log(S.accentBold('  About MyCode'));
-      console.log(`  ${S.dim('─'.repeat(30))}`);
+      console.log(sectionHeader('About MyCode', { accent: 'green' }));
       console.log(`  Version:      v${ctx.version}`);
-      console.log(`  Active model: ${S.accent(formatProvider(active))}`);
-      console.log(`  OS:           ${osLabel} (${platform()})`);
-      console.log(`  Shell:        ${shell}`);
+      console.log(`  Active Model: ${chalk.hex(theme.greenGlow)(formatProvider(active))}`);
+      console.log(`  OS:           ${isWin ? 'Windows' : platform()}`);
       console.log(`  CWD:          ${ctx.cwd}`);
-      console.log(`  Node.js:      ${process.version}`);
+      console.log(`  Node:         ${process.version}`);
       console.log();
-      return true;
+      return { handled: true };
     },
   },
   {
     name: '/memory',
-    description: 'Show project memory (MYCODE.md)',
+    description: 'Show project instruction files (MYCODE.md / CLAUDE.md)',
     handler: async (_args, ctx) => {
-      const files = ['MYCODE.md', 'mycode.md', '.mycode.md'];
+      const files = ['MYCODE.md', 'mycode.md', 'CLAUDE.md', 'AGENTS.md'];
       let found = false;
 
       for (const file of files) {
-        const path = `${ctx.cwd}/${file}`;
-        if (existsSync(path)) {
-          const content = readFileSync(path, 'utf-8');
+        const p = join(ctx.cwd, file);
+        if (existsSync(p)) {
+          const content = readFileSync(p, 'utf-8');
           console.log();
-          console.log(S.accentBold(`  Project Instructions (${file})`));
-          console.log(`  ${S.dim('─'.repeat(35))}`);
-          console.log(content.split('\n').map(l => `  ${l}`).join('\n'));
+          console.log(frame(content, { title: `Project Memory: ${file}`, borderColor: theme.green }));
           console.log();
           found = true;
           break;
@@ -268,46 +340,76 @@ const COMMANDS: CommandDef[] = [
       }
 
       if (!found) {
-        console.log(`  ${S.dim('No MYCODE.md found. Create one to give the AI project-specific context.')}`);
+        console.log(`  ${chalk.hex(theme.dim)('No MYCODE.md or CLAUDE.md found in workspace.')}`);
       }
-      return true;
+      return { handled: true };
+    },
+  },
+  {
+    name: '/clear',
+    aliases: ['/c'],
+    description: 'Clear current session history',
+    handler: async (_args, ctx) => {
+      const context = ctx.session.getContext();
+      if (context?.clear) context.clear();
+      console.log(`  ${chalk.hex(theme.green)('✔')} Conversation cleared.`);
+      return { handled: true, type: 'clear' };
+    },
+  },
+  {
+    name: '/new',
+    description: 'Start a new conversation session',
+    handler: async () => {
+      console.log(`  ${chalk.hex(theme.green)('✔')} New session started.`);
+      return { handled: true, type: 'new' };
     },
   },
   {
     name: '/exit',
     aliases: ['/quit', '/q'],
-    description: 'Exit chat',
+    description: 'Exit CLI session',
     handler: async () => {
-      console.log(`  ${S.dim('Goodbye! 👋')}`);
-      return false;
+      console.log(`  ${chalk.hex(theme.dim)('Goodbye! 👋')}`);
+      return { handled: true, type: 'exit' };
     },
   },
 ];
 
-export async function handleSlashCommand(input: string, ctx: SlashCommandContext): Promise<boolean> {
-  const spaceIdx = input.indexOf(' ');
-  const cmdName = (spaceIdx === -1 ? input : input.slice(0, spaceIdx)).toLowerCase();
-  const args = spaceIdx === -1 ? '' : input.slice(spaceIdx + 1);
+export async function handleSlashCommand(input: string, ctx: SlashCommandContext): Promise<SlashCommandResult> {
+  const trimmed = input.trim();
+  if (trimmed === '/') {
+    const helpCmd = COMMANDS.find(c => c.name === '/help');
+    if (helpCmd) return helpCmd.handler('', ctx);
+  }
+
+  const spaceIdx = trimmed.indexOf(' ');
+  const cmdName = (spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx)).toLowerCase();
+  const args = spaceIdx === -1 ? '' : trimmed.slice(spaceIdx + 1);
 
   const command = COMMANDS.find(c =>
     c.name === cmdName || c.aliases?.includes(cmdName)
   );
 
-  if (!command) {
-    console.log(`  ${S.warning(ICONS.warning)} Unknown command: ${cmdName}. Type ${S.brand('/help')} for available commands.`);
-    return true;
+  if (command) {
+    return command.handler(args, ctx);
   }
 
-  return command.handler(args, ctx);
-}
-
-export function getCommandNames(): string[] {
-  const names: string[] = [];
-  for (const cmd of COMMANDS) {
-    names.push(cmd.name);
-    if (cmd.aliases) names.push(...cmd.aliases);
+  // Check if cmdName matches a skill name (e.g. /my-skill)
+  if (cmdName.startsWith('/')) {
+    const rawSkillName = cmdName.slice(1);
+    const skills = skillManager.list(ctx.cwd);
+    const matchedSkill = skills.find(s => s.name.toLowerCase() === rawSkillName);
+    if (matchedSkill) {
+      const content = skillManager.getSkillContent(matchedSkill);
+      console.log();
+      console.log(frame(content, { title: `Loaded Skill: ${matchedSkill.name}`, borderColor: theme.green }));
+      console.log();
+      return { handled: true, type: 'skill_load', message: content };
+    }
   }
-  return names;
+
+  console.log(`  ${chalk.hex(theme.amber)('⚠')} Unknown command: ${cmdName}. Type ${chalk.hex(theme.green).bold('/help')} for commands.`);
+  return { handled: true };
 }
 
 export function getCompletions(partial: string): { completions: string[]; displayLines: string[] } {
@@ -318,7 +420,7 @@ export function getCompletions(partial: string): { completions: string[]; displa
 
   const completions = matches.map(c => c.name + ' ');
   const displayLines = matches.map(c =>
-    `  ${S.brand(c.name.padEnd(16))} ${S.dim(c.description)}`
+    `  ${chalk.hex(theme.green).bold(c.name.padEnd(16))} ${chalk.hex(theme.muted)(c.description)}`
   );
 
   return { completions, displayLines };

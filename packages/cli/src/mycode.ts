@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+process.noDeprecation = true;
 import { chatCommand } from './commands/chat.js';
 import { initCommand } from './commands/init.js';
 import { configCommand } from './commands/config.js';

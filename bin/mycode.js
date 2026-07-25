@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+process.noDeprecation = true;
 
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';

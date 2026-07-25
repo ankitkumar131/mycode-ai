@@ -206,8 +206,8 @@ export async function chatCommand(options: { model?: string; provider?: string }
       rl.pause();
 
       handleSlashCommand(input, slashCtx)
-        .then((shouldContinue) => {
-          if (!shouldContinue) {
+        .then((res) => {
+          if (res?.type === 'exit') {
             rl.close();
             process.exit(0);
           }

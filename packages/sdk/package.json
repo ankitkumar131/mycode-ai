@@ -1,6 +1,6 @@
 {
   "name": "@mycode/sdk",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "private": true,
   "description": "MyCode SDK — Programmatic API for MyCode agent",
   "type": "module",

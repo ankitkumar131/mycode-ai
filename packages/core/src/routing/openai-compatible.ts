@@ -12,14 +12,19 @@ export class OpenAICompatibleProvider extends BaseProvider {
     model: string;
     apiKey?: string;
     baseURL?: string;
+    baseUrl?: string;
     apiProvider?: string;
   }) {
     super();
     this._name = options.name;
     this._model = options.model;
+    let url = options.baseURL || options.baseUrl;
+    if (!url && options.apiProvider === 'openrouter') {
+      url = 'https://openrouter.ai/api/v1';
+    }
     this.client = new OpenAI({
       apiKey: options.apiKey || 'dummy-key',
-      baseURL: options.baseURL,
+      baseURL: url,
     });
   }
 

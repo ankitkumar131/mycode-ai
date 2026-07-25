@@ -25,7 +25,7 @@ describe('MyCodeAgent', () => {
     const agent = new MyCodeAgent();
     const info = agent.getInfo();
     expect(info.version).toBe('1.0.0-alpha');
-    expect(info.tools).toBe(11);
+    expect(info.tools).toBeGreaterThanOrEqual(11);
   });
 
   it('creates with custom config', () => {

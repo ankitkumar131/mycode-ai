@@ -1,4 +1,4 @@
-import type { ToolModule, ToolFunctionDefinition } from './types.js';
+import type { ToolModule, ToolFunctionDefinition, ToolDefinition, ToolHandler } from './types.js';
 import { readFileTool } from './definitions/read-file.js';
 import { writeFileTool } from './definitions/write-file.js';
 import { editFileTool } from './definitions/edit-file.js';
@@ -10,7 +10,11 @@ import { readPdfTool } from './definitions/read-pdf.js';
 import { readDocumentTool } from './definitions/read-document.js';
 import { fetchWebPageTool } from './definitions/web-fetch.js';
 import { globSearchTool } from './definitions/glob-search.js';
-import type { ToolDefinition, ToolHandler } from './types.js';
+import { delegateTool } from './definitions/delegate.js';
+import { codeExecTool } from './definitions/code-exec.js';
+import { questionTool } from './definitions/question.js';
+import { todoWriteTool } from './definitions/todowrite.js';
+import { readInstructionsTool } from './definitions/read-instructions.js';
 
 const ALL_TOOLS: ToolModule[] = [
   readFileTool,
@@ -24,9 +28,13 @@ const ALL_TOOLS: ToolModule[] = [
   readDocumentTool,
   fetchWebPageTool,
   globSearchTool,
+  delegateTool,
+  codeExecTool,
+  questionTool,
+  todoWriteTool,
+  readInstructionsTool,
 ];
 
-// Aliases for camelCase / kebab-case tool invocation matching
 const ALIASES: Record<string, string> = {
   'readFile': 'read-file',
   'writeFile': 'write-file',
@@ -40,9 +48,12 @@ const ALIASES: Record<string, string> = {
   'read-document': 'readDocument',
   'fetchWebPage': 'fetchWebPage',
   'globSearch': 'globSearch',
+  'codeExec': 'code_exec',
+  'todoWrite': 'todo_write',
+  'readInstructions': 'read_instructions',
 };
 
-const WRITE_TOOLS = new Set(['write-file', 'edit-file', 'writeFile', 'editFile']);
+const WRITE_TOOLS = new Set(['write-file', 'edit-file', 'writeFile', 'editFile', 'code_exec', 'codeExec']);
 
 export class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -53,7 +64,6 @@ export class ToolRegistry {
       const name = mod.definition.function.name;
       this.modules.set(name, mod);
     }
-    // Also register camelCase aliases
     for (const [alias, canonical] of Object.entries(ALIASES)) {
       const mod = this.modules.get(canonical);
       if (mod) {
@@ -64,6 +74,11 @@ export class ToolRegistry {
 
   register(name: string, definition: ToolDefinition): void {
     this.tools.set(name, definition);
+  }
+
+  registerModule(mod: ToolModule): void {
+    const name = mod.definition.function.name;
+    this.modules.set(name, mod);
   }
 
   get(name: string): ToolDefinition | undefined {
@@ -112,7 +127,8 @@ export class ToolRegistry {
     const canonicalName = ALIASES[name] || name;
     const mod = this.modules.get(canonicalName) || this.modules.get(name);
     if (mod) {
-      return await mod.execute(args, cwd, execOptions);
+      const res = await mod.execute(args, cwd as any, execOptions as any);
+      return typeof res === 'string' ? res : JSON.stringify(res, null, 2);
     }
 
     const legacy = this.tools.get(name);
