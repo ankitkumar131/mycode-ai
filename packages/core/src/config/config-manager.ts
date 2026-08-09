@@ -11,11 +11,42 @@ const SNAKE_TO_CAMEL = new Map<string, string>([
   ['max_retries', 'maxRetries'],
 ]);
 
+export function adjustProviderPriorities<T extends { priority?: number }>(
+  providers: T[],
+  targetIndex: number
+): T[] {
+  if (targetIndex < 0 || targetIndex >= providers.length) {
+    return providers;
+  }
+
+  const targetPriority = providers[targetIndex].priority ?? 1;
+
+  for (let i = 0; i < providers.length; i++) {
+    if (i !== targetIndex) {
+      const currentP = providers[i].priority ?? 1;
+      if (currentP >= targetPriority) {
+        providers[i].priority = currentP + 1;
+      }
+    }
+  }
+
+  providers.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+
+  providers.forEach((p, idx) => {
+    p.priority = idx + 1;
+  });
+
+  return providers;
+}
+
 function normalizeProvider(p: Record<string, unknown>): ProviderConfig {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(p)) {
     out[SNAKE_TO_CAMEL.get(key) ?? key] = value;
   }
+  if (out.read === undefined) out.read = true;
+  if (out.write === undefined) out.write = true;
+  if (out.maxRetries === undefined) out.maxRetries = 3;
   return out as unknown as ProviderConfig;
 }
 
@@ -67,10 +98,30 @@ export class ConfigManager {
     try {
       const raw = readFileSync(configFile, 'utf-8');
       const parsed = JSON.parse(raw);
+      const providers: ProviderConfig[] = (parsed.providers || []).map(normalizeProvider);
+
+      const priorityCounts = new Map<number, number>();
+      let hasDuplicates = false;
+      for (const p of providers) {
+        const pr = p.priority ?? 99;
+        if (priorityCounts.has(pr)) {
+          hasDuplicates = true;
+          break;
+        }
+        priorityCounts.set(pr, 1);
+      }
+
+      if (hasDuplicates) {
+        providers.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+        providers.forEach((p, idx) => {
+          p.priority = idx + 1;
+        });
+      }
+
       this.config = {
         ...this.getDefault(),
         ...parsed,
-        providers: (parsed.providers || []).map(normalizeProvider),
+        providers,
         preferences: {
           ...this.getDefault().preferences,
           ...(parsed.preferences || {}),
@@ -111,6 +162,7 @@ export class ConfigManager {
   async addProvider(provider: MyCodeConfig['providers'][0]): Promise<void> {
     const config = await this.load();
     config.providers.push(provider);
+    adjustProviderPriorities(config.providers, config.providers.length - 1);
     await this.save(config);
   }
 
@@ -121,6 +173,10 @@ export class ConfigManager {
       (p) => p.name.toLowerCase() !== name.toLowerCase()
     );
     if (config.providers.length < before) {
+      config.providers.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+      config.providers.forEach((p, idx) => {
+        p.priority = idx + 1;
+      });
       await this.save(config);
       return true;
     }

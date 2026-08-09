@@ -77,7 +77,7 @@ export { ContextManager } from './context/context-manager.js';
 export { FileContextResolver } from './context/file-resolver.js';
 
 // Config
-export { ConfigManager } from './config/config-manager.js';
+export { ConfigManager, adjustProviderPriorities } from './config/config-manager.js';
 export type { MyCodeConfig } from './config/types.js';
 
 // Output

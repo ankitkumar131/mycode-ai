@@ -105,4 +105,17 @@ describe('ConfigManager', () => {
     expect(config.version).toBe('1');
     expect(config.providers).toEqual([]);
   });
+
+  it('automatically shifts existing provider priority when a new provider is added with same priority', async () => {
+    const cm = new ConfigManager();
+    await cm.addProvider({ name: 'p1', apiProvider: 'openai', priority: 1, model: 'gpt-4o' });
+    await cm.addProvider({ name: 'p2', apiProvider: 'openrouter', priority: 1, model: 'claude-3-5-sonnet' });
+
+    const cfg = await cm.load();
+    expect(cfg.providers).toHaveLength(2);
+    expect(cfg.providers[0].name).toBe('p2');
+    expect(cfg.providers[0].priority).toBe(1);
+    expect(cfg.providers[1].name).toBe('p1');
+    expect(cfg.providers[1].priority).toBe(2);
+  });
 });

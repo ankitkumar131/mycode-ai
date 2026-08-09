@@ -83,6 +83,6 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "@ankitkumar131/mycode-ai": "^1.0.1"
+    "@ankitkumar131/mycode-ai": "^1.0.10"
   }
 }

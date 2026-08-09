@@ -5,6 +5,8 @@ export interface ProviderConfig {
   apiKey?: string;
   baseUrl?: string;
   priority?: number;
+  read?: boolean;
+  write?: boolean;
   maxRetries?: number;
 }
 

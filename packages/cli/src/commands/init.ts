@@ -1,5 +1,5 @@
 import { createInterface } from 'readline/promises';
-import { ConfigManager } from '@mycode/core';
+import { ConfigManager, adjustProviderPriorities, type ProviderConfig } from '@mycode/core';
 import chalk from 'chalk';
 import { select, input } from '../ui/prompt.js';
 
@@ -30,13 +30,14 @@ export async function initCommand(): Promise<void> {
 
       if (choice === 'priority') {
         console.log(chalk.cyan('\nChange Priorities (lower number = higher priority):'));
-        for (const p of cfg.providers) {
-          const currentPriority = p.priority !== undefined ? String(p.priority) : '1';
+        for (let i = 0; i < cfg.providers.length; i++) {
+          const p = cfg.providers[i];
+          const currentPriority = p.priority !== undefined ? String(p.priority) : String(i + 1);
           const newPriorityStr = await input(rl, `Priority for ${chalk.bold(p.name)}`, currentPriority);
           const parsed = parseInt(newPriorityStr, 10);
-          p.priority = isNaN(parsed) ? 1 : parsed;
+          p.priority = isNaN(parsed) ? (i + 1) : parsed;
+          adjustProviderPriorities(cfg.providers, i);
         }
-        cfg.providers.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
         await config.save(cfg);
         console.log(chalk.green('\nPriorities updated and saved successfully!'));
         return;
@@ -47,44 +48,81 @@ export async function initCommand(): Promise<void> {
       console.log(chalk.cyan('MyCode Setup\n'));
     }
 
-    const apiProvider = await rl.question(
-      chalk.dim('API provider') + ' (openai/openrouter/ollama/custom): '
-    );
-    const provider = apiProvider.trim().toLowerCase() || 'openai';
+    const defaultConfig = config.configExists() ? await config.load() : config.get();
+    const defaultPriority = defaultConfig.providers.length + 1;
 
-    const defaultUrl = provider === 'ollama' ? 'http://localhost:11434' : '';
-    const baseUrl = await rl.question(
-      chalk.dim('Base URL') + (defaultUrl ? ` (${defaultUrl}): ` : ': ')
-    );
-
-    let apiKey = '';
-    if (provider !== 'ollama') {
-      apiKey = await rl.question(chalk.dim('API key') + ': ');
-    }
-
-    const model = await rl.question(chalk.dim('Model') + ' (gpt-4o): ');
-
-    const name = await rl.question(
-      chalk.dim('Provider name') + ` (${provider}-1): `
-    );
-
+    // 1. priority
     const priorityStr = await rl.question(
-      chalk.dim('Priority') + ' (1): '
+      chalk.dim('Priority') + ` (${defaultPriority}): `
     );
     const parsedPriority = parseInt(priorityStr.trim(), 10);
-    const priority = isNaN(parsedPriority) ? 1 : parsedPriority;
+    const priority = isNaN(parsedPriority) ? defaultPriority : parsedPriority;
 
-    const defaultConfig = config.configExists() ? await config.load() : config.get();
-    defaultConfig.providers.push({
-      name: name.trim() || `${provider}-1`,
-      apiProvider: provider,
-      model: model.trim() || 'gpt-4o',
-      baseUrl: baseUrl.trim() || defaultUrl || undefined,
-      apiKey: apiKey.trim() || undefined,
+    // 2. name
+    const defaultNamePlaceholder = `provider-${priority}`;
+    const nameStr = await rl.question(
+      chalk.dim('Provider name') + ` (${defaultNamePlaceholder}): `
+    );
+    let name = nameStr.trim();
+
+    // 3. apiProvider
+    const apiProviderStr = await rl.question(
+      chalk.dim('API provider') + ' (openai/openrouter/ollama/custom): '
+    );
+    const provider = apiProviderStr.trim().toLowerCase() || 'openai';
+
+    if (!name) {
+      name = `${provider}-${priority}`;
+    }
+
+    // 4. model
+    const defaultModel = provider === 'ollama' ? 'llama3.1:8b' : 'gpt-4o';
+    const modelStr = await rl.question(chalk.dim('Model') + ` (${defaultModel}): `);
+    const model = modelStr.trim() || defaultModel;
+
+    // 5. apiKey
+    let apiKey: string | undefined = undefined;
+    if (provider !== 'ollama') {
+      const keyStr = await rl.question(chalk.dim('API key') + ': ');
+      apiKey = keyStr.trim() || undefined;
+    }
+
+    // 6. baseUrl
+    const defaultUrl = provider === 'ollama' ? 'http://localhost:11434' : provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : '';
+    const baseUrlStr = await rl.question(
+      chalk.dim('Base URL') + (defaultUrl ? ` (${defaultUrl}): ` : ': ')
+    );
+    const baseUrl = baseUrlStr.trim() || defaultUrl || undefined;
+
+    // 7. read
+    const readStr = await rl.question(chalk.dim('Read permission') + ' (true/false) [true]: ');
+    const readTrim = readStr.trim().toLowerCase();
+    const read = readTrim === '' ? true : !(readTrim === 'false' || readTrim === 'f' || readTrim === 'no' || readTrim === 'n');
+
+    // 8. write
+    const writeStr = await rl.question(chalk.dim('Write permission') + ' (true/false) [true]: ');
+    const writeTrim = writeStr.trim().toLowerCase();
+    const write = writeTrim === '' ? true : !(writeTrim === 'false' || writeTrim === 'f' || writeTrim === 'no' || writeTrim === 'n');
+
+    // 9. maxRetries
+    const maxRetriesStr = await rl.question(chalk.dim('Max retries') + ' (3): ');
+    const parsedRetries = parseInt(maxRetriesStr.trim(), 10);
+    const maxRetries = isNaN(parsedRetries) ? 3 : parsedRetries;
+
+    const newProvider: ProviderConfig = {
       priority,
-    });
+      name,
+      apiProvider: provider,
+      model,
+      apiKey,
+      baseUrl,
+      read,
+      write,
+      maxRetries,
+    };
 
-    defaultConfig.providers.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+    defaultConfig.providers.push(newProvider);
+    adjustProviderPriorities(defaultConfig.providers, defaultConfig.providers.length - 1);
 
     await config.save(defaultConfig);
     console.log(chalk.green('\nConfig saved to:'), config.getConfigPath());
