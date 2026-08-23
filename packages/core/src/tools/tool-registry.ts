@@ -1,0 +1,162 @@
+import type { ToolModule, ToolFunctionDefinition, ToolDefinition, ToolHandler } from './types.js';
+import { readFileTool } from './definitions/read-file.js';
+import { writeFileTool } from './definitions/write-file.js';
+import { editFileTool } from './definitions/edit-file.js';
+import { listDirTool } from './definitions/list-dir.js';
+import { searchFilesTool } from './definitions/search-files.js';
+import { gitStatusTool } from './definitions/git-status.js';
+import { execCommandTool } from './definitions/exec-command.js';
+import { readPdfTool } from './definitions/read-pdf.js';
+import { readDocumentTool } from './definitions/read-document.js';
+import { fetchWebPageTool } from './definitions/web-fetch.js';
+import { webSearchTool } from './definitions/web-search.js';
+import { globSearchTool } from './definitions/glob-search.js';
+import { codeExecTool } from './definitions/code-exec.js';
+import { todoWriteTool } from './definitions/todowrite.js';
+import { readInstructionsTool } from './definitions/read-instructions.js';
+
+const ALL_TOOLS: ToolModule[] = [
+  readFileTool,
+  writeFileTool,
+  editFileTool,
+  listDirTool,
+  searchFilesTool,
+  gitStatusTool,
+  execCommandTool,
+  readPdfTool,
+  readDocumentTool,
+  fetchWebPageTool,
+  webSearchTool,
+  globSearchTool,
+  codeExecTool,
+  todoWriteTool,
+  readInstructionsTool,
+];
+
+const ALIASES: Record<string, string> = {
+  'readFile': 'read-file',
+  'writeFile': 'write-file',
+  'editFile': 'edit-file',
+  'listDirectory': 'list-dir',
+  'searchFiles': 'search-files',
+  'gitStatus': 'git-status',
+  'executeCommand': 'exec-command',
+  'readPdf': 'readPDF',
+  'readDocument': 'readDocument',
+  'read-document': 'readDocument',
+  'fetchWebPage': 'fetchWebPage',
+  'webSearch': 'webSearch',
+  'web_search': 'webSearch',
+  'globSearch': 'globSearch',
+  'codeExec': 'code_exec',
+  'todoWrite': 'todo_write',
+  'readInstructions': 'read_instructions',
+};
+
+const WRITE_TOOLS = new Set(['write-file', 'edit-file', 'writeFile', 'editFile', 'code_exec', 'codeExec']);
+
+export class ToolRegistry {
+  private tools: Map<string, ToolDefinition> = new Map();
+  private modules: Map<string, ToolModule> = new Map();
+
+  constructor() {
+    for (const mod of ALL_TOOLS) {
+      const name = mod.definition.function.name;
+      this.modules.set(name, mod);
+    }
+    for (const [alias, canonical] of Object.entries(ALIASES)) {
+      const mod = this.modules.get(canonical);
+      if (mod) {
+        this.modules.set(alias, mod);
+      }
+    }
+  }
+
+  register(name: string, definition: ToolDefinition): void {
+    this.tools.set(name, definition);
+  }
+
+  registerModule(mod: ToolModule): void {
+    const name = mod.definition.function.name;
+    this.modules.set(name, mod);
+  }
+
+  get(name: string): ToolDefinition | undefined {
+    return this.tools.get(name) ?? (this.modules.get(name) as unknown as ToolDefinition | undefined);
+  }
+
+  getAll(): ToolDefinition[] {
+    const legacy = Array.from(this.tools.values());
+    const modDefs = Array.from(this.modules.values()).map(m => ({
+      name: m.definition.function.name,
+      description: m.definition.function.description,
+      parameters: m.definition.function.parameters,
+      handler: (async (args: Record<string, unknown>) => '') as ToolHandler,
+    }));
+    return [...legacy, ...modDefs];
+  }
+
+  getDefinitions(options?: { filterWriteTools?: boolean }): ToolFunctionDefinition[] {
+    const seen = new Set<string>();
+    let defs: ToolFunctionDefinition[] = [];
+
+    for (const mod of this.modules.values()) {
+      const name = mod.definition.function.name;
+      if (!seen.has(name)) {
+        seen.add(name);
+        defs.push(mod.definition);
+      }
+    }
+
+    if (options?.filterWriteTools) {
+      defs = defs.filter(d => !WRITE_TOOLS.has(d.function.name));
+    }
+    return defs;
+  }
+
+  async executeTool(
+    name: string,
+    args: Record<string, unknown>,
+    cwd: string,
+    execOptions?: {
+      confirmFn?: (target: string, context?: string | null, safety?: import('./types.js').SafetyResult) => Promise<boolean>;
+      commandHistory?: { add(record: import('./types.js').CommandRecord): void };
+      abortSignal?: AbortSignal;
+    }
+  ): Promise<string> {
+    const canonicalName = ALIASES[name] || name;
+    const mod = this.modules.get(canonicalName) || this.modules.get(name);
+    if (mod) {
+      const res = await mod.execute(args, cwd as any, execOptions as any);
+      return typeof res === 'string' ? res : JSON.stringify(res, null, 2);
+    }
+
+    const legacy = this.tools.get(name);
+    if (legacy) {
+      return await legacy.handler(args);
+    }
+
+    throw new Error(`Unknown tool: ${name}`);
+  }
+
+  isValidTool(name: string): boolean {
+    const canonicalName = ALIASES[name] || name;
+    return this.modules.has(canonicalName) || this.modules.has(name) || this.tools.has(name);
+  }
+
+  isWriteTool(name: string): boolean {
+    const canonicalName = ALIASES[name] || name;
+    return WRITE_TOOLS.has(canonicalName) || WRITE_TOOLS.has(name);
+  }
+
+  getToolNames(): string[] {
+    const modNames = Array.from(this.modules.keys());
+    const legacyNames = Array.from(this.tools.keys());
+    return [...new Set([...modNames, ...legacyNames])];
+  }
+
+  getTool(name: string): ToolModule | undefined {
+    const canonicalName = ALIASES[name] || name;
+    return this.modules.get(canonicalName) || this.modules.get(name);
+  }
+}

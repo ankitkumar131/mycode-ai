@@ -1,15 +1,27 @@
 /**
  * Command: mycode chat
  * Interactive REPL-style conversation with the AI.
+ *
+ * Enhanced with:
+ * - /history — show commands executed this session
+ * - /run <command> — execute a shell command directly (bypass AI)
+ * - /shell — show current shell info
+ * - CommandHistory integration
  */
 
 import chalk from 'chalk';
 import { createInterface } from 'readline';
+import { readFileSync } from 'fs';
+import { platform } from 'os';
 import { ProviderRouter } from '../providers/router.js';
 import { AgentLoop } from '../agent/loop.js';
+import { CommandHistory } from '../tools/command-history.js';
+import { executeCommand } from '../tools/command-executor.js';
 import { loadConfig, configExists, getProvidersSorted } from '../utils/config.js';
 import { createReadlineConfirmFns } from '../ui/prompt.js';
 import logger from '../utils/logger.js';
+
+const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
 
 export function registerChatCommand(program) {
   program
@@ -65,18 +77,65 @@ async function startRepl(options) {
   const router = new ProviderRouter(providers);
   const cwd = process.cwd();
 
+  // Create shared command history for this session
+  const commandHistory = new CommandHistory();
+
   // Display header
-  logger.header();
+  const firstProvider = providers[0];
+  const modelLabel = firstProvider ? `${firstProvider.name} (${firstProvider.model})` : '';
+  logger.header(pkg.version, modelLabel);
   logger.info(`Working directory: ${cwd}`);
   logger.info(`Providers: ${providers.map((p) => p.name).join(' → ')}`);
   console.log(
-    chalk.dim('  Type your message and press Enter. Use /help for commands.\n')
+    chalk.hex('#6B7280')('  Type your message and press Enter. Use /help for commands.\n')
   );
 
-  const rl = createInterface({
+  let rl;
+
+  const completer = (line) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('/')) {
+      const chatCommands = [
+        { cmd: '/help', desc: 'Show this help' },
+        { cmd: '/model', desc: 'View or switch the active provider/model' },
+        { cmd: '/stats', desc: 'Show session token usage and command stats' },
+        { cmd: '/about', desc: 'Show version, shell, OS, and active model info' },
+        { cmd: '/clear', desc: 'Clear conversation history' },
+        { cmd: '/run', desc: 'Execute a shell command directly' },
+        { cmd: '/exit', desc: 'Exit chat' },
+        { cmd: '/quit', desc: 'Exit chat' }
+      ];
+
+      const hits = chatCommands.filter((c) => c.cmd.startsWith(trimmed));
+      if (hits.length === 0) {
+        return [[], line];
+      }
+
+      if (hits.length === 1) {
+        return [[hits[0].cmd + ' '], line];
+      }
+
+      // Print completions beautifully
+      console.log();
+      for (const h of hits) {
+        console.log(`  ${chalk.hex('#60A5FA').bold(h.cmd.padEnd(12))} — ${chalk.hex('#9CA3AF')(h.desc)}`);
+      }
+      console.log();
+
+      if (rl) {
+        rl.prompt();
+      }
+
+      return [[], line];
+    }
+    return [[], line];
+  };
+
+  rl = createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: chalk.hex('#7C3AED').bold('❯ '),
+    prompt: chalk.hex('#60A5FA').bold('✦ ❯ '),
+    completer,
     terminal: true,
   });
 
@@ -90,6 +149,8 @@ async function startRepl(options) {
     confirmCommands: !options.noExec && config.preferences.confirm_commands,
     // Pass the readline-based confirm functions
     rlConfirmFns,
+    // Pass command history
+    commandHistory,
   });
 
   // Track whether we're currently processing to ignore input during processing
@@ -98,7 +159,7 @@ async function startRepl(options) {
   // Handle Ctrl+C gracefully
   rl.on('SIGINT', () => {
     if (isProcessing) {
-      // Abort current agent loop
+      // Abort current agent loop (which forwards to running commands)
       agent.abort();
       isProcessing = false;
       console.log();
@@ -129,10 +190,50 @@ async function startRepl(options) {
 
     // Handle slash commands
     if (input.startsWith('/')) {
-      handleSlashCommand(input, agent, rl, router)
+      handleSlashCommand(input, agent, rl, router, commandHistory, cwd)
         .then(() => rl.prompt())
         .catch((err) => {
           logger.error(err.message);
+          rl.prompt();
+        });
+      return;
+    }
+
+    // Handle direct shell commands (e.g. !git status)
+    if (input.startsWith('!')) {
+      const command = input.slice(1).trim();
+      if (!command) {
+        rl.prompt();
+        return;
+      }
+      isProcessing = true;
+      rl.pause();
+
+      console.log();
+      logger.info(`Running: ${chalk.bold(command)}`);
+
+      executeCommand(command, {
+        cwd,
+        timeoutMs: 120_000,
+        stream: true,
+      })
+        .then((result) => {
+          commandHistory.add({
+            command,
+            cwd,
+            exitCode: result.exitCode,
+            signal: result.signal,
+            durationMs: result.durationMs,
+            status: result.status,
+            output: result.output,
+          });
+        })
+        .catch((err) => {
+          logger.error(err.message);
+        })
+        .finally(() => {
+          isProcessing = false;
+          rl.resume();
           rl.prompt();
         });
       return;
@@ -166,7 +267,7 @@ async function startRepl(options) {
 /**
  * Handle REPL slash commands.
  */
-async function handleSlashCommand(input, agent, rl, router) {
+async function handleSlashCommand(input, agent, rl, router, commandHistory, cwd) {
   const parts = input.split(' ');
   const cmd = parts[0].toLowerCase();
 
@@ -175,12 +276,13 @@ async function handleSlashCommand(input, agent, rl, router) {
       console.log();
       console.log(chalk.hex('#A78BFA').bold('  Chat Commands'));
       console.log(chalk.dim('  ───────────────────────'));
-      console.log('  /help       — Show this help');
-      console.log('  /clear      — Clear conversation history');
-      console.log('  /status     — Show provider status');
-      console.log('  /providers  — List configured providers');
-      console.log('  /tokens     — Show token usage');
-      console.log('  /exit       — Exit chat');
+      console.log('  /help             — Show this help');
+      console.log('  /model [name]     — View or switch the active provider/model');
+      console.log('  /stats            — Show session token usage and command stats');
+      console.log('  /about            — Show version, shell, OS, and active model info');
+      console.log('  /clear            — Clear conversation history');
+      console.log('  /run <command>    — Execute a shell command directly');
+      console.log('  /exit             — Exit chat');
       console.log();
       break;
 
@@ -189,38 +291,122 @@ async function handleSlashCommand(input, agent, rl, router) {
       logger.success('Conversation cleared.');
       break;
 
-    case '/status':
-      console.log();
+    case '/model': {
+      const targetModel = parts.slice(1).join(' ').trim();
       const stats = router.getStats();
-      for (const stat of stats) {
-        const status = stat.available
-          ? chalk.hex('#34D399')('● online')
-          : chalk.hex('#F87171')('● offline');
-        console.log(
-          `  ${status} ${chalk.bold(stat.name)} (${stat.model}) — ` +
-          chalk.dim(`${stat.successes} ok, ${stat.failures} errors`)
-        );
-      }
-      console.log();
-      break;
 
-    case '/providers':
-      console.log();
-      const providerStats = router.getStats();
-      for (const p of providerStats) {
-        console.log(
-          `  #${p.priority} ${chalk.bold(p.name)} — ${p.model}`
-        );
+      if (!targetModel) {
+        // List models and indicate active
+        console.log();
+        console.log(chalk.hex('#A78BFA').bold('  Available Models'));
+        console.log(chalk.dim('  ───────────────────────'));
+        const activeLabel = router.getCurrentProvider().getLabel();
+        
+        for (const stat of stats) {
+          const label = `${stat.name}/${stat.model}`;
+          const isActive = label === activeLabel || stat.model === router.getCurrentProvider().model;
+          
+          if (isActive) {
+            console.log(`  ${chalk.hex('#34D399')('●')} ${chalk.bold(label)} ${chalk.hex('#34D399')('(active)')}`);
+          } else {
+            console.log(`    ${label}`);
+          }
+        }
+        console.log();
+        console.log(chalk.dim('  To switch model: /model <name>'));
+        console.log();
+      } else {
+        const success = router.setActiveProvider(targetModel);
+        if (success) {
+          logger.success(`Switched active model to: ${router.getCurrentProvider().getLabel()}`);
+        } else {
+          logger.warn(`Could not find model matching "${targetModel}". Type "/model" to see available options.`);
+        }
       }
-      console.log();
       break;
+    }
 
-    case '/tokens':
+    case '/stats': {
+      console.log();
+      console.log(chalk.hex('#A78BFA').bold('  Session Stats'));
+      console.log(chalk.dim('  ───────────────────────'));
+      
       const ctx = agent.getContext();
-      logger.info(
-        `Messages: ${ctx.getMessageCount()} | Estimated tokens: ~${ctx.getTokenCount().toLocaleString()}`
-      );
+      console.log(`  Messages:         ${ctx.getMessageCount()}`);
+      console.log(`  Estimated tokens: ~${ctx.getTokenCount().toLocaleString()}`);
+      
+      // Active provider info
+      const activeP = router.getCurrentProvider();
+      console.log(`  Active model:     ${activeP.getLabel()}`);
+      
+      // History summary
+      if (commandHistory.count() > 0) {
+        console.log();
+        console.log(chalk.hex('#A78BFA').bold('  Commands Run'));
+        console.log(chalk.dim('  ─────────────'));
+        console.log(commandHistory.formatSummary());
+      }
+      console.log();
       break;
+    }
+
+    case '/about': {
+      const isWindows = platform() === 'win32';
+      const shell = isWindows ? 'cmd.exe' : '/bin/sh';
+      const osLabel = isWindows ? 'Windows' : platform() === 'darwin' ? 'macOS' : 'Linux';
+
+      console.log();
+      console.log(chalk.hex('#A78BFA').bold('  About MyCode'));
+      console.log(chalk.dim('  ───────────────────────'));
+      console.log(`  Version:      v${pkg.version}`);
+      console.log(`  Active model: ${router.getCurrentProvider().getLabel()}`);
+      console.log(`  OS:           ${osLabel} (${platform()})`);
+      console.log(`  Shell:        ${shell}`);
+      console.log(`  CWD:          ${cwd}`);
+
+      try {
+        const { execSync } = await import('child_process');
+        const nodeV = execSync('node -v', { encoding: 'utf-8' }).trim();
+        console.log(`  Node.js:      ${nodeV}`);
+      } catch {
+        // ignore
+      }
+
+      console.log();
+      break;
+    }
+
+    case '/run': {
+      const command = parts.slice(1).join(' ');
+      if (!command) {
+        logger.warn('Usage: /run <command>');
+        logger.info('Example: /run git status');
+        break;
+      }
+
+      console.log();
+      logger.info(`Running: ${chalk.bold(command)}`);
+
+      // Execute directly — bypass AI, no confirmation needed
+      const result = await executeCommand(command, {
+        cwd,
+        timeoutMs: 120_000,
+        stream: true,
+      });
+
+      // Record in history
+      commandHistory.add({
+        command,
+        cwd,
+        exitCode: result.exitCode,
+        signal: result.signal,
+        durationMs: result.durationMs,
+        status: result.status,
+        output: result.output,
+      });
+
+      break;
+    }
 
     case '/exit':
     case '/quit':

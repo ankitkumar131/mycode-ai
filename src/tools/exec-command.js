@@ -1,29 +1,14 @@
 /**
  * Tool: Execute Command
- * Runs shell commands with output capture and safety checks.
+ * Full-featured command execution tool for the AI agent.
+ *
+ * Uses the CommandExecutor for real-time streaming, and the
+ * CommandSafety system for classification and blocking.
  */
 
-import { execSync } from 'child_process';
 import { resolve } from 'path';
-
-// Commands that are always blocked for safety
-const BLOCKED_COMMANDS = [
-  'rm -rf /',
-  'format c:',
-  'del /f /s /q c:\\',
-  'mkfs',
-  ':(){:|:&};:',
-];
-
-// Commands that require explicit confirmation
-const DANGEROUS_PREFIXES = [
-  'rm ', 'del ', 'rmdir',
-  'git push', 'git reset --hard',
-  'npm publish',
-  'sudo ',
-  'chmod ', 'chown ',
-  'kill ', 'taskkill',
-];
+import { classifyCommand, isBlocked, getSafetyLabel } from './command-safety.js';
+import { executeCommand } from './command-executor.js';
 
 export const execCommandTool = {
   definition: {
@@ -32,8 +17,10 @@ export const execCommandTool = {
       name: 'executeCommand',
       description:
         'Execute a shell command and return its output. ' +
-        'Use this for running tests, installing packages, git operations, etc. ' +
-        'The user will be asked to confirm before execution.',
+        'Use this for running tests, installing packages, builds, git operations, ' +
+        'checking file contents, running scripts, and any other terminal command. ' +
+        'Output is streamed in real-time. The user will be asked to confirm before execution. ' +
+        'Commands run in the OS default shell (cmd.exe on Windows, /bin/sh on Unix).',
       parameters: {
         type: 'object',
         properties: {
@@ -43,7 +30,14 @@ export const execCommandTool = {
           },
           cwd: {
             type: 'string',
-            description: 'Working directory for the command. Defaults to current project directory.',
+            description:
+              'Working directory for the command. Defaults to the current project directory.',
+          },
+          timeout: {
+            type: 'number',
+            description:
+              'Timeout in seconds. Default is 120. Use 0 for no timeout (for long builds). ' +
+              'Use a shorter timeout for quick commands like "git status".',
           },
         },
         required: ['command'],
@@ -53,62 +47,124 @@ export const execCommandTool = {
 
   /**
    * Execute the command tool.
-   * @param {object} args - { command, cwd? }
+   * @param {object} args - { command, cwd?, timeout? }
    * @param {string} defaultCwd - Default working directory
-   * @param {object} options - { confirmFn }
-   * @returns {Promise<string>}
+   * @param {object} options - { confirmFn, commandHistory, abortSignal }
+   * @returns {Promise<string>} Result string for AI context
    */
   async execute(args, defaultCwd, options = {}) {
     const command = args.command.trim();
     const cwd = resolve(args.cwd || defaultCwd);
 
-    // Safety check: block dangerous commands
-    for (const blocked of BLOCKED_COMMANDS) {
-      if (command.toLowerCase().includes(blocked.toLowerCase())) {
-        return `⚠ BLOCKED: This command is too dangerous to execute: "${command}"`;
-      }
+    // ── Step 1: Safety check ──
+    const { blocked, reason } = isBlocked(command);
+    if (blocked) {
+      return `🚫 BLOCKED: This command is too dangerous to execute.\n` +
+        `Command: ${command}\nReason: ${reason}\n\n` +
+        `This command cannot be executed for safety reasons. ` +
+        `Please use a safer alternative.`;
     }
 
-    // Determine if command needs confirmation
-    const isDangerous = DANGEROUS_PREFIXES.some((prefix) =>
-      command.toLowerCase().startsWith(prefix.toLowerCase())
-    );
+    // Get safety classification for the confirmation prompt
+    const safety = classifyCommand(command);
 
-    // Ask for confirmation
+    // ── Step 2: User confirmation ──
     if (options.confirmFn) {
-      const confirmed = await options.confirmFn(command, cwd);
+      const confirmed = await options.confirmFn(command, cwd, safety);
       if (!confirmed) {
-        return `Command execution cancelled by user.`;
+        // Record cancellation in history
+        if (options.commandHistory) {
+          options.commandHistory.add({
+            command,
+            cwd,
+            exitCode: null,
+            signal: null,
+            durationMs: 0,
+            status: 'cancelled',
+            output: '',
+          });
+        }
+        return `Command execution cancelled by user.\n$ ${command}`;
       }
     }
 
-    try {
-      const output = execSync(command, {
+    // ── Step 3: Determine timeout ──
+    let timeoutMs;
+    if (args.timeout !== undefined && args.timeout !== null) {
+      timeoutMs = args.timeout * 1000; // Convert seconds to ms
+    } else {
+      // Smart defaults based on command type
+      timeoutMs = getSmartTimeout(command);
+    }
+
+    // ── Step 4: Execute with streaming ──
+    const result = await executeCommand(command, {
+      cwd,
+      timeoutMs,
+      stream: true, // Always stream for tool calls
+      signal: options.abortSignal,
+    });
+
+    // ── Step 5: Record in history ──
+    if (options.commandHistory) {
+      options.commandHistory.add({
+        command,
         cwd,
-        encoding: 'utf-8',
-        timeout: 60_000, // 60 second timeout
-        maxBuffer: 5 * 1024 * 1024, // 5MB output buffer
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true,
+        exitCode: result.exitCode,
+        signal: result.signal,
+        durationMs: result.durationMs,
+        status: result.status,
+        output: result.output,
       });
-
-      const trimmed = output.trim();
-      if (!trimmed) {
-        return `✔ Command completed successfully (no output).\n$ ${command}`;
-      }
-
-      // Truncate very long output
-      if (trimmed.length > 10_000) {
-        return `$ ${command}\n${'─'.repeat(40)}\n${trimmed.slice(0, 10_000)}\n... (output truncated, ${trimmed.length} total chars)`;
-      }
-
-      return `$ ${command}\n${'─'.repeat(40)}\n${trimmed}`;
-    } catch (err) {
-      const stderr = err.stderr?.trim() || '';
-      const stdout = err.stdout?.trim() || '';
-      const output = stderr || stdout || err.message;
-
-      return `✖ Command failed (exit code ${err.status || 1}):\n$ ${command}\n${'─'.repeat(40)}\n${output.slice(0, 5000)}`;
     }
+
+    // ── Step 6: Return result for AI context ──
+    return result.output;
   },
 };
+
+/**
+ * Get a smart default timeout based on command patterns.
+ * @param {string} command
+ * @returns {number} Timeout in milliseconds
+ */
+function getSmartTimeout(command) {
+  const lower = command.toLowerCase();
+
+  // Long-running: builds, installs, tests
+  const longRunning = [
+    'npm install', 'npm ci', 'npm run build', 'npm test', 'npm run test',
+    'yarn install', 'yarn build', 'yarn test',
+    'pnpm install', 'pnpm build', 'pnpm test',
+    'pip install', 'pip3 install',
+    'cargo build', 'cargo test',
+    'go build', 'go test',
+    'mvn ', 'gradle ',
+    'make', 'cmake',
+    'docker build', 'docker-compose up',
+  ];
+
+  for (const pattern of longRunning) {
+    if (lower.includes(pattern)) {
+      return 300_000; // 5 minutes
+    }
+  }
+
+  // Quick commands
+  const quick = [
+    'git status', 'git log', 'git branch', 'git diff',
+    'ls ', 'dir ', 'type ', 'cat ',
+    'echo ', 'pwd', 'cd ',
+    'whoami', 'hostname',
+    'node -v', 'npm -v', 'python --version',
+  ];
+
+  for (const pattern of quick) {
+    if (lower.startsWith(pattern) || lower === pattern.trim()) {
+      return 15_000; // 15 seconds
+    }
+  }
+
+  // Default
+  return 120_000; // 2 minutes
+}

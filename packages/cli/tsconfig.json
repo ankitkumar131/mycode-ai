@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "noEmit": true,
+    "paths": {
+      "@mycode/core": ["../core/src/index.ts"],
+      "@mycode/sdk": ["../sdk/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "../core/src/**/*.ts", "../sdk/src/**/*.ts"]
+
+}

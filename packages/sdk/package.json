@@ -1,0 +1,23 @@
+{
+  "name": "@mycode/sdk",
+  "version": "2.0.3",
+  "private": true,
+  "description": "MyCode SDK — Programmatic API for MyCode agent",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/build.mjs --package sdk",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mycode/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}

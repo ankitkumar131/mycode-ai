@@ -1,9 +1,19 @@
 node_modules/
-.env
-*.log
+dist/
+*.tsbuildinfo
+
+# Editor
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
 Thumbs.db
-dist/
-coverage/
-.nyc_output/
-*.tgz
+
+# Environment
+.env
+.env.local
+
+# MyCode config
+.mycode/settings.json

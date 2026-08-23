@@ -4,6 +4,14 @@
  * Implements the Observe → Reason → Act → Feedback cycle.
  * The agent iterates: sends messages to the AI, executes tool calls,
  * feeds results back, and repeats until the task is complete.
+ *
+ * Enhanced for production-grade command execution:
+ * - No spinner during command streaming (output takes over the terminal)
+ * - Ctrl+C forwarding to running commands via AbortController
+ * - CommandHistory integration for tracking executed commands
+ * - Structured result handling from the command executor
+ * - Tool call deduplication (prevents AI from running same command twice)
+ * - Failed command retry limiting (max 2 retries for identical commands)
  */
 
 import { getToolDefinitions, executeTool, isWriteTool } from '../tools/registry.js';
@@ -12,10 +20,12 @@ import { buildSystemPrompt } from './system-prompt.js';
 import { createSpinner, createToolSpinner, createCodegenSpinner } from '../ui/spinner.js';
 import { renderMarkdown } from '../ui/renderer.js';
 import { confirmFileWrite, confirmCommand } from '../ui/prompt.js';
+import { resolveContextReferences } from '../utils/context-resolver.js';
 import logger from '../utils/logger.js';
 import chalk from 'chalk';
 
 const MAX_ITERATIONS = 25; // Safety limit to prevent infinite loops
+const MAX_IDENTICAL_RETRIES = 2; // Max times the same failing command can be retried
 
 function estimateTokens(text) {
   if (!text) return 0;
@@ -33,11 +43,24 @@ function estimatePromptTokens(messages) {
   }, 0);
 }
 
+/**
+ * Create a dedup key for a tool call (tool name + sorted args).
+ */
+function makeToolCallKey(name, args) {
+  try {
+    // Normalize args to a deterministic string
+    const sortedArgs = JSON.stringify(args, Object.keys(args).sort());
+    return `${name}::${sortedArgs}`;
+  } catch {
+    return `${name}::${JSON.stringify(args)}`;
+  }
+}
+
 export class AgentLoop {
   /**
    * @param {ProviderRouter} router - The provider router for AI requests
    * @param {string} cwd - Current working directory
-   * @param {object} options - { mode, confirmWrites, confirmCommands, rlConfirmFns }
+   * @param {object} options - { mode, confirmWrites, confirmCommands, rlConfirmFns, commandHistory }
    */
   constructor(router, cwd, options = {}) {
     this.router = router;
@@ -50,11 +73,27 @@ export class AgentLoop {
     // Store readline-based confirm functions if provided (for chat REPL)
     this._rlConfirmFns = options.rlConfirmFns || null;
 
+    // Command history for tracking executed commands
+    this._commandHistory = options.commandHistory || null;
+
     this.context = new ConversationContext();
-    this.context.setSystemPrompt(buildSystemPrompt(cwd, { mode: this.mode }));
+    this.context.setSystemPrompt(
+      buildSystemPrompt(cwd, {
+        mode: this.mode,
+        commandHistory: this._commandHistory,
+      })
+    );
 
     this._iterationCount = 0;
     this._aborted = false;
+
+    // AbortController for forwarding Ctrl+C to running commands
+    this._currentAbortController = null;
+
+    // ── Deduplication state ──
+    // Tracks tool calls executed in the current run() to detect duplicates
+    // Key: makeToolCallKey(name, args) → { count, lastResult }
+    this._executedToolCalls = new Map();
   }
 
   /**
@@ -63,9 +102,17 @@ export class AgentLoop {
    * @returns {Promise<string>} The final text response
    */
   async run(userMessage) {
-    this.context.addMessage({ role: 'user', content: userMessage });
+    const { resolvedPrompt, filesInjected } = resolveContextReferences(userMessage, this.cwd);
+
+    if (filesInjected.length > 0) {
+      logger.info(`Injected context for ${filesInjected.length} file(s): ${filesInjected.join(', ')}`);
+    }
+
+    this.context.addMessage({ role: 'user', content: resolvedPrompt });
     this._iterationCount = 0;
     this._aborted = false;
+    // Reset dedup tracking for each new user message
+    this._executedToolCalls.clear();
 
     return this._loop();
   }
@@ -101,6 +148,12 @@ export class AgentLoop {
         return `Error: ${err.message}`;
       }
 
+      // ── Deduplicate tool calls within the same response ──
+      // Some AI providers return duplicate tool calls in a single response.
+      if (response.tool_calls && response.tool_calls.length > 1) {
+        response.tool_calls = this._deduplicateToolCalls(response.tool_calls);
+      }
+
       // Add assistant response to context
       const assistantMessage = {
         role: 'assistant',
@@ -127,7 +180,7 @@ export class AgentLoop {
         console.log();
       }
 
-      // Show usage info — always show, using estimates if needed
+      // Show usage info — compact Gemini-style footer
       const promptTokens = response.usage?.prompt_tokens;
       const completionTokens = response.usage?.completion_tokens;
       const isEstimated = response.usage?.estimated === true;
@@ -135,10 +188,7 @@ export class AgentLoop {
       const inDisplay = Number.isFinite(promptTokens) ? promptTokens : estimatePromptTokens(messages);
       const outDisplay = Number.isFinite(completionTokens) ? completionTokens : estimateTokens(response.content || '');
 
-      const prefix = (isEstimated || !Number.isFinite(promptTokens)) ? '~' : '';
-      logger.info(
-        `Tokens: ${prefix}${inDisplay.toLocaleString()} in / ${prefix}${outDisplay.toLocaleString()} out`
-      );
+      logger.tokens(inDisplay, outDisplay, isEstimated || !Number.isFinite(promptTokens));
 
       return response.content || '';
     }
@@ -149,6 +199,27 @@ export class AgentLoop {
     }
 
     return '';
+  }
+
+  /**
+   * Deduplicate tool calls within a single AI response.
+   * Some providers (especially free-tier ones) return the same tool call 2+ times.
+   */
+  _deduplicateToolCalls(toolCalls) {
+    const seen = new Set();
+    const unique = [];
+
+    for (const tc of toolCalls) {
+      const key = `${tc.function.name}::${tc.function.arguments}`;
+      if (seen.has(key)) {
+        logger.warn(`Skipping duplicate tool call: ${tc.function.name}`);
+        continue;
+      }
+      seen.add(key);
+      unique.push(tc);
+    }
+
+    return unique;
   }
 
   /**
@@ -240,6 +311,8 @@ export class AgentLoop {
 
   /**
    * Execute tool calls requested by the AI.
+   * Enhanced: handles executeCommand specially — no spinner during streaming,
+   * Ctrl+C forwarding, CommandHistory integration, and deduplication.
    */
   async _handleToolCalls(toolCalls) {
     for (const toolCall of toolCalls) {
@@ -253,6 +326,40 @@ export class AgentLoop {
         logger.warn(`Failed to parse tool arguments for ${name}`);
       }
 
+      // ── Cross-iteration deduplication ──
+      // Prevent the AI from running the exact same tool call across loop iterations.
+      const toolKey = makeToolCallKey(name, args);
+      const existing = this._executedToolCalls.get(toolKey);
+
+      if (existing) {
+        // For commands that already succeeded, return the cached result
+        if (existing.succeeded) {
+          logger.warn(`Skipping repeated tool call: ${name} (already succeeded)`);
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: existing.lastResult +
+              '\n\n⚠️ NOTE: This is a cached result. This exact tool call already succeeded earlier. Do NOT re-run it.',
+          });
+          continue;
+        }
+
+        // For commands that already failed, limit retries
+        if (existing.count >= MAX_IDENTICAL_RETRIES) {
+          logger.warn(`Blocking repeated failing tool call: ${name} (failed ${existing.count} times)`);
+          this.context.addMessage({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: `⚠️ BLOCKED: This exact command has already failed ${existing.count} times. ` +
+              `Do NOT retry the same command. Try a DIFFERENT approach instead.\n\n` +
+              `Last error:\n${existing.lastResult}`,
+          });
+          continue;
+        }
+      }
+
+      const isCommand = name === 'executeCommand';
+
       // Determine if this tool needs user confirmation
       const toolOptions = {};
       let needsConfirm = false;
@@ -265,7 +372,7 @@ export class AgentLoop {
             : confirmFileWrite;
           toolOptions.confirmFn = baseFn;
         }
-        if (this.confirmCommands && name === 'executeCommand') {
+        if (this.confirmCommands && isCommand) {
           needsConfirm = true;
           const baseFn = this._rlConfirmFns
             ? this._rlConfirmFns.confirmCommand
@@ -274,38 +381,61 @@ export class AgentLoop {
         }
       }
 
-      // Start spinner
-      const toolSpinner = createToolSpinner(name);
-      toolSpinner.start();
+      // Pass command history for executeCommand
+      if (isCommand && this._commandHistory) {
+        toolOptions.commandHistory = this._commandHistory;
+      }
+
+      // Create an AbortController for Ctrl+C forwarding during command execution
+      if (isCommand) {
+        this._currentAbortController = new AbortController();
+        toolOptions.abortSignal = this._currentAbortController.signal;
+      }
+
+      // Start spinner — but NOT for executeCommand (its own output renderer takes over)
+      let toolSpinner = null;
+      if (!isCommand) {
+        toolSpinner = createToolSpinner(name);
+        toolSpinner.start();
+      }
 
       // CRITICAL: Stop the spinner BEFORE any tool that needs user confirmation.
-      // Ora's animation loop writes ANSI escape codes that overwrite the terminal line,
-      // making it impossible to see or respond to confirmation prompts.
-      // This is how Claude Code, Gemini CLI, etc. handle it — all animations stop
-      // before interactive prompts.
-      if (needsConfirm) {
+      if (needsConfirm && toolSpinner) {
         toolSpinner.stop();
       }
 
       const result = await executeTool(name, args, this.cwd, toolOptions);
 
-      // Show completion
-      if (needsConfirm) {
-        // Spinner was already stopped; just log the result
-        console.log(
-          `${chalk.hex('#34D399')('✔')} ${chalk.hex('#38BDF8').bold(name)} ${chalk.dim('completed')}`
-        );
-      } else {
-        toolSpinner.succeed(
-          `${chalk.hex('#38BDF8').bold(name)} ${chalk.dim('completed')}`
-        );
+      // Clean up abort controller
+      if (isCommand) {
+        this._currentAbortController = null;
       }
 
-      // Show tool result
-      if (result.length < 500) {
-        console.log(chalk.dim(result));
+      // ── Track this tool call for deduplication ──
+      const succeeded = isCommand
+        ? result.includes('Completed successfully') || result.includes('✔')
+        : !result.startsWith('Error');
+
+      const prev = this._executedToolCalls.get(toolKey);
+      this._executedToolCalls.set(toolKey, {
+        count: (prev?.count || 0) + 1,
+        succeeded,
+        lastResult: result.slice(0, 2000), // Keep a truncated copy
+      });
+
+      // ── Gemini-style compact tool display ──
+      if (isCommand) {
+        // Command output renderer already showed everything — nothing else needed
       } else {
-        console.log(chalk.dim(result.slice(0, 300) + '... (truncated)'));
+        // Stop spinner cleanly
+        if (toolSpinner) {
+          toolSpinner.stop();
+        }
+
+        // Extract a useful detail string from args
+        const detail = this._getToolDetail(name, args);
+        logger.tool(name, detail);
+        logger.toolResult(name, result);
       }
 
       // Add tool result to context
@@ -318,9 +448,44 @@ export class AgentLoop {
   }
 
   /**
+   * Extract a human-readable detail string from tool args.
+   * Used for Gemini-style compact tool display:
+   *   📄 Read src/index.js
+   *   ✏️ Wrote config.json
+   *   🔍 Searched "TODO" in src/
+   */
+  _getToolDetail(name, args) {
+    switch (name) {
+      case 'readFile':
+        return args.path || '';
+      case 'writeFile':
+        return args.path || '';
+      case 'editFile':
+        return args.path || args.filePath || '';
+      case 'listDirectory':
+        return args.path || args.directory || '.';
+      case 'searchFiles':
+        return args.query
+          ? `"${args.query}" in ${args.path || args.directory || '.'}`
+          : args.path || '';
+      case 'gitStatus':
+        return '';
+      case 'executeCommand':
+        return args.command || '';
+      default:
+        return JSON.stringify(args).slice(0, 60);
+    }
+  }
+
+  /**
    * Abort the current loop.
+   * If a command is running, forward the abort to it first.
    */
   abort() {
+    if (this._currentAbortController) {
+      this._currentAbortController.abort();
+      this._currentAbortController = null;
+    }
     this._aborted = true;
   }
 
@@ -329,5 +494,12 @@ export class AgentLoop {
    */
   getContext() {
     return this.context;
+  }
+
+  /**
+   * Get the command history instance (if available).
+   */
+  getCommandHistory() {
+    return this._commandHistory;
   }
 }

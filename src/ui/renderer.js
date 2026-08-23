@@ -1,29 +1,50 @@
 /**
  * Terminal Markdown Renderer
- * Renders AI responses as beautifully formatted markdown in the terminal.
+ * Gemini CLI-inspired: clean, readable markdown rendering with refined colors.
  */
 
 import chalk from 'chalk';
 import { Marked } from 'marked';
 import { markedTerminal } from 'marked-terminal';
 
+// ── Brand colors consistent with the rest of the UI ────────────────────────
+
+const BRAND = {
+  text: '#E5E7EB',
+  muted: '#9CA3AF',
+  dim: '#6B7280',
+  heading: '#60A5FA',
+  headingBold: '#93C5FD',
+  code: '#E5E7EB',
+  codeBg: '#1F2937',
+  codespan: '#F472B6',
+  link: '#60A5FA',
+  strong: '#FBBF24',
+  blockquote: '#9CA3AF',
+  success: '#34D399',
+  error: '#EF4444',
+  diffAdd: '#34D399',
+  diffDel: '#EF4444',
+  diffHunk: '#60A5FA',
+};
+
 // Configure marked with terminal rendering
 const marked = new Marked();
 marked.use(
   markedTerminal({
-    code: chalk.hex('#E2E8F0').bgHex('#1E293B'),
-    codespan: chalk.hex('#F472B6').bgHex('#1E293B'),
-    blockquote: chalk.hex('#94A3B8').italic,
-    heading: chalk.hex('#A78BFA').bold,
-    firstHeading: chalk.hex('#7C3AED').bold,
-    strong: chalk.hex('#FBBF24').bold,
+    code: chalk.hex(BRAND.code).bgHex(BRAND.codeBg),
+    codespan: chalk.hex(BRAND.codespan).bgHex(BRAND.codeBg),
+    blockquote: chalk.hex(BRAND.blockquote).italic,
+    heading: chalk.hex(BRAND.headingBold).bold,
+    firstHeading: chalk.hex(BRAND.heading).bold,
+    strong: chalk.hex(BRAND.strong).bold,
     em: chalk.italic,
     del: chalk.strikethrough.dim,
-    link: chalk.hex('#38BDF8').underline,
-    href: chalk.hex('#38BDF8').underline,
-    listitem: chalk.hex('#E2E8F0'),
-    table: chalk.hex('#E2E8F0'),
-    paragraph: chalk.hex('#CBD5E1'),
+    link: chalk.hex(BRAND.link).underline,
+    href: chalk.hex(BRAND.link).underline,
+    listitem: chalk.hex(BRAND.text),
+    table: chalk.hex(BRAND.text),
+    paragraph: chalk.hex(BRAND.text),
     tab: 2,
     width: Math.min(process.stdout.columns || 80, 100),
   })
@@ -38,9 +59,14 @@ export function renderMarkdown(text) {
 
   try {
     const rendered = marked.parse(text);
-    process.stdout.write(rendered);
+    // Add 2-space indent to match Gemini's response alignment
+    const indented = rendered
+      .split('\n')
+      .map(line => (line.trim() ? `  ${line}` : line))
+      .join('\n');
+    process.stdout.write(indented);
   } catch {
-    // Fallback to plain text if markdown rendering fails
+    // Fallback to plain text
     console.log(text);
   }
 }
@@ -54,21 +80,22 @@ export function renderDiff(diffText) {
 
   for (const line of lines) {
     if (line.startsWith('+') && !line.startsWith('+++')) {
-      console.log(chalk.hex('#34D399')(line));
+      console.log(`  ${chalk.hex(BRAND.diffAdd)(line)}`);
     } else if (line.startsWith('-') && !line.startsWith('---')) {
-      console.log(chalk.hex('#F87171')(line));
+      console.log(`  ${chalk.hex(BRAND.diffDel)(line)}`);
     } else if (line.startsWith('@@')) {
-      console.log(chalk.hex('#38BDF8')(line));
+      console.log(`  ${chalk.hex(BRAND.diffHunk)(line)}`);
     } else if (line.startsWith('---') || line.startsWith('+++')) {
-      console.log(chalk.bold(line));
+      console.log(`  ${chalk.bold(line)}`);
     } else {
-      console.log(chalk.dim(line));
+      console.log(`  ${chalk.hex(BRAND.dim)(line)}`);
     }
   }
 }
 
 /**
  * Render a code block with a header showing the language.
+ * Gemini-style: subtle header bar with language label.
  * @param {string} code - The code content
  * @param {string} language - Programming language
  * @param {string} filename - Optional filename
@@ -76,32 +103,32 @@ export function renderDiff(diffText) {
 export function renderCodeBlock(code, language = '', filename = '') {
   const header = filename || language || 'code';
   console.log();
-  console.log(chalk.hex('#475569').bgHex('#1E293B')(` ${header} `));
-  console.log(chalk.hex('#E2E8F0').bgHex('#0F172A')(code));
+  console.log(`  ${chalk.hex(BRAND.dim).bgHex(BRAND.codeBg)(` ${header} `)}`);
+  console.log(`  ${chalk.hex(BRAND.code).bgHex('#111827')(code)}`);
   console.log();
 }
 
 /**
- * Render a boxed message.
+ * Render a boxed message — clean, minimal style.
  * @param {string} title - Box title
  * @param {string} content - Box content
  * @param {string} color - Hex color for the border
  */
-export function renderBox(title, content, color = '#7C3AED') {
+export function renderBox(title, content, color = '#60A5FA') {
   const width = Math.min(process.stdout.columns || 80, 70);
   const border = chalk.hex(color);
 
-  console.log(border('┌' + '─'.repeat(width - 2) + '┐'));
-  console.log(border('│') + ' ' + chalk.bold(title).padEnd(width - 3) + border('│'));
-  console.log(border('├' + '─'.repeat(width - 2) + '┤'));
+  console.log(`  ${border('┌' + '─'.repeat(width - 4) + '┐')}`);
+  console.log(`  ${border('│')} ${chalk.bold(title).padEnd(width - 5)} ${border('│')}`);
+  console.log(`  ${border('├' + '─'.repeat(width - 4) + '┤')}`);
 
   const lines = content.split('\n');
   for (const line of lines) {
-    const trimmed = line.slice(0, width - 4);
-    console.log(border('│') + ' ' + trimmed.padEnd(width - 3) + border('│'));
+    const trimmed = line.slice(0, width - 6);
+    console.log(`  ${border('│')} ${trimmed.padEnd(width - 5)} ${border('│')}`);
   }
 
-  console.log(border('└' + '─'.repeat(width - 2) + '┘'));
+  console.log(`  ${border('└' + '─'.repeat(width - 4) + '┘')}`);
 }
 
 /**

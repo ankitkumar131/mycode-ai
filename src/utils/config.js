@@ -66,11 +66,36 @@ export function loadConfig() {
   try {
     const raw = readFileSync(CONFIG_FILE, 'utf-8');
     const config = JSON.parse(raw);
+    const providers = (config.providers || []).map((p) => {
+      const out = { ...p };
+      if (out.read === undefined) out.read = true;
+      if (out.write === undefined) out.write = true;
+      if (out.max_retries === undefined && out.maxRetries === undefined) out.max_retries = 3;
+      return out;
+    });
 
-    // Merge with defaults so new preference fields are always present
+    const priorityCounts = new Map();
+    let hasDuplicates = false;
+    for (const p of providers) {
+      const pr = p.priority ?? 99;
+      if (priorityCounts.has(pr)) {
+        hasDuplicates = true;
+        break;
+      }
+      priorityCounts.set(pr, 1);
+    }
+
+    if (hasDuplicates) {
+      providers.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+      providers.forEach((p, idx) => {
+        p.priority = idx + 1;
+      });
+    }
+
     return {
       ...getDefaultSettings(),
       ...config,
+      providers,
       preferences: {
         ...getDefaultSettings().preferences,
         ...(config.preferences || {}),
@@ -91,12 +116,44 @@ export function saveConfig(config) {
 }
 
 /**
+/**
+ * Automatically adjust priorities on insert/update.
+ * @param {Array} providers
+ * @param {number} targetIndex
+ * @returns {Array}
+ */
+export function adjustProviderPriorities(providers, targetIndex) {
+  if (targetIndex < 0 || targetIndex >= providers.length) {
+    return providers;
+  }
+
+  const targetPriority = providers[targetIndex].priority ?? 1;
+
+  for (let i = 0; i < providers.length; i++) {
+    if (i !== targetIndex) {
+      const currentP = providers[i].priority ?? 1;
+      if (currentP >= targetPriority) {
+        providers[i].priority = currentP + 1;
+      }
+    }
+  }
+
+  providers.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+
+  providers.forEach((p, idx) => {
+    p.priority = idx + 1;
+  });
+
+  return providers;
+}
+
+/**
  * Get providers sorted by priority (ascending — 1 is highest).
  * @returns {Array} Sorted provider list
  */
 export function getProvidersSorted() {
   const config = loadConfig();
-  return [...config.providers].sort((a, b) => a.priority - b.priority);
+  return [...config.providers].sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
 }
 
 /**
@@ -106,6 +163,7 @@ export function getProvidersSorted() {
 export function addProvider(provider) {
   const config = loadConfig();
   config.providers.push(provider);
+  adjustProviderPriorities(config.providers, config.providers.length - 1);
   saveConfig(config);
 }
 
@@ -121,6 +179,10 @@ export function removeProvider(name) {
     (p) => p.name.toLowerCase() !== name.toLowerCase()
   );
   if (config.providers.length < before) {
+    config.providers.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+    config.providers.forEach((p, idx) => {
+      p.priority = idx + 1;
+    });
     saveConfig(config);
     return true;
   }

@@ -1,59 +1,33 @@
 #!/usr/bin/env node
+process.noDeprecation = true;
 
-/**
- * MyCode CLI — Multi-Provider AI Coding Agent
- * Entry point for the global `mycode` command.
- */
-
-import { Command } from 'commander';
-import chalk from 'chalk';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
+import { existsSync } from 'fs';
 
-// Import commands
-import { registerInitCommand } from '../src/commands/init.js';
-import { registerChatCommand } from '../src/commands/chat.js';
-import { registerExplainCommand } from '../src/commands/explain.js';
-import { registerFixCommand } from '../src/commands/fix.js';
-import { registerEditCommand } from '../src/commands/edit.js';
-import { registerAgentCommand } from '../src/commands/agent.js';
-import { registerConfigCommand } from '../src/commands/config.js';
-import { maybeCheckForUpdates } from '../src/utils/update-check.js';
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Prefer standalone bundle (self-contained), fall back to workspace-linked ESM build
+const standaloneEntry = join(__dirname, '..', 'packages', 'cli', 'dist', 'mycode-standalone.cjs');
+const workspaceEntry = join(__dirname, '..', 'packages', 'cli', 'dist', 'mycode.js');
 
-// Read version from package.json
-const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
-
-const program = new Command();
-
-program
-  .name('mycode')
-  .description(chalk.bold('🚀 MyCode — Multi-Provider AI Coding Agent'))
-  .version(pkg.version, '-v, --version', 'Display the current version')
-  .addHelpText('beforeAll', `
-${chalk.hex('#7C3AED').bold('╔══════════════════════════════════════════╗')}
-${chalk.hex('#7C3AED').bold('║')}   ${chalk.hex('#A78BFA').bold('⚡ MyCode')} ${chalk.dim('— AI Coding in Your Terminal')}   ${chalk.hex('#7C3AED').bold('║')}
-${chalk.hex('#7C3AED').bold('║')}   ${chalk.dim('Multi-provider • Auto-failover • Agent')}  ${chalk.hex('#7C3AED').bold('║')}
-${chalk.hex('#7C3AED').bold('╚══════════════════════════════════════════╝')}
-  `);
-
-await maybeCheckForUpdates(pkg);
-
-// Register all commands
-registerInitCommand(program);
-registerChatCommand(program);
-registerExplainCommand(program);
-registerFixCommand(program);
-registerEditCommand(program);
-registerAgentCommand(program);
-registerConfigCommand(program);
-
-// Default action (no command specified) — launch interactive chat
-program.action(() => {
-  program.help();
-});
-
-await program.parseAsync(process.argv);
+if (existsSync(standaloneEntry)) {
+  await import(pathToFileURL(standaloneEntry).href);
+} else if (existsSync(workspaceEntry)) {
+  try {
+    await import(pathToFileURL(workspaceEntry).href);
+  } catch (err) {
+    if (err.code === 'ERR_MODULE_NOT_FOUND') {
+      console.error('\nError: MyCode workspace modules could not be resolved.');
+      console.error('If you are running MyCode globally, please build the project first:');
+      console.error('  npm run build');
+      console.error('And then install/link it again. The standalone bundle must be present at:');
+      console.error(`  ${standaloneEntry}\n`);
+      process.exit(1);
+    }
+    throw err;
+  }
+} else {
+  console.error('MyCode CLI not built yet. Run `npm run build` first.');
+  process.exit(1);
+}

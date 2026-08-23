@@ -230,6 +230,39 @@ export class ProviderRouter {
   }
 
   /**
+   * Set the active provider by name/model string or index.
+   * @param {string|number} identifier
+   * @returns {boolean} Whether the switch was successful
+   */
+  setActiveProvider(identifier) {
+    if (typeof identifier === 'number') {
+      if (identifier >= 0 && identifier < this.providers.length) {
+        this._currentIndex = identifier;
+        return true;
+      }
+      return false;
+    }
+
+    const lower = identifier.toLowerCase();
+    const idx = this.providers.findIndex(
+      (p) =>
+        p.name.toLowerCase() === lower ||
+        p.model.toLowerCase() === lower ||
+        `${p.name}/${p.model}`.toLowerCase() === lower
+    );
+
+    if (idx !== -1) {
+      this._currentIndex = idx;
+      // Reset availability/failure metrics when explicitly switched to
+      this.providers[idx]._isAvailable = true;
+      this.providers[idx]._failureCount = 0;
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Get stats for all providers.
    */
   getStats() {

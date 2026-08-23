@@ -180,11 +180,19 @@ async function runInit() {
   console.log();
 }
 
-async function addProviderWizard(priority) {
-  console.log(chalk.hex('#A78BFA').bold(`\n  Provider #${priority}`));
+async function addProviderWizard(defaultPriority = 1) {
+  console.log(chalk.hex('#A78BFA').bold(`\n  Provider Setup`));
   console.log(chalk.dim('  ─────────────────────'));
 
-  // Select provider type
+  // 1. Priority
+  const priorityStr = await input('Priority:', String(defaultPriority));
+  const parsedPriority = parseInt(priorityStr, 10);
+  const priority = isNaN(parsedPriority) ? defaultPriority : parsedPriority;
+
+  // 2. Name
+  const name = await input('Provider name:', `provider-${priority}`);
+
+  // 3. Provider Type
   const providerType = await select('Choose your AI provider:', [
     { name: '🌐 OpenRouter (100+ models, best for flexibility)', value: 'openrouter' },
     { name: '🟢 NVIDIA NIM (GPU-optimized inference)', value: 'nvidia_nim' },
@@ -195,7 +203,7 @@ async function addProviderWizard(priority) {
 
   const preset = PROVIDER_PRESETS[providerType];
 
-  // Model selection
+  // 4. Model selection
   let model;
   if (preset.models.length > 0) {
     model = await select('Select a model:', [
@@ -210,13 +218,7 @@ async function addProviderWizard(priority) {
     model = await input('Enter the model identifier (e.g., gpt-4o):');
   }
 
-  // Base URL
-  let baseUrl = preset.base_url;
-  if (providerType === 'custom' || !baseUrl) {
-    baseUrl = await input('Enter the API base URL:', 'https://api.example.com/v1');
-  }
-
-  // API Key (not needed for Ollama)
+  // 5. API Key (not needed for Ollama)
   let apiKey = '';
   if (providerType !== 'ollama') {
     apiKey = await password(`Enter your ${providerType} API key:`);
@@ -226,13 +228,22 @@ async function addProviderWizard(priority) {
     }
   }
 
-  // Permissions
-  const canRead = true; // Always enable reading
+  // 6. Base URL
+  let baseUrl = preset.base_url;
+  if (providerType === 'custom' || !baseUrl) {
+    baseUrl = await input('Enter the API base URL:', 'https://api.example.com/v1');
+  }
+
+  // 7. Read permission
+  const canRead = await confirm('Allow this provider read access?', true);
+
+  // 8. Write permission
   const canWrite = await confirm('Allow this provider to write/edit files?', true);
 
-  // Name
-  const defaultName = `${providerType} ${model.split('/').pop()}`;
-  const name = await input('Give this provider a name:', defaultName);
+  // 9. Max retries
+  const retriesStr = await input('Max retries:', '3');
+  const parsedRetries = parseInt(retriesStr, 10);
+  const maxRetries = isNaN(parsedRetries) ? 3 : parsedRetries;
 
   // Build and save
   const provider = {
@@ -244,7 +255,7 @@ async function addProviderWizard(priority) {
     base_url: baseUrl,
     read: canRead,
     write: canWrite,
-    max_retries: 3,
+    max_retries: maxRetries,
   };
 
   addProvider(provider);
