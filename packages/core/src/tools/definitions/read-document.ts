@@ -85,7 +85,7 @@ function extractDocx(buffer: Buffer): string {
     .replace(/<w:br\/>/gi, '\n');
 
   const textMatches = withLines.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/gi) || [];
-  let text = textMatches
+  const text = textMatches
     .map(m => m.replace(/<[^>]+>/g, ''))
     .join('');
 

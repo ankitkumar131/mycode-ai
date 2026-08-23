@@ -43,7 +43,6 @@ export function executeCommand(
       windowsHide: true,
     });
 
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     let abortHandler: (() => void) | undefined;
 
     const cleanup = () => {
@@ -63,7 +62,7 @@ export function executeCommand(
       });
     };
 
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       timedOut = true;
       handleAbort();
     }, timeout);

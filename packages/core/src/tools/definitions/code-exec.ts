@@ -25,21 +25,21 @@ export const codeExecTool: ToolModule = {
       },
     },
   },
-  execute: async (args: { code: string; language?: string }, opts?: { cwd?: string }) => {
-    const lang = args.language || 'javascript';
-    const cwd = opts?.cwd || process.cwd();
+  execute: (async (args: Record<string, unknown>, cwd: string) => {
+    const code = typeof args.code === 'string' ? args.code : '';
+    const lang = typeof args.language === 'string' ? args.language : 'javascript';
 
     let cmd = '';
     if (lang === 'python') {
-      cmd = `python -c ${JSON.stringify(args.code)}`;
+      cmd = `python -c ${JSON.stringify(code)}`;
     } else if (lang === 'bash' || lang === 'powershell') {
-      cmd = args.code;
+      cmd = code;
     } else {
-      cmd = `node -e ${JSON.stringify(args.code)}`;
+      cmd = `node -e ${JSON.stringify(code)}`;
     }
 
     try {
-      const res = await executeCommand(cmd, { cwd });
+      const res = await executeCommand(cmd, cwd, { timeout: 60_000 });
       return {
         success: res.exitCode === 0,
         stdout: res.stdout,
@@ -52,5 +52,5 @@ export const codeExecTool: ToolModule = {
         error: err.message || String(err),
       };
     }
-  },
+  }) as unknown as ToolModule['execute'],
 };

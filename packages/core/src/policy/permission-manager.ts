@@ -1,6 +1,5 @@
 import chalk from 'chalk';
 import * as readline from 'readline';
-import { theme } from '../../../../packages/cli/src/ui/themes/theme.js';
 
 export type Effect = 'allow' | 'deny' | 'ask';
 export type Reply = 'once' | 'always' | 'reject';
@@ -171,7 +170,7 @@ const DEFAULT_RULES: RulesetArray = [
   })),
 ];
 
-let sessionSavedRules: RulesetArray = [];
+const sessionSavedRules: RulesetArray = [];
 let currentAgent: string | undefined = undefined;
 let parentAgent: string | undefined = undefined;
 

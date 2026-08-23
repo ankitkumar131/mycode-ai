@@ -35,11 +35,11 @@ export const todoWriteTool: ToolModule = {
       },
     },
   },
-  execute: async (args: { items: TodoItem[] }) => {
-    activeTodos = args.items;
+  execute: (async (args: Record<string, unknown>, _cwd: string) => {
+    activeTodos = Array.isArray(args.items) ? (args.items as TodoItem[]) : [];
     return {
       success: true,
       todos: activeTodos,
     };
-  },
+  }) as unknown as ToolModule['execute'],
 };

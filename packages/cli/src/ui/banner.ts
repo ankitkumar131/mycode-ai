@@ -41,7 +41,10 @@ export function renderBanner(opts: BannerOptions): void {
   console.log(`  ${chalk.hex(theme.dim)(`${osLabel} · ${shell} · Node ${nodeV}`)}`);
   console.log();
   console.log(
-    `  ${chalk.hex(theme.dim)('Type your message. Use')} ${chalk.hex(theme.green).bold('/help')} ${chalk.hex(theme.dim)('for commands,')} ${chalk.hex(theme.green).bold('/exit')} ${chalk.hex(theme.dim)('to quit.')}`
+    `  ${chalk.hex(theme.dim)('Enter to send')} ${chalk.hex(theme.green)('·')} ${chalk.hex(theme.dim)('Shift+Enter new line')} ${chalk.hex(theme.green)('·')} ${chalk.hex(theme.dim)('↑/↓ edit & history')} ${chalk.hex(theme.green)('·')} ${chalk.hex(theme.dim)('Ctrl+←/→ words')}`
+  );
+  console.log(
+    `  ${chalk.hex(theme.dim)('Use')} ${chalk.hex(theme.green).bold('/')} ${chalk.hex(theme.dim)('for commands (live menu),')} ${chalk.hex(theme.green).bold('!cmd')} ${chalk.hex(theme.dim)('to run shell,')} ${chalk.hex(theme.green).bold('@file')} ${chalk.hex(theme.dim)('to inject files.')}`
   );
   console.log();
 }

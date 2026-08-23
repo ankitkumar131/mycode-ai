@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import readline from 'readline';
-import { theme, heavyDivider, sectionHeader } from './themes/theme.js';
+import { theme, sectionHeader } from './themes/theme.js';
 import { COMMANDS } from '../commands/slash-commands.js';
 
 export interface SlashCommandChoice {
@@ -20,22 +20,41 @@ export async function pickSlashCommandInteractive(initialQuery = '/'): Promise<s
     return undefined;
   }
 
+  if (!process.stdin.isTTY) {
+    return matches[0].name;
+  }
+
   let selectedIndex = 0;
+  let renderedLines = 0;
 
   return new Promise<string | undefined>((resolve) => {
     const stdin = process.stdin;
-    const isRaw = stdin.isRaw;
-    stdin.setRawMode?.(true);
+    const wasRaw = stdin.isRaw;
+    readline.emitKeypressEvents(stdin);
+    if (stdin.setRawMode) stdin.setRawMode(true);
     stdin.resume();
 
-    const render = () => {
-      // Move cursor up and clear lines if rendering repeatedly
-      console.log();
-      console.log(sectionHeader('Slash Commands', { accent: 'green' }));
-      console.log(`  ${chalk.hex(theme.dim)('Use ↑/↓ arrow keys to select, Enter/Tab to accept, Esc to cancel:')}`);
-      console.log();
+    const clearRendered = () => {
+      if (renderedLines > 0) {
+        process.stdout.write(`\x1b[${renderedLines}A`);
+        for (let i = 0; i < renderedLines; i++) {
+          process.stdout.write('\x1b[2K\n');
+        }
+        process.stdout.write(`\x1b[${renderedLines}A`);
+        renderedLines = 0;
+      }
+    };
 
-      const maxDisplay = 10;
+    const render = () => {
+      clearRendered();
+      const lines: string[] = [];
+
+      lines.push('');
+      lines.push(sectionHeader('Slash Commands', { accent: 'green' }));
+      lines.push(`  ${chalk.hex(theme.dim)('Use ↑/↓ to select, Enter to accept, Esc to cancel')}`);
+      lines.push('');
+
+      const maxDisplay = Math.min(matches.length, 10);
       const startIdx = Math.max(0, Math.min(selectedIndex - Math.floor(maxDisplay / 2), matches.length - maxDisplay));
       const visible = matches.slice(startIdx, startIdx + maxDisplay);
 
@@ -48,10 +67,14 @@ export async function pickSlashCommandInteractive(initialQuery = '/'): Promise<s
           : chalk.hex(theme.green).bold(cmd.name);
         const descStr = chalk.hex(theme.muted)(cmd.description);
 
-        console.log(`${prefix}${nameStr.padEnd(24)} ${descStr}`);
+        lines.push(`${prefix}${nameStr}  ${descStr}`);
       });
 
-      console.log();
+      lines.push('');
+
+      const output = lines.join('\n');
+      process.stdout.write(output);
+      renderedLines = lines.length;
     };
 
     render();
@@ -76,7 +99,7 @@ export async function pickSlashCommandInteractive(initialQuery = '/'): Promise<s
 
     const cleanup = () => {
       stdin.removeListener('keypress', onKeypress);
-      stdin.setRawMode?.(isRaw ?? false);
+      if (stdin.setRawMode) stdin.setRawMode(wasRaw ?? false);
     };
 
     stdin.on('keypress', onKeypress);

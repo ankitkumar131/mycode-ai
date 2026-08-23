@@ -9,6 +9,7 @@ import { execCommandTool } from './definitions/exec-command.js';
 import { readPdfTool } from './definitions/read-pdf.js';
 import { readDocumentTool } from './definitions/read-document.js';
 import { fetchWebPageTool } from './definitions/web-fetch.js';
+import { webSearchTool } from './definitions/web-search.js';
 import { globSearchTool } from './definitions/glob-search.js';
 import { codeExecTool } from './definitions/code-exec.js';
 import { todoWriteTool } from './definitions/todowrite.js';
@@ -25,6 +26,7 @@ const ALL_TOOLS: ToolModule[] = [
   readPdfTool,
   readDocumentTool,
   fetchWebPageTool,
+  webSearchTool,
   globSearchTool,
   codeExecTool,
   todoWriteTool,
@@ -43,6 +45,8 @@ const ALIASES: Record<string, string> = {
   'readDocument': 'readDocument',
   'read-document': 'readDocument',
   'fetchWebPage': 'fetchWebPage',
+  'webSearch': 'webSearch',
+  'web_search': 'webSearch',
   'globSearch': 'globSearch',
   'codeExec': 'code_exec',
   'todoWrite': 'todo_write',

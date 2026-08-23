@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync, readdirSync, rmSync, mkdirSync } from 'fs';
 import { platform, homedir } from 'os';
 import { join } from 'path';
 import { theme, S, ICONS, hr, heavyDivider, sectionHeader, frame, chatStatusBar } from '../ui/themes/theme.js';
@@ -190,11 +190,124 @@ export const COMMANDS: CommandDef[] = [
   },
   {
     name: '/search',
-    aliases: ['/scrape', '/crawl'],
-    description: 'Search or scrape the web via web connectors',
+    aliases: ['/web', '/scrape'],
+    description: 'Perform a live web search for up-to-date documentation and answers',
     usage: '/search <query>',
-    handler: async (args) => {
-      console.log(`  ${chalk.hex(theme.green)('Searching web for:')} ${args}`);
+    handler: async (args, ctx) => {
+      const query = args.trim();
+      if (!query) {
+        console.log(`  ${chalk.hex(theme.amber)('Usage:')} /search <query>`);
+        return { handled: true };
+      }
+      console.log(`  ${chalk.hex(theme.green)('🔍 Searching web for:')} ${chalk.bold(query)}`);
+      try {
+        const { webSearchTool } = await import('../../../core/src/tools/definitions/web-search.js');
+        const res = await webSearchTool.execute({ query, numResults: 5 }, ctx.cwd);
+        console.log();
+        console.log(res);
+        console.log();
+        ctx.session.getContext()?.addMessage({ role: 'user', content: `[Web Search Results for "${query}"]\n${res}` });
+      } catch (err: any) {
+        console.log(`  ${chalk.hex(theme.red)('✖')} Search error: ${err.message}`);
+      }
+      return { handled: true };
+    },
+  },
+  {
+    name: '/save',
+    description: 'Save current session context and conversation history to disk',
+    usage: '/save [filename]',
+    handler: async (args, ctx) => {
+      const logsDir = join(homedir(), '.mycode', 'logs');
+      if (!existsSync(logsDir)) {
+        mkdirSync(logsDir, { recursive: true });
+      }
+
+      const name = args.trim() || `session-${Date.now()}`;
+      const fileName = name.endsWith('.json') ? name : `${name}.json`;
+      const filePath = join(logsDir, fileName);
+
+      const context = ctx.session.getContext();
+      const messages = context?.getMessages?.() || [];
+
+      const data = {
+        timestamp: new Date().toISOString(),
+        version: ctx.version,
+        cwd: ctx.cwd,
+        provider: ctx.router.getCurrentProvider()?.name,
+        messages,
+      };
+
+      writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+      console.log(`  ${chalk.hex(theme.green)('✔')} Session saved to: ${chalk.bold(filePath)}`);
+      return { handled: true };
+    },
+  },
+  {
+    name: '/load',
+    description: 'Load a saved session context from disk',
+    usage: '/load [filename]',
+    handler: async (args, ctx) => {
+      const logsDir = join(homedir(), '.mycode', 'logs');
+      const name = args.trim();
+
+      if (!name) {
+        console.log(`  ${chalk.hex(theme.amber)('Usage:')} /load <filename> (use /history to list files)`);
+        return { handled: true };
+      }
+
+      const fileName = name.endsWith('.json') ? name : `${name}.json`;
+      const filePath = join(logsDir, fileName);
+
+      if (!existsSync(filePath)) {
+        console.log(`  ${chalk.hex(theme.red)('✖')} Session file not found: ${filePath}`);
+        return { handled: true };
+      }
+
+      try {
+        const raw = readFileSync(filePath, 'utf-8');
+        const data = JSON.parse(raw);
+        const context = ctx.session.getContext();
+
+        if (context && Array.isArray(data.messages)) {
+          if (context.clear) context.clear();
+          for (const msg of data.messages) {
+            context.addMessage(msg);
+          }
+          console.log(`  ${chalk.hex(theme.green)('✔')} Loaded session from: ${chalk.bold(fileName)} (${data.messages.length} messages)`);
+        }
+      } catch (err: any) {
+        console.log(`  ${chalk.hex(theme.red)('✖')} Failed to load session: ${err.message}`);
+      }
+
+      return { handled: true };
+    },
+  },
+  {
+    name: '/history',
+    aliases: ['/sessions'],
+    description: 'List saved conversation sessions',
+    handler: async () => {
+      const logsDir = join(homedir(), '.mycode', 'logs');
+      console.log();
+      console.log(sectionHeader('Saved Sessions', { accent: 'green' }));
+
+      if (existsSync(logsDir)) {
+        const files = readdirSync(logsDir).filter(f => f.endsWith('.json'));
+        if (files.length === 0) {
+          console.log(`  ${chalk.hex(theme.dim)('No saved session history found.')}`);
+        } else {
+          for (const f of files.slice(0, 15)) {
+            console.log(`  ${chalk.hex(theme.green)('•')} ${f}`);
+          }
+          console.log();
+          console.log(`  ${chalk.hex(theme.muted)('Load a session: /load <filename>')}`);
+        }
+      } else {
+        console.log(`  ${chalk.hex(theme.dim)('No saved session history directory found.')}`);
+      }
+
+      console.log();
       return { handled: true };
     },
   },

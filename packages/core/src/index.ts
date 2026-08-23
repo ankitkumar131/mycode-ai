@@ -43,6 +43,7 @@ export { execCommandTool } from './tools/definitions/exec-command.js';
 export { readPdfTool } from './tools/definitions/read-pdf.js';
 export { readDocumentTool } from './tools/definitions/read-document.js';
 export { fetchWebPageTool } from './tools/definitions/web-fetch.js';
+export { webSearchTool } from './tools/definitions/web-search.js';
 export { globSearchTool } from './tools/definitions/glob-search.js';
 export { delegateTool } from './tools/definitions/delegate.js';
 export { codeExecTool } from './tools/definitions/code-exec.js';

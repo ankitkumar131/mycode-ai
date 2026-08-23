@@ -25,14 +25,13 @@ export async function agentCommand(task?: string): Promise<void> {
 
   const router = new ProviderRouter(cfg.providers);
   let currentSpinner: Ora | null = null;
-  const promptRl = createInterface({ input: process.stdin, output: process.stdout });
 
   const session = new AgentSession({
     providerRouter: router,
     cwd: process.cwd(),
     maxIterations: 50,
-    confirmFn: async (target, context, safety) => {
-      return confirmCommand(promptRl, target, process.cwd(), safety as any ?? null);
+    confirmFn: async (target, _context, safety) => {
+      return confirmCommand(target, process.cwd(), (safety as any) ?? null);
     },
     onText() {
       if (currentSpinner) {

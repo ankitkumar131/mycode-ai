@@ -4,56 +4,35 @@ vi.mock('@mycode/core', () => {
   const mockRun = vi.fn().mockResolvedValue('Mock response');
   const MockSession = vi.fn().mockImplementation(() => ({
     run: mockRun,
+    getContext: () => ({}),
+    getState: () => ({ messageCount: 0, iterations: 0 }),
+    abort: vi.fn(),
   }));
   return {
     ConfigManager: vi.fn().mockImplementation(() => ({
       configExists: () => true,
-      load: () => Promise.resolve({ providers: [{ name: 'test', apiKey: 'sk-test' }] }),
-      get: () => ({ providers: [] }),
+      load: () =>
+        Promise.resolve({
+          providers: [{ name: 'test', apiKey: 'sk-test' }],
+          preferences: { confirmCommands: true, confirmWrites: true },
+        }),
+      get: () => ({ providers: [], preferences: { confirmCommands: true, confirmWrites: true } }),
     })),
     AgentSession: MockSession,
     ProviderRouter: vi.fn().mockImplementation(() => ({
       getCurrentProvider: () => ({ name: 'test', model: 'gpt-4o' }),
     })),
+    executeCommand: vi.fn().mockResolvedValue({ output: '', exitCode: 0 }),
   };
 });
 
-vi.mock('readline', () => {
-  const mockQuestion = vi.fn();
-  const mockClose = vi.fn();
-  const mockResume = vi.fn();
-  const mockPause = vi.fn();
-  const listeners: Record<string, Function[]> = {};
-
-  const rl = {
-    question: mockQuestion,
-    close: vi.fn(() => {
-      listeners['close']?.forEach(fn => fn());
-    }),
-    resume: mockResume,
-    pause: mockPause,
-    prompt: vi.fn(),
-    on: vi.fn((event: string, fn: Function) => {
-      listeners[event] = listeners[event] || [];
-      listeners[event].push(fn);
-      if (event === 'line') {
-        setTimeout(() => {
-          fn('/exit');
-        }, 10);
-      }
-    }),
-    once: vi.fn((event: string, fn: Function) => {
-      listeners[event] = listeners[event] || [];
-      listeners[event].push(fn);
-    }),
-  };
-
-  return {
-    createInterface: vi.fn(() => rl),
-    default: {
-      createInterface: vi.fn(() => rl),
-    },
-  };
+vi.mock('../../ui/text-area.js', () => {
+  const TextArea = vi.fn().mockImplementation(() => ({
+    read: vi.fn().mockResolvedValue({ kind: 'exit' }),
+    setBusy: vi.fn(),
+    close: vi.fn(),
+  }));
+  return { TextArea };
 });
 
 import { chatCommand } from '../chat.js';
@@ -63,18 +42,50 @@ describe('chatCommand', () => {
     vi.clearAllMocks();
   });
 
-  it('exits on /exit command', async () => {
+  it('creates a text area and exits cleanly', async () => {
+    const { TextArea } = await import('../../ui/text-area.js');
     await chatCommand();
-    const { createInterface } = await import('readline');
-    expect(createInterface).toHaveBeenCalled();
+    expect(TextArea).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs a slash command selected from the inline menu', async () => {
+    const { TextArea } = await import('../../ui/text-area.js');
+    const readMock = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: 'slash', name: '/help' })
+      .mockResolvedValueOnce({ kind: 'exit' });
+    (TextArea as any).mockImplementation(() => ({
+      read: readMock,
+      setBusy: vi.fn(),
+      close: vi.fn(),
+    }));
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await chatCommand();
+    expect(readMock).toHaveBeenCalledTimes(2);
+    expect(logSpy.mock.calls.flat().join('\n').toLowerCase()).toContain('mycode commands');
+    logSpy.mockRestore();
+  });
+
+  it('exits on the /exit slash command', async () => {
+    const { TextArea } = await import('../../ui/text-area.js');
+    const readMock = vi.fn().mockResolvedValueOnce({ kind: 'slash', name: '/exit' });
+    (TextArea as any).mockImplementation(() => ({
+      read: readMock,
+      setBusy: vi.fn(),
+      close: vi.fn(),
+    }));
+
+    await chatCommand();
+    expect(readMock).toHaveBeenCalledTimes(1);
   });
 
   it('requires providers to be configured', async () => {
     const { ConfigManager } = await import('@mycode/core');
     (ConfigManager as any).mockImplementationOnce(() => ({
       configExists: () => false,
-      load: () => Promise.resolve({ providers: [] }),
-      get: () => ({ providers: [] }),
+      load: () => Promise.resolve({ providers: [], preferences: {} }),
+      get: () => ({ providers: [], preferences: {} }),
     }));
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});

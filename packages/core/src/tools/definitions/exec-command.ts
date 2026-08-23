@@ -50,7 +50,9 @@ export const execCommandTool: ToolModule = {
       throw new Error(`Command blocked: ${safety.reason}`);
     }
 
-    if (safety.level === 'dangerous' && options?.confirmFn) {
+    // Ask the user before running ANY command (Yes / Always allow / No), so
+    // nothing executes without permission unless it was already approved.
+    if (options?.confirmFn) {
       const confirmed = await options.confirmFn(command, description ?? null, safety);
       if (!confirmed) {
         if (options.commandHistory) {

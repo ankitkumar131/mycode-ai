@@ -19,9 +19,9 @@ export const readInstructionsTool: ToolModule = {
       },
     },
   },
-  execute: async (args: { file?: string }, opts?: { cwd?: string }) => {
-    const cwd = opts?.cwd || process.cwd();
-    const candidates = args.file ? [args.file] : ['MYCODE.md', 'mycode.md', 'CLAUDE.md', 'AGENTS.md'];
+  execute: (async (args: Record<string, unknown>, cwd: string) => {
+    const requested = typeof args.file === 'string' ? args.file : '';
+    const candidates = requested ? [requested] : ['MYCODE.md', 'mycode.md', 'CLAUDE.md', 'AGENTS.md'];
 
     for (const name of candidates) {
       const fullPath = join(cwd, name);
@@ -39,5 +39,5 @@ export const readInstructionsTool: ToolModule = {
       success: false,
       error: 'No instruction files found in workspace.',
     };
-  },
+  }) as unknown as ToolModule['execute'],
 };

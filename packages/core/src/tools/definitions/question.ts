@@ -23,12 +23,12 @@ export const questionTool: ToolModule = {
       },
     },
   },
-  execute: async (args: { text: string; options?: string[] }) => {
+  execute: (async (args: Record<string, unknown>, _cwd: string) => {
     return {
       success: true,
-      question: args.text,
-      options: args.options || [],
+      question: typeof args.text === 'string' ? args.text : '',
+      options: Array.isArray(args.options) ? (args.options as string[]) : [],
       message: 'Question presented to user.',
     };
-  },
+  }) as unknown as ToolModule['execute'],
 };

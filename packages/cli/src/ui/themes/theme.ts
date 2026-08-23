@@ -1,5 +1,4 @@
 import chalk from 'chalk';
-import boxen from 'boxen';
 
 export const theme = {
   // Electric Cyan (Primary Cyber Glow)
@@ -46,6 +45,11 @@ export const theme = {
   switch: '#00f0ff',
   codeBg: '#0f172a',
   codeBgDark: '#020617',
+
+  // Diff renderer tokens
+  diffAdd: '#34d399',
+  diffDel: '#f87171',
+  diffHunk: '#60a5fa',
 } as const;
 
 export const COLORS = theme;

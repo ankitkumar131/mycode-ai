@@ -1,5 +1,6 @@
 import chalk from 'chalk';
-import * as readline from 'readline/promises';
+import readline from 'readline';
+import * as readlinePromises from 'readline/promises';
 
 const SAFETY_LEVELS = {
   blocked: { fg: '#FCA5A5', icon: '\uD83D\uDEAB', label: 'BLOCKED' },
@@ -16,17 +17,26 @@ interface SafetyResult {
   warnings?: string[];
 }
 
+/** Commands the user approved with "Always allow this command for current session". */
 const ALWAYS_ALLOW = new Set<string>();
 
+function normalizeCommand(command: string): string {
+  return command.trim().toLowerCase();
+}
+
 function isAlwaysAllowed(command: string): boolean {
-  return ALWAYS_ALLOW.has(command.split(' ')[0].toLowerCase());
+  const norm = normalizeCommand(command);
+  for (const entry of ALWAYS_ALLOW) {
+    if (norm === entry || norm.startsWith(entry + ' ')) return true;
+  }
+  return false;
 }
 
 function addAlwaysAllow(command: string): void {
-  ALWAYS_ALLOW.add(command.split(' ')[0].toLowerCase());
+  ALWAYS_ALLOW.add(normalizeCommand(command));
 }
 
-async function askYesNo(rl: readline.Interface, question: string, defaultYes = true): Promise<boolean> {
+async function askYesNo(rl: readlinePromises.Interface, question: string, defaultYes = true): Promise<boolean> {
   const hint = defaultYes ? 'Y/n' : 'y/N';
   rl.resume();
   const answer = (await rl.question(`${question} (${hint}) `)).trim().toLowerCase();
@@ -35,77 +45,167 @@ async function askYesNo(rl: readline.Interface, question: string, defaultYes = t
   return answer === 'y' || answer === 'yes';
 }
 
-export async function confirmFileWrite(rl: readline.Interface, filePath: string): Promise<boolean> {
+export async function confirmFileWrite(rl: readlinePromises.Interface, filePath: string): Promise<boolean> {
   console.log();
   console.log(chalk.hex('#FBBF24')(`\uD83D\uDCDD File write requested: `) + chalk.hex('#E2E8F0').bold(filePath));
   console.log();
   return askYesNo(rl, chalk.hex('#FBBF24')('Apply this change?'), true);
 }
 
+/**
+ * Interactive arrow-key choice picker (like agy/gemini-cli / openclaude).
+ * Uses ANSI escape codes to clear and redraw in-place.
+ */
+export function pickChoiceArrowKeys(
+  title: string,
+  choices: Array<{ name: string; value: string }>
+): Promise<string> {
+  if (!process.stdin.isTTY) {
+    return Promise.resolve(choices[0].value);
+  }
+
+  let selectedIndex = 0;
+  let renderedLines = 0;
+
+  return new Promise<string>((resolve) => {
+    const stdin = process.stdin;
+    const wasRaw = stdin.isRaw;
+    readline.emitKeypressEvents(stdin);
+    if (stdin.setRawMode) stdin.setRawMode(true);
+    stdin.resume();
+
+    const clearRendered = () => {
+      if (renderedLines > 0) {
+        process.stdout.write(`\x1b[${renderedLines}A`);
+        for (let i = 0; i < renderedLines; i++) {
+          process.stdout.write('\x1b[2K\n');
+        }
+        process.stdout.write(`\x1b[${renderedLines}A`);
+        renderedLines = 0;
+      }
+    };
+
+    const render = () => {
+      clearRendered();
+      const lines: string[] = [];
+
+      lines.push(chalk.hex('#38BDF8').bold(`  ${title}`));
+      choices.forEach((choice, idx) => {
+        const isSelected = idx === selectedIndex;
+        if (isSelected) {
+          lines.push(`  ${chalk.hex('#34D399').bold('❯')} ${chalk.bgHex('#34D399').hex('#0F172A').bold(` ${choice.name} `)}`);
+        } else {
+          lines.push(`    ${chalk.hex('#94A3B8')(choice.name)}`);
+        }
+      });
+      lines.push('');
+
+      const output = lines.join('\n');
+      process.stdout.write(output);
+      renderedLines = lines.length;
+    };
+
+    render();
+
+    const onKeypress = (_str: string, key: readline.Key) => {
+      if (!key) return;
+
+      if (key.name === 'up') {
+        selectedIndex = (selectedIndex - 1 + choices.length) % choices.length;
+        render();
+      } else if (key.name === 'down') {
+        selectedIndex = (selectedIndex + 1) % choices.length;
+        render();
+      } else if (key.name === 'return') {
+        clearRendered();
+        // Show the chosen option inline
+        const chosen = choices[selectedIndex];
+        process.stdout.write(`  ${chalk.hex('#34D399').bold('✔')} ${chalk.hex('#E2E8F0')(chosen.name)}\n`);
+        cleanup();
+        resolve(chosen.value);
+      } else if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
+        clearRendered();
+        process.stdout.write(`  ${chalk.hex('#94A3B8')('✖ Cancelled')}\n`);
+        cleanup();
+        resolve(choices[choices.length - 1].value);
+      }
+    };
+
+    const cleanup = () => {
+      stdin.removeListener('keypress', onKeypress);
+      if (stdin.setRawMode) stdin.setRawMode(wasRaw ?? false);
+    };
+
+    stdin.on('keypress', onKeypress);
+  });
+}
+
+/**
+ * Confirmation dialog shown when the agent auto-runs a command (or writes a
+ * file). Mirrors gemini-cli / agy: the user picks with arrow keys between
+ * "Yes — execute once", "Always allow this command for current session" and
+ * "No — skip".
+ */
 export async function confirmCommand(
-  rl: readline.Interface,
   command: string,
   cwd: string,
   safety: SafetyResult | null = null,
+  description?: string | null,
 ): Promise<boolean> {
-  const level = safety?.level || 'normal';
-  const colors = SAFETY_LEVELS[level];
+  if (isAlwaysAllowed(command)) return true;
 
-  if ((level === 'normal' || level === 'elevated') && isAlwaysAllowed(command)) {
-    return true;
-  }
+  const level = safety?.level ?? 'normal';
+  const colors = SAFETY_LEVELS[level] || SAFETY_LEVELS.normal;
 
   console.log();
 
-  if (level === 'dangerous' || level === 'elevated') {
-    console.log(chalk.hex(colors.fg)(`${colors.icon} ${colors.label}: ${safety?.reason || ''}`));
+  // Header chip
+  if (safety) {
+    console.log(`  ${chalk.hex(colors.fg)(`${colors.icon} ${colors.label}`)} ${chalk.hex('#94A3B8')(safety.reason ?? '')}`);
     if (level === 'dangerous') {
       console.log(chalk.hex('#F87171')('  This command may cause irreversible changes.'));
     }
+  } else {
+    console.log(`  ${chalk.hex(colors.fg)(`${colors.icon} ${colors.label}`)} ${chalk.hex('#94A3B8')('File write requested')}`);
   }
 
+  // Command / target box
   console.log();
-  console.log(chalk.hex('#475569')('  \u250C\u2500 ') + chalk.hex('#E2E8F0').bold(`$ ${command}`));
-  console.log(chalk.hex('#475569')('  \u2514\u2500 ') + chalk.dim(`cwd: ${cwd}`));
-
+  const isCommand = !!safety;
+  console.log(chalk.hex('#475569')('  ┌─ ') + chalk.hex('#E2E8F0').bold(`${isCommand ? '$ ' : '✍ '}${command}`));
+  console.log(chalk.hex('#475569')('  └─ ') + chalk.dim(`cwd: ${cwd}`));
+  if (description) {
+    console.log(chalk.hex('#94A3B8')(`     ${description}`));
+  }
   if (safety?.warnings?.length) {
-    console.log();
     for (const w of safety.warnings) {
-      console.log(chalk.hex('#FBBF24')(`  \u26A0 ${w}`));
+      console.log(chalk.hex('#FBBF24')(`  ⚠ ${w}`));
     }
   }
-
   console.log();
 
-  if (level === 'dangerous') {
-    return askYesNo(rl, chalk.hex('#F87171').bold('Execute this DANGEROUS command?'), false);
-  }
+  const choices = [
+    { name: 'Yes — execute once', value: 'yes' },
+    { name: 'Always allow this command for current session', value: 'always' },
+    { name: 'No — skip', value: 'no' },
+  ];
 
-  const { action } = await (async () => {
-    console.log(chalk.hex('#38BDF8')('Execute this command?'));
-    console.log(`  ${chalk.hex('#34D399')('1.')} Yes \u2014 execute once`);
-    console.log(`  ${chalk.hex('#34D399')('2.')} Yes, always allow "${command.split(' ')[0]}" this session`);
-    console.log(`  ${chalk.hex('#F87171')('3.')} No \u2014 skip`);
-    rl.resume();
-    const answer = (await rl.question(chalk.hex('#38BDF8')('Choice (1-3): '))).trim();
-    rl.pause();
-    return { action: answer };
-  })();
+  const selectedValue = await pickChoiceArrowKeys('Execute command?', choices);
 
-  if (action === '2') {
+  if (selectedValue === 'always') {
     addAlwaysAllow(command);
     return true;
   }
 
-  return action === '1';
+  return selectedValue === 'yes';
 }
 
-export async function confirm(rl: readline.Interface, message: string, defaultYes = true): Promise<boolean> {
+export async function confirm(rl: readlinePromises.Interface, message: string, defaultYes = true): Promise<boolean> {
   return askYesNo(rl, message, defaultYes);
 }
 
 export async function select(
-  rl: readline.Interface,
+  rl: readlinePromises.Interface,
   message: string,
   choices: Array<{ name: string; value: string }>,
 ): Promise<string> {
@@ -121,7 +221,7 @@ export async function select(
   return choices[0].value;
 }
 
-export async function input(rl: readline.Interface, message: string, defaultValue = ''): Promise<string> {
+export async function input(rl: readlinePromises.Interface, message: string, defaultValue = ''): Promise<string> {
   const prompt = defaultValue ? `${message} (${defaultValue})` : message;
   rl.resume();
   const answer = (await rl.question(`${prompt}: `)).trim();

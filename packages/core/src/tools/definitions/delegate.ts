@@ -26,8 +26,9 @@ export const delegateTool: ToolModule = {
       },
     },
   },
-  execute: async (args: { task: string; agent?: string }) => {
-    const targetAgentName = args.agent || 'explore';
+  execute: (async (args: Record<string, unknown>, _cwd: string) => {
+    const targetAgentName = typeof args.agent === 'string' ? args.agent : 'explore';
+    const task = typeof args.task === 'string' ? args.task : '';
     const agent = agentService.get(targetAgentName);
 
     if (!agent) {
@@ -40,7 +41,7 @@ export const delegateTool: ToolModule = {
     try {
       const result = await agent.generate?.({
         model: null,
-        prompt: args.task,
+        prompt: task,
       });
 
       return {
@@ -55,5 +56,5 @@ export const delegateTool: ToolModule = {
         error: err.message || String(err),
       };
     }
-  },
+  }) as unknown as ToolModule['execute'],
 };
