@@ -117,11 +117,6 @@ export class TextArea {
   // Rendering state
   private regionTop: number | null = null;
   private prevCursorRow = 0;
-  private pendingPos: {
-    promise: Promise<{ row: number; col: number }>;
-    resolve: (p: { row: number; col: number }) => void;
-    timer: ReturnType<typeof setTimeout>;
-  } | null = null;
   private renderChain: Promise<void> = Promise.resolve();
 
   // Input state
@@ -220,10 +215,6 @@ export class TextArea {
     process.stdin.removeListener('keypress', this.keyHandler);
     process.stdin.removeListener('data', this.dataHandler);
     if (typeof (process.stdout as any).removeListener === 'function') process.stdout.removeListener('resize', this.resizeHandler);
-    if (this.pendingPos) {
-      clearTimeout(this.pendingPos.timer);
-      this.pendingPos = null;
-    }
     if (this.nonTTYHandlers) {
       process.stdin.removeListener('data', this.nonTTYHandlers.onData);
       process.stdin.removeListener('end', this.nonTTYHandlers.onEnd);
@@ -292,17 +283,11 @@ export class TextArea {
   private onData(chunk: Buffer): void {
     let s = chunk.toString('utf-8');
 
-    if (this.pendingPos) {
-      const m = s.match(/\x1b\[(\d+);(\d+)R/);
-      if (m) {
-        clearTimeout(this.pendingPos.timer);
-        const { resolve } = this.pendingPos;
-        this.pendingPos = null;
-        resolve({ row: Number(m[1]), col: Number(m[2]) });
-        const rest = s.replace(/\x1b\[\d+;\d+R/, '');
-        if (rest) process.stdin.emit('data', Buffer.from(rest));
-        return;
-      }
+    // Swallow stray terminal reports (cursor position, device attributes, focus events).
+    if (/\x1b\[(?:\d+;\d+R|\?[\d;]*c|>[\d;]*c|[IO])/.test(s)) {
+      const rest = s.replace(/\x1b\[(?:\d+;\d+R|\?[\d;]*c|>[\d;]*c|[IO])/g, '');
+      if (rest) process.stdin.emit('data', Buffer.from(rest));
+      return;
     }
 
     // Modified Enter as CSI-u (kitty/WezTerm/Windows Terminal/foot) or
@@ -374,6 +359,10 @@ export class TextArea {
 
     const name = key.name;
     const seq = key.sequence ?? '';
+
+    // Unknown escape sequences (terminal replies, unmapped keys) must never be inserted as text.
+    if (seq.startsWith('\x1b') && (name === undefined || name === 'undefined') && !key.meta) return;
+    if (name === 'undefined' && !str) return;
 
     // While busy: Ctrl+C interrupts; Enter with text queues/steers; typing still edits.
     if (this.busy) {
@@ -1111,14 +1100,21 @@ export class TextArea {
     }
 
     const cpos = posOfIndexInput(rows, this.cursor, this.text);
-    const absRow = (this.regionTop ?? 1) + above.length + cpos.row;
     // First row of every logical line is prefixed by the prompt (row 0) or the gutter.
     const rowStart = rows[cpos.row]?.start ?? 0;
     const isLogicalLineStart = rowStart === 0 || this.text[rowStart - 1] === '\n';
     const gutter = isLogicalLineStart ? promptW : 0;
-    const absCol = gutter + cpos.col + 1;
-    process.stdout.write(`\x1b[${absRow};${absCol}H`);
-    this.prevCursorRow = above.length + cpos.row;
+    const col = gutter + cpos.col;
+    // The cursor currently sits on the last drawn row; move up to the target row.
+    const totalRows = placeholderShown ? 1 : Math.max(1, rows.length);
+    const lastRow = above.length + totalRows - 1;
+    const targetRow = above.length + cpos.row;
+    const up = lastRow - targetRow;
+    if (up > 0) process.stdout.write(`\x1b[${up}A`);
+    process.stdout.write('\r');
+    if (col > 0) process.stdout.write(`\x1b[${col}C`);
+    this.regionTop = 1;
+    this.prevCursorRow = targetRow;
   }
 
   /** Light syntax colouring for the composer: slash cmd, @paths, !shell, paste placeholders. */
@@ -1156,37 +1152,16 @@ export class TextArea {
 
   // ─── Erase / cursor position ─────────────────────────────────────────────
 
+  /**
+   * Erase everything we drew last time. Purely relative cursor movement —
+   * we never ask the terminal for its cursor position (DSR replies leak into
+   * the input on Windows/ConPTY and some multiplexers).
+   */
   private async eraseRegion(): Promise<void> {
-    const pos = await this.cursorPos();
     if (this.closed) return;
-    if (this.regionTop === null) {
-      this.regionTop = pos.row;
-      return;
-    }
-    const top = pos.row - this.prevCursorRow;
-    if (top < 1) {
-      process.stdout.write('\x1b[2J\x1b[H');
-      this.regionTop = 1;
-      return;
-    }
-    process.stdout.write(`\x1b[${top};1H`);
-    process.stdout.write('\x1b[J');
-    this.regionTop = top;
-  }
-
-  private cursorPos(): Promise<{ row: number; col: number }> {
-    if (this.pendingPos) return this.pendingPos.promise;
-    let resolveFn!: (p: { row: number; col: number }) => void;
-    const promise = new Promise<{ row: number; col: number }>(resolve => {
-      resolveFn = resolve;
-    });
-    const timer = setTimeout(() => {
-      this.pendingPos = null;
-      resolveFn({ row: 1, col: 1 });
-    }, 150);
-    this.pendingPos = { promise, resolve: resolveFn, timer };
-    process.stdout.write('\x1b[6n');
-    return promise;
+    if (this.regionTop === null) return; // nothing drawn yet
+    if (this.prevCursorRow > 0) process.stdout.write(`\x1b[${this.prevCursorRow}A`);
+    process.stdout.write('\r\x1b[J');
   }
 
   // ─── Non-TTY fallback (piped input, tests, CI) ──────────────────────────
