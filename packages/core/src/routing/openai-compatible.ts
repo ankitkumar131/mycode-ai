@@ -75,22 +75,97 @@ export class OpenAICompatibleProvider extends BaseProvider {
   }
 
   async chat(messages: unknown[], tools: unknown[] = [], options: any = {}): Promise<any> {
+    // When a stream callback is supplied, stream tokens live and assemble the
+    // final response (text + tool calls + usage) — this is what the CLI uses.
+    if (typeof options.onStream === 'function' || typeof options.onReasoning === 'function') {
+      return this.chatStreaming(messages, tools, options);
+    }
     try {
       const params = this.buildParams(messages, tools, options);
-      const response = await this.client.chat.completions.create(params);
+      const response = await this.client.chat.completions.create(params, { signal: options.abortSignal });
       this.recordSuccess();
       const choice = response.choices[0];
       const rawToolCalls = choice.message.tool_calls || [];
       return {
         content: choice.message.content || '',
+        reasoning: (choice.message as any).reasoning_content || (choice.message as any).reasoning || '',
         toolCalls: rawToolCalls,
         usage: response.usage || {},
         finish_reason: choice.finish_reason,
       };
     } catch (err: any) {
+      if (options.abortSignal?.aborted) throw new Error('Request aborted');
       this.recordFailure();
       throw classifyError(err, this._name);
     }
+  }
+
+  private async chatStreaming(messages: unknown[], tools: unknown[] = [], options: any = {}): Promise<any> {
+    const params = this.buildParams(messages, tools, options);
+    params.stream = true;
+    params.stream_options = { include_usage: true };
+
+    let content = '';
+    let reasoning = '';
+    let usage: any = {};
+    let finish_reason: string | null = null;
+    const toolCallBuffers: Map<number, { id: string; name: string; arguments: string }> = new Map();
+
+    try {
+      let stream: any;
+      try {
+        stream = await this.client.chat.completions.create(params, { signal: options.abortSignal });
+      } catch (err: any) {
+        // Some servers reject stream_options — retry without it once.
+        if (/stream_options/i.test(err?.message ?? '')) {
+          delete params.stream_options;
+          stream = await this.client.chat.completions.create(params, { signal: options.abortSignal });
+        } else throw err;
+      }
+      this.recordSuccess();
+
+      for await (const chunk of stream as any) {
+        if (options.abortSignal?.aborted) break;
+        if (chunk.usage) usage = chunk.usage;
+        const choice = chunk.choices?.[0];
+        if (!choice) continue;
+        const delta = choice.delta ?? {};
+        const r = delta.reasoning_content ?? delta.reasoning;
+        if (r) {
+          reasoning += r;
+          options.onReasoning?.(r);
+        }
+        if (delta.content) {
+          content += delta.content;
+          options.onStream?.(delta.content);
+        }
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index ?? 0;
+            let buf = toolCallBuffers.get(idx);
+            if (!buf) {
+              buf = { id: tc.id || '', name: tc.function?.name || '', arguments: '' };
+              toolCallBuffers.set(idx, buf);
+            }
+            if (tc.id) buf.id = tc.id;
+            if (tc.function?.name) buf.name = tc.function.name;
+            if (tc.function?.arguments) buf.arguments += tc.function.arguments;
+          }
+        }
+        if (choice.finish_reason) finish_reason = choice.finish_reason;
+      }
+    } catch (err: any) {
+      if (options.abortSignal?.aborted) throw new Error('Request aborted');
+      this.recordFailure();
+      throw classifyError(err, this._name);
+    }
+
+    const toolCalls = Array.from(toolCallBuffers.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([i, b]) => ({ id: b.id || `call_${i}`, type: 'function', function: { name: b.name, arguments: b.arguments || '{}' } }))
+      .filter(t => t.function.name);
+
+    return { content, reasoning, toolCalls, usage, finish_reason };
   }
 
   async *stream(messages: unknown[], tools: unknown[] = [], options: any = {}): AsyncGenerator<any> {

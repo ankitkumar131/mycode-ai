@@ -5,7 +5,7 @@ export const codeExecTool: ToolModule = {
   definition: {
     type: 'function',
     function: {
-      name: 'code_exec',
+      name: 'execute_code',
       description: 'Execute code snippets safely in an isolated shell execution environment.',
       parameters: {
         type: 'object',

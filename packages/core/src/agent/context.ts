@@ -21,14 +21,48 @@ export interface Message {
 
 export class ConversationContext {
   private messages: Message[] = [];
-  private maxTokens: number;
+  private _maxTokens: number;
 
   constructor(maxTokens = DEFAULT_MAX_TOKENS) {
-    this.maxTokens = maxTokens;
+    this._maxTokens = maxTokens;
+  }
+
+  get maxTokens(): number {
+    return this._maxTokens;
+  }
+
+  set maxTokens(v: number) {
+    this._maxTokens = v;
   }
 
   addSystem(content: string): void {
     this.messages.push({ role: 'system', content });
+  }
+
+  /** Replace the primary (first) system message, or insert one. */
+  setSystem(content: string): void {
+    const idx = this.messages.findIndex(m => m.role === 'system');
+    if (idx === -1) this.messages.unshift({ role: 'system', content });
+    else this.messages[idx] = { role: 'system', content };
+  }
+
+  addMessage(msg: Message): void {
+    this.messages.push(msg);
+  }
+
+  replaceMessages(msgs: Message[]): void {
+    this.messages = [...msgs];
+  }
+
+  /** Estimated tokens per category (for /context). */
+  breakdown(): { system: number; user: number; assistant: number; tool: number; total: number } {
+    const out = { system: 0, user: 0, assistant: 0, tool: 0, total: 0 };
+    for (const m of this.messages) {
+      const t = this.countTokens(JSON.stringify(m));
+      out[m.role] += t;
+      out.total += t;
+    }
+    return out;
   }
 
   addUser(content: string): void {
@@ -118,7 +152,7 @@ export class ConversationContext {
   }
 
   trimToLimit(): number {
-    while (this.estimateTokens() > this.maxTokens - RESERVED_TOKENS && this.messages.length > 2) {
+    while (this.estimateTokens() > this._maxTokens - RESERVED_TOKENS && this.messages.length > 2) {
       const systemMsg = this.messages[0].role === 'system' ? this.messages.shift() : null;
       this.messages.shift();
       this.messages.shift();

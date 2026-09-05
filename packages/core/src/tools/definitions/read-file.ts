@@ -25,7 +25,7 @@ export const readFileTool: ToolModule = {
   definition: {
     type: 'function',
     function: {
-      name: 'read-file',
+      name: 'read_file',
       description: 'Read the contents of a file at the given path with line numbers. Efficiently reads text files, code, PDFs, Word docs (.docx), Excel spreadsheets (.xlsx, .csv), and presentations (.pptx).',
       parameters: {
         type: 'object',

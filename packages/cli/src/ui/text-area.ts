@@ -1,28 +1,40 @@
 /**
- * text-area — A true multiline terminal text area (gemini-cli / openclaude style).
+ * text-area — A true multiline terminal composer (Hermes-agent style).
  *
- * Behavior:
- *   - Enter            → submit
- *   - Shift+Enter / Alt+Enter / Ctrl+Enter → insert newline
- *   - ↑/↓              → move cursor between wrapped lines; navigate history at the edges
- *   - ←/→              → move cursor by character (across line boundaries)
- *   - Ctrl+← / Ctrl+→  → move by word
- *   - Home / End, Ctrl+A / Ctrl+E → start / end of logical line
- *   - Ctrl+W           → delete word before cursor
- *   - Ctrl+U / Ctrl+K  → delete to start / end of logical line
- *   - Delete / Ctrl+D  → delete char at cursor
- *   - Ctrl+L           → clear screen
- *   - Esc              → close slash menu / clear input
- *   - Ctrl+C           → clear input, then exit on second press
- *   - /                → live-filtering slash command menu (openclaude style)
- *   - Paste            → inserted at the cursor (bracketed paste)
+ * Keys:
+ *   Enter                          → send
+ *   Ctrl+Enter / Shift+Enter /
+ *   Alt+Enter / Ctrl+J             → new line
+ *   `\` then Enter                 → new line (fallback for terminals that can't
+ *                                    distinguish Ctrl+Enter from Enter)
+ *   ↑/↓                            → move between lines; history at the edges
+ *   ←/→, Home/End, Ctrl+A/E        → cursor movement
+ *   Ctrl+←/→ (Alt+B/F)             → word movement
+ *   Ctrl+W / Alt+Backspace         → delete word
+ *   Ctrl+U / Ctrl+K                → delete to line start / end
+ *   Delete / Ctrl+D                → delete char (Ctrl+D on empty input exits)
+ *   Ctrl+L                         → clear screen
+ *   Ctrl+G  (or Ctrl+X Ctrl+E)     → edit prompt in $EDITOR
+ *   Ctrl+S                         → stash / restore draft
+ *   Ctrl+Z                         → suspend (unix)
+ *   Tab                            → accept ghost suggestion / complete slash or @path
+ *   Esc                            → close menu → clear input
+ *   Ctrl+C                         → clear input; twice on empty → exit
+ *   /                              → live slash-command menu (commands + skills)
+ *   @                              → file path completion menu
+ *   Paste                          → bracketed paste; big pastes are collapsed to a
+ *                                    placeholder and expanded on submit
  *
- * Rendering is done with raw ANSI redraw: the region (slash menu + input) is
- * erased and redrawn on every change, using cursor-position reports so it
- * stays correct even when the terminal scrolls.
+ * Rendering: the region (status line + menu + input) is erased and redrawn
+ * on every change using cursor-position reports, so it stays correct while
+ * the terminal scrolls.
  */
 
 import readline from 'readline';
+import { readdirSync, statSync, writeFileSync, readFileSync, unlinkSync, mkdtempSync, mkdirSync } from 'fs';
+import { join, dirname, basename, sep } from 'path';
+import { tmpdir } from 'os';
+import { spawnSync } from 'child_process';
 import chalk from 'chalk';
 import { theme, stripAnsi } from './themes/theme.js';
 import {
@@ -40,6 +52,10 @@ export interface SlashMenuItem {
   name: string;
   description: string;
   aliases?: string[];
+  /** e.g. "<file> [notes]" — shown dim after the name */
+  argumentHint?: string;
+  /** 'command' (default) | 'skill' | 'quick' */
+  kind?: 'command' | 'skill' | 'quick';
 }
 
 export type TextAreaSubmit =
@@ -47,24 +63,38 @@ export type TextAreaSubmit =
   | { kind: 'slash'; name: string }
   | { kind: 'exit' };
 
-/** Submits that get committed to the chat log (text messages and slash commands). */
 type CommitSubmit = { kind: 'text'; text: string } | { kind: 'slash'; name: string };
 
 export interface TextAreaOptions {
-  /** ANSI-styled prompt string shown before the input text. */
   prompt: string;
-  /** Dim placeholder shown when the input is empty. */
   placeholder?: string;
-  /** Slash commands offered by the inline menu. */
   commands?: SlashMenuItem[];
-  /** Input history (persists across reads). */
   history?: string[];
   /** Called when Ctrl+C is pressed while busy (processing). */
   onInterrupt?: () => void;
+  /** Optional status line rendered above the input (called on every redraw). */
+  statusLine?: () => string | null;
+  /** Working directory for @path completion. */
+  cwd?: string;
+  /** Called when the user submits text while busy (queue / steer). */
+  onBusySubmit?: (text: string) => void;
+  /** Persist history to this file (one JSON array). */
+  historyFile?: string;
 }
 
-const MAX_MENU_ROWS = 12;
-const MAX_HISTORY = 100;
+interface MenuState {
+  kind: 'slash' | 'file';
+  items: SlashMenuItem[];
+  index: number;
+  /** For file menu: the token range being completed */
+  tokenStart?: number;
+  tokenEnd?: number;
+}
+
+const MAX_MENU_ROWS = 10;
+const MAX_HISTORY = 200;
+const PASTE_COLLAPSE_LINES = 4;
+const PASTE_COLLAPSE_CHARS = 400;
 
 export class TextArea {
   private opts: TextAreaOptions;
@@ -73,16 +103,16 @@ export class TextArea {
   private history: string[];
   private historyIndex = -1;
   private pendingText: string | null = null;
-  private menu: SlashMenuItem[] = [];
-  private menuIndex = 0;
+  private menu: MenuState | null = null;
+  private stash: string[] = [];
+  private pastes: Map<number, string> = new Map();
+  private pasteCounter = 0;
+  private ghost = '';
 
   private busy = false;
   private closed = false;
   private readPromise: { resolve: (v: TextAreaSubmit) => void } | null = null;
-  private nonTTYHandlers: {
-    onData: (c: Buffer) => void;
-    onEnd: () => void;
-  } | null = null;
+  private nonTTYHandlers: { onData: (c: Buffer) => void; onEnd: () => void } | null = null;
 
   // Rendering state
   private regionTop: number | null = null;
@@ -99,40 +129,86 @@ export class TextArea {
   private pasteMode = false;
   private pasteBuffer = '';
   private rawEnabled = false;
+  private kittyEnabled = false;
+  private ctrlXPending = false;
   private keyHandler: (str: string, key: readline.Key) => void = () => {};
   private dataHandler: (chunk: Buffer) => void = () => {};
+  private resizeHandler: () => void = () => {};
 
   constructor(opts: TextAreaOptions) {
     this.opts = opts;
     this.history = [...(opts.history ?? [])];
+    if (opts.historyFile) this.loadHistory(opts.historyFile);
   }
 
-  /** Mark the text area as busy (processing); Ctrl+C then triggers onInterrupt. */
+  // ─── Public API ──────────────────────────────────────────────────────────
+
   setBusy(b: boolean): void {
     this.busy = b;
   }
 
-  /** Wait for the user to submit a message. Call again after processing. */
+  isBusy(): boolean {
+    return this.busy;
+  }
+
+  setCommands(commands: SlashMenuItem[]): void {
+    this.opts.commands = commands;
+  }
+
+  setPrompt(prompt: string): void {
+    this.opts.prompt = prompt;
+  }
+
+  /** Pre-fill the composer (used by /retry, /prompt). */
+  setText(text: string): void {
+    this.text = text;
+    this.cursor = text.length;
+    this.menu = null;
+    if (this.readPromise) void this.render();
+  }
+
+  getText(): string {
+    return this.text;
+  }
+
+  /** Redraw the region (e.g. after status changes). */
+  refresh(): void {
+    if (this.readPromise && !this.busy) void this.render();
+  }
+
+  /** Print a line above the input while it's active. */
+  log(line: string): void {
+    if (!this.readPromise || !process.stdin.isTTY) {
+      process.stdout.write(line + '\n');
+      return;
+    }
+    this.renderChain = this.renderChain
+      .then(async () => {
+        await this.eraseRegion();
+        process.stdout.write(line.replace(/\n/g, '\r\n') + '\r\n');
+        this.regionTop = null;
+        this.prevCursorRow = 0;
+        await this.doRender();
+      })
+      .catch(() => {});
+  }
+
   async read(): Promise<TextAreaSubmit> {
-    if (!process.stdin.isTTY) {
-      return this.readLineNonTTY();
-    }
+    if (!process.stdin.isTTY) return this.readLineNonTTY();
     this.ensureInput();
-    if (this.readPromise) {
-      throw new Error('TextArea.read() already pending');
-    }
+    if (this.readPromise) throw new Error('TextArea.read() already pending');
     this.clearInput();
-    const promise = new Promise<TextAreaSubmit>((resolve) => {
+    const promise = new Promise<TextAreaSubmit>(resolve => {
       this.readPromise = { resolve };
     });
     void this.render();
     return promise;
   }
 
-  /** Restore the terminal and release input listeners. */
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.disableKitty();
     if (this.rawEnabled) {
       try {
         process.stdin.setRawMode(false);
@@ -143,6 +219,7 @@ export class TextArea {
     }
     process.stdin.removeListener('keypress', this.keyHandler);
     process.stdin.removeListener('data', this.dataHandler);
+    if (typeof (process.stdout as any).removeListener === 'function') process.stdout.removeListener('resize', this.resizeHandler);
     if (this.pendingPos) {
       clearTimeout(this.pendingPos.timer);
       this.pendingPos = null;
@@ -152,8 +229,13 @@ export class TextArea {
       process.stdin.removeListener('end', this.nonTTYHandlers.onEnd);
       this.nonTTYHandlers = null;
     }
+    if (this.opts.historyFile) this.saveHistory(this.opts.historyFile);
     this.readPromise?.resolve({ kind: 'exit' });
     this.readPromise = null;
+  }
+
+  getHistory(): string[] {
+    return [...this.history];
   }
 
   // ─── Setup ───────────────────────────────────────────────────────────────
@@ -168,18 +250,47 @@ export class TextArea {
       this.rawEnabled = false;
     }
     process.stdin.resume();
+    this.enableKitty();
 
     this.keyHandler = (str: string, key: readline.Key) => this.onKeypress(str, key);
     this.dataHandler = (chunk: Buffer) => this.onData(chunk);
+    this.resizeHandler = () => {
+      if (this.readPromise && !this.busy) void this.render();
+    };
 
     process.stdin.on('keypress', this.keyHandler);
     process.stdin.prependListener('data', this.dataHandler);
+    if (typeof (process.stdout as any).on === 'function') process.stdout.on('resize', this.resizeHandler);
+    // Bracketed paste
+    process.stdout.write('\x1b[?2004h');
   }
 
-  // ─── Raw data (paste + cursor position reports) ──────────────────────────
+  /** Ask terminals that support the kitty keyboard protocol to disambiguate Ctrl/Shift+Enter. */
+  private enableKitty(): void {
+    if (process.env.MYCODE_NO_KITTY) return;
+    try {
+      process.stdout.write('\x1b[>1u');
+      this.kittyEnabled = true;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private disableKitty(): void {
+    if (!this.kittyEnabled) return;
+    try {
+      process.stdout.write('\x1b[<u');
+      process.stdout.write('\x1b[?2004l');
+    } catch {
+      /* ignore */
+    }
+    this.kittyEnabled = false;
+  }
+
+  // ─── Raw data (paste + cursor position + modified Enter) ─────────────────
 
   private onData(chunk: Buffer): void {
-    const s = chunk.toString('utf-8');
+    let s = chunk.toString('utf-8');
 
     if (this.pendingPos) {
       const m = s.match(/\x1b\[(\d+);(\d+)R/);
@@ -194,15 +305,28 @@ export class TextArea {
       }
     }
 
-    // Shift+Enter / Alt+Enter as CSI-u sequences (Windows Terminal, kitty…)
-    const newlineSeq = s.match(/\x1b\[13;\d+u/g);
-    if (newlineSeq) {
+    // Modified Enter as CSI-u (kitty/WezTerm/Windows Terminal/foot) or
+    // xterm modifyOtherKeys: \x1b[13;<mod>u  |  \x1b[27;<mod>;13~
+    const modEnter = /\x1b\[(?:13;(\d+)u|27;(\d+);13~)/g;
+    if (modEnter.test(s)) {
+      modEnter.lastIndex = 0;
+      let count = 0;
+      s = s.replace(modEnter, () => {
+        count++;
+        return '';
+      });
       if (!this.busy && !this.closed) {
-        for (let i = 0; i < newlineSeq.length; i++) this.insertAt('\n');
+        for (let i = 0; i < count; i++) this.insertAt('\n');
         void this.render();
       }
-      const rest = newlineSeq.reduce((acc, seq) => acc.replace(seq, ''), s);
-      if (rest) process.stdin.emit('data', Buffer.from(rest));
+      if (s) process.stdin.emit('data', Buffer.from(s));
+      return;
+    }
+    // Plain Enter in kitty mode may arrive as \x1b[13u (no modifier) — treat as Enter
+    if (/\x1b\[13u/.test(s)) {
+      s = s.replace(/\x1b\[13u/g, '');
+      if (!this.busy && !this.closed) this.handleEnter();
+      if (s) process.stdin.emit('data', Buffer.from(s));
       return;
     }
 
@@ -210,20 +334,36 @@ export class TextArea {
       this.pasteMode = true;
       this.pasteBuffer = '';
     }
-
     if (this.pasteMode) {
       const body = s.replace(/\x1b\[200~|\x1b\[201~/g, '');
       if (body) this.pasteBuffer += body;
       if (s.includes('\x1b[201~')) {
         this.pasteMode = false;
         if (!this.busy && !this.closed && this.pasteBuffer) {
-          this.insertAt(this.pasteBuffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n'));
+          this.insertPaste(this.pasteBuffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n'));
           void this.render();
         }
         this.pasteBuffer = '';
       }
       return;
     }
+  }
+
+  private insertPaste(text: string): void {
+    const lines = text.split('\n').length;
+    if (lines > PASTE_COLLAPSE_LINES || text.length > PASTE_COLLAPSE_CHARS) {
+      const id = ++this.pasteCounter;
+      this.pastes.set(id, text);
+      this.insertAt(`[Pasted text #${id}: ${lines} lines, ${text.length.toLocaleString()} chars]`);
+    } else {
+      this.insertAt(text);
+    }
+  }
+
+  /** Replace paste placeholders with their content. */
+  private expandPastes(text: string): string {
+    if (this.pastes.size === 0) return text;
+    return text.replace(/\[Pasted text #(\d+): [^\]]*\]/g, (m, id) => this.pastes.get(Number(id)) ?? m);
   }
 
   // ─── Key handling ────────────────────────────────────────────────────────
@@ -235,55 +375,100 @@ export class TextArea {
     const name = key.name;
     const seq = key.sequence ?? '';
 
-    // While busy, only Ctrl+C matters (aborts the running session).
+    // While busy: Ctrl+C interrupts; Enter with text queues/steers; typing still edits.
     if (this.busy) {
-      if (key.ctrl && name === 'c') this.opts.onInterrupt?.();
+      if (key.ctrl && name === 'c') {
+        this.opts.onInterrupt?.();
+        return;
+      }
+      if (name === 'return' && !key.shift && !key.ctrl && !key.meta && seq !== '\n') {
+        const t = this.text.trim();
+        if (t && this.opts.onBusySubmit) {
+          this.opts.onBusySubmit(this.expandPastes(t));
+          this.clearInput();
+          void this.render();
+        }
+        return;
+      }
+      // fall through: allow editing the draft while the agent works
+    }
+
+    // Ctrl+X Ctrl+E (emacs) → external editor
+    if (this.ctrlXPending) {
+      this.ctrlXPending = false;
+      if (key.ctrl && name === 'e') {
+        void this.openExternalEditor();
+        return;
+      }
+    }
+    if (key.ctrl && name === 'x') {
+      this.ctrlXPending = true;
       return;
     }
 
-    if (name === 'return') {
-      if (key.shift || key.ctrl || key.meta || seq === '\n') {
+    if (name === 'return' || name === 'enter' || seq === '\n' || seq === '\r') {
+      const wantsNewline = key.shift || key.ctrl || key.meta || seq === '\n' || name === 'enter';
+      if (wantsNewline) {
         this.insertAt('\n');
         void this.render();
-      } else {
-        this.handleEnter();
+        return;
       }
+      // Backslash continuation: "foo\" + Enter → newline
+      if (this.cursor > 0 && this.text[this.cursor - 1] === '\\' && !this.menu) {
+        this.text = this.text.slice(0, this.cursor - 1) + this.text.slice(this.cursor);
+        this.cursor--;
+        this.insertAt('\n');
+        void this.render();
+        return;
+      }
+      this.handleEnter();
       return;
     }
 
     switch (name) {
       case 'backspace':
+        if (key.meta) {
+          this.deleteWordBefore();
+          return;
+        }
         if (this.cursor > 0) {
           this.text = this.text.slice(0, this.cursor - 1) + this.text.slice(this.cursor);
           this.cursor--;
-          this.updateMenu();
-          void this.render();
+          this.afterEdit();
         }
         return;
       case 'delete':
         if (this.cursor < this.text.length) {
           this.text = this.text.slice(0, this.cursor) + this.text.slice(this.cursor + 1);
-          this.updateMenu();
-          void this.render();
+          this.afterEdit();
         }
         return;
       case 'left':
-        if (this.cursor > 0) {
-          this.cursor--;
-          void this.render();
-        }
+        if (key.ctrl || key.meta) {
+          this.cursor = wordStartBefore(this.text, this.cursor);
+        } else if (this.cursor > 0) this.cursor--;
+        void this.render();
         return;
       case 'right':
-        if (this.cursor < this.text.length) {
-          this.cursor++;
-          void this.render();
-        }
+        if (key.ctrl || key.meta) {
+          this.cursor = wordEndAfter(this.text, this.cursor);
+        } else if (this.cursor < this.text.length) this.cursor++;
+        else if (this.ghost) this.acceptGhost();
+        void this.render();
         return;
       case 'up':
         this.handleArrowUpDown(-1);
         return;
       case 'down':
         this.handleArrowUpDown(1);
+        return;
+      case 'pageup':
+      case 'pagedown':
+        if (this.menu) {
+          const n = this.menu.items.length;
+          this.menu.index = name === 'pageup' ? Math.max(0, this.menu.index - MAX_MENU_ROWS) : Math.min(n - 1, this.menu.index + MAX_MENU_ROWS);
+          void this.render();
+        }
         return;
       case 'home':
         this.cursor = lineStart(this.text, this.cursor);
@@ -294,16 +479,11 @@ export class TextArea {
         void this.render();
         return;
       case 'tab':
-        if (this.menu.length > 0) {
-          this.handleEnter();
-        } else if (this.text.startsWith('/') && !this.text.includes('\n')) {
-          this.updateMenu();
-          if (this.menu.length > 0) void this.render();
-        }
+        this.handleTab(!!key.shift);
         return;
       case 'escape':
-        if (this.menu.length > 0) {
-          this.menu = [];
+        if (this.menu) {
+          this.menu = null;
           void this.render();
         } else if (this.text.length > 0) {
           this.clearInput();
@@ -314,86 +494,164 @@ export class TextArea {
         break;
     }
 
-    // Ctrl / Alt combos
-    if (key.ctrl && name === 'c') {
-      this.handleCtrlC();
-      return;
-    }
-    if (key.ctrl && name === 'd') {
-      if (this.cursor < this.text.length) {
-        this.text = this.text.slice(0, this.cursor) + this.text.slice(this.cursor + 1);
-        this.updateMenu();
-        void this.render();
+    if (key.ctrl) {
+      switch (name) {
+        case 'c':
+          this.handleCtrlC();
+          return;
+        case 'd':
+          if (this.text.length === 0) {
+            this.exit();
+          } else if (this.cursor < this.text.length) {
+            this.text = this.text.slice(0, this.cursor) + this.text.slice(this.cursor + 1);
+            this.afterEdit();
+          }
+          return;
+        case 'a':
+          this.cursor = lineStart(this.text, this.cursor);
+          void this.render();
+          return;
+        case 'e':
+          this.cursor = lineEnd(this.text, this.cursor);
+          void this.render();
+          return;
+        case 'b':
+          if (this.cursor > 0) this.cursor--;
+          void this.render();
+          return;
+        case 'f':
+          if (this.cursor < this.text.length) this.cursor++;
+          void this.render();
+          return;
+        case 'w':
+          this.deleteWordBefore();
+          return;
+        case 'u': {
+          const start = lineStart(this.text, this.cursor);
+          if (start < this.cursor) {
+            this.text = this.text.slice(0, start) + this.text.slice(this.cursor);
+            this.cursor = start;
+            this.afterEdit();
+          }
+          return;
+        }
+        case 'k': {
+          const end = lineEnd(this.text, this.cursor);
+          if (end > this.cursor) {
+            this.text = this.text.slice(0, this.cursor) + this.text.slice(end);
+            this.afterEdit();
+          }
+          return;
+        }
+        case 'l':
+          process.stdout.write('\x1b[2J\x1b[H');
+          this.regionTop = null;
+          void this.render();
+          return;
+        case 'g':
+          void this.openExternalEditor();
+          return;
+        case 's':
+          this.toggleStash();
+          return;
+        case 'z':
+          this.suspend();
+          return;
+        case 'j':
+          this.insertAt('\n');
+          void this.render();
+          return;
+        default:
+          return;
       }
-      return;
-    }
-    if ((key.ctrl || key.meta) && name === 'left') {
-      this.cursor = wordStartBefore(this.text, this.cursor);
-      void this.render();
-      return;
-    }
-    if ((key.ctrl || key.meta) && name === 'right') {
-      this.cursor = wordEndAfter(this.text, this.cursor);
-      void this.render();
-      return;
-    }
-    if (key.ctrl && name === 'a') {
-      this.cursor = lineStart(this.text, this.cursor);
-      void this.render();
-      return;
-    }
-    if (key.ctrl && name === 'e') {
-      this.cursor = lineEnd(this.text, this.cursor);
-      void this.render();
-      return;
-    }
-    if (key.ctrl && name === 'w') {
-      const start = wordStartBefore(this.text, this.cursor);
-      if (start < this.cursor) {
-        this.text = this.text.slice(0, start) + this.text.slice(this.cursor);
-        this.cursor = start;
-        this.updateMenu();
-        void this.render();
-      }
-      return;
-    }
-    if (key.ctrl && name === 'u') {
-      const start = lineStart(this.text, this.cursor);
-      if (start < this.cursor) {
-        this.text = this.text.slice(0, start) + this.text.slice(this.cursor);
-        this.cursor = start;
-        this.updateMenu();
-        void this.render();
-      }
-      return;
-    }
-    if (key.ctrl && name === 'k') {
-      const end = lineEnd(this.text, this.cursor);
-      if (end > this.cursor) {
-        this.text = this.text.slice(0, this.cursor) + this.text.slice(end);
-        this.updateMenu();
-        void this.render();
-      }
-      return;
-    }
-    if (key.ctrl && name === 'l') {
-      process.stdout.write('\x1b[2J\x1b[H');
-      this.regionTop = null;
-      void this.render();
-      return;
     }
 
-    // Printable characters (everything not handled above). Control sequences
-    // like arrows carry \x1b escapes and are rejected by the regex.
-    if (str && /^\P{C}$/u.test(str)) {
+    if (key.meta) {
+      if (name === 'b') {
+        this.cursor = wordStartBefore(this.text, this.cursor);
+        void this.render();
+        return;
+      }
+      if (name === 'f') {
+        this.cursor = wordEndAfter(this.text, this.cursor);
+        void this.render();
+        return;
+      }
+      if (name === 'd') {
+        const end = wordEndAfter(this.text, this.cursor);
+        this.text = this.text.slice(0, this.cursor) + this.text.slice(end);
+        this.afterEdit();
+        return;
+      }
+    }
+
+    // Printable characters (control sequences carry \x1b and are rejected)
+    if (str && !key.ctrl && !key.meta && /^\P{C}+$/u.test(str)) {
       this.insertAt(str);
       void this.render();
     }
   }
 
+  private afterEdit(): void {
+    this.historyIndex = -1;
+    this.pendingText = null;
+    this.updateMenu();
+    void this.render();
+  }
+
+  private deleteWordBefore(): void {
+    const start = wordStartBefore(this.text, this.cursor);
+    if (start < this.cursor) {
+      this.text = this.text.slice(0, start) + this.text.slice(this.cursor);
+      this.cursor = start;
+      this.afterEdit();
+    }
+  }
+
+  private handleTab(reverse: boolean): void {
+    if (this.menu) {
+      if (this.menu.kind === 'file') {
+        this.applyFileCompletion();
+        return;
+      }
+      if (this.menu.items.length > 1 && reverse) {
+        this.menu.index = (this.menu.index - 1 + this.menu.items.length) % this.menu.items.length;
+        void this.render();
+        return;
+      }
+      // Complete the command name into the buffer (keep typing args)
+      const sel = this.menu.items[this.menu.index];
+      this.text = sel.name + ' ';
+      this.cursor = this.text.length;
+      this.menu = null;
+      void this.render();
+      return;
+    }
+    if (this.ghost) {
+      this.acceptGhost();
+      void this.render();
+      return;
+    }
+    if (this.text.startsWith('/') && !this.text.includes('\n')) {
+      this.updateMenu();
+      void this.render();
+      return;
+    }
+    // Try @path completion at cursor
+    this.updateFileMenu(true);
+    void this.render();
+  }
+
+  private acceptGhost(): void {
+    if (!this.ghost) return;
+    this.text += this.ghost;
+    this.cursor = this.text.length;
+    this.ghost = '';
+  }
+
   private handleCtrlC(): void {
-    if (this.menu.length > 0) {
-      this.menu = [];
+    if (this.menu) {
+      this.menu = null;
       void this.render();
       return;
     }
@@ -403,50 +661,157 @@ export class TextArea {
       return;
     }
     const now = Date.now();
-    if (now - this.lastCtrlC < 800) {
-      this.close();
-      this.readPromise?.resolve({ kind: 'exit' });
+    if (now - this.lastCtrlC < 2000) {
+      this.exit();
       return;
     }
     this.lastCtrlC = now;
     void this.closeRegion();
-    void this.printLine(chalk.hex(theme.dim)('Press Ctrl+C again to exit.'));
+    void this.printLine(chalk.hex(theme.dim)('  Press Ctrl+C again to exit (or Ctrl+D).'));
+  }
+
+  private exit(): void {
+    const resolve = this.readPromise;
+    this.close();
+    resolve?.resolve({ kind: 'exit' });
   }
 
   private handleEnter(): void {
-    if (this.menu.length > 0) {
-      const sel = this.menu[this.menuIndex];
+    if (this.menu) {
+      if (this.menu.kind === 'file') {
+        this.applyFileCompletion();
+        return;
+      }
+      const sel = this.menu.items[this.menu.index];
+      // If the command takes arguments, complete it and let the user type them.
+      if (sel.argumentHint && this.text.trim() !== sel.name) {
+        this.text = sel.name + ' ';
+        this.cursor = this.text.length;
+        this.menu = null;
+        void this.render();
+        return;
+      }
       this.commit({ kind: 'slash', name: sel.name });
       return;
     }
     if (!this.text.trim()) return;
-    this.commit({ kind: 'text', text: this.text });
+    this.commit({ kind: 'text', text: this.expandPastes(this.text) });
   }
 
   private handleArrowUpDown(dir: -1 | 1): void {
-    if (this.menu.length > 0) {
-      this.menuIndex = (this.menuIndex + dir + this.menu.length) % this.menu.length;
+    if (this.menu) {
+      const n = this.menu.items.length;
+      this.menu.index = (this.menu.index + dir + n) % n;
       void this.render();
       return;
     }
     const W = this.width();
-    const rows = buildInputRows(this.promptWidth(), this.text, W);
+    const rows = buildInputRows(this.promptWidth(), this.text, W, this.promptWidth());
     const pos = posOfIndexInput(rows, this.cursor, this.text);
     if (dir === -1) {
       if (pos.row > 0) {
         this.cursor = indexAtVisualInput(rows, pos.row - 1, pos.col);
         void this.render();
-      } else {
-        this.historyBack();
-      }
+      } else this.historyBack();
     } else {
       if (pos.row < rows.length - 1) {
         this.cursor = indexAtVisualInput(rows, pos.row + 1, pos.col);
         void this.render();
-      } else {
-        this.historyForward();
+      } else this.historyForward();
+    }
+  }
+
+  // ─── Stash / editor / suspend ────────────────────────────────────────────
+
+  private toggleStash(): void {
+    if (this.text.trim()) {
+      this.stash.push(this.text);
+      this.clearInput();
+      void this.closeRegion();
+      void this.printLine(chalk.hex(theme.dim)(`  📌 Draft stashed (${this.stash.length}). Press Ctrl+S on an empty prompt to restore.`));
+      void this.render();
+      return;
+    }
+    const d = this.stash.pop();
+    if (d !== undefined) {
+      this.text = d;
+      this.cursor = d.length;
+      void this.render();
+    }
+  }
+
+  get stashCount(): number {
+    return this.stash.length;
+  }
+
+  private async openExternalEditor(): Promise<void> {
+    const editor = process.env.VISUAL || process.env.EDITOR || (process.platform === 'win32' ? 'notepad' : 'vi');
+    const dir = mkdtempSync(join(tmpdir(), 'mycode-'));
+    const file = join(dir, 'PROMPT.md');
+    writeFileSync(file, this.text, 'utf-8');
+
+    await this.closeRegion();
+    const wasRaw = this.rawEnabled;
+    this.disableKitty();
+    if (wasRaw) {
+      try {
+        process.stdin.setRawMode(false);
+      } catch {
+        /* ignore */
       }
     }
+    process.stdin.pause();
+    try {
+      const [cmd, ...args] = editor.split(' ');
+      spawnSync(cmd, [...args, file], { stdio: 'inherit' });
+      const edited = readFileSync(file, 'utf-8').replace(/\r\n/g, '\n').replace(/\n+$/, '');
+      this.text = edited;
+      this.cursor = edited.length;
+    } catch (err: any) {
+      void this.printLine(chalk.hex(theme.red)(`  ✖ Editor failed: ${err.message}`));
+    } finally {
+      try {
+        unlinkSync(file);
+      } catch {
+        /* ignore */
+      }
+      if (wasRaw) {
+        try {
+          process.stdin.setRawMode(true);
+        } catch {
+          /* ignore */
+        }
+      }
+      process.stdin.resume();
+      this.enableKitty();
+      process.stdout.write('\x1b[?2004h');
+      this.regionTop = null;
+      void this.render();
+    }
+  }
+
+  private suspend(): void {
+    if (process.platform === 'win32') return;
+    void this.closeRegion().then(() => {
+      this.disableKitty();
+      try {
+        process.stdin.setRawMode(false);
+      } catch {
+        /* ignore */
+      }
+      process.once('SIGCONT', () => {
+        try {
+          process.stdin.setRawMode(true);
+        } catch {
+          /* ignore */
+        }
+        this.enableKitty();
+        process.stdout.write('\x1b[?2004h');
+        this.regionTop = null;
+        void this.render();
+      });
+      process.kill(process.pid, 'SIGTSTP');
+    });
   }
 
   // ─── History ─────────────────────────────────────────────────────────────
@@ -456,14 +821,11 @@ export class TextArea {
     if (this.historyIndex === -1) {
       this.pendingText = this.text;
       this.historyIndex = this.history.length - 1;
-    } else if (this.historyIndex > 0) {
-      this.historyIndex--;
-    } else {
-      return;
-    }
+    } else if (this.historyIndex > 0) this.historyIndex--;
+    else return;
     this.text = this.history[this.historyIndex];
     this.cursor = this.text.length;
-    this.menu = [];
+    this.menu = null;
     void this.render();
   }
 
@@ -472,15 +834,32 @@ export class TextArea {
     if (this.historyIndex < this.history.length - 1) {
       this.historyIndex++;
       this.text = this.history[this.historyIndex];
-      this.cursor = this.text.length;
     } else {
       this.historyIndex = -1;
       this.text = this.pendingText ?? '';
-      this.cursor = this.text.length;
       this.pendingText = null;
     }
-    this.menu = [];
+    this.cursor = this.text.length;
+    this.menu = null;
     void this.render();
+  }
+
+  private loadHistory(file: string): void {
+    try {
+      const arr = JSON.parse(readFileSync(file, 'utf-8'));
+      if (Array.isArray(arr)) this.history = arr.filter(x => typeof x === 'string').slice(-MAX_HISTORY);
+    } catch {
+      /* none */
+    }
+  }
+
+  private saveHistory(file: string): void {
+    try {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, JSON.stringify(this.history.slice(-MAX_HISTORY)), 'utf-8');
+    } catch {
+      /* ignore */
+    }
   }
 
   // ─── Editing helpers ─────────────────────────────────────────────────────
@@ -497,62 +876,163 @@ export class TextArea {
   private clearInput(): void {
     this.text = '';
     this.cursor = 0;
-    this.menu = [];
+    this.menu = null;
+    this.ghost = '';
     this.historyIndex = -1;
     this.pendingText = null;
   }
 
   private updateMenu(): void {
     const t = this.text;
-    if (!t.startsWith('/') || t.includes('\n')) {
-      this.menu = [];
+    // Slash menu: only while typing the command word itself (no space / newline yet)
+    if (t.startsWith('/') && !t.includes('\n') && !t.includes(' ')) {
+      const q = t.toLowerCase();
+      const all = this.opts.commands ?? [];
+      const starts = all.filter(c => c.name.toLowerCase().startsWith(q) || (c.aliases ?? []).some(a => a.toLowerCase().startsWith(q)));
+      const contains = q.length > 2 ? all.filter(c => !starts.includes(c) && c.name.toLowerCase().includes(q.slice(1))) : [];
+      const items = [...starts, ...contains];
+      if (items.length) {
+        const prevIdx = this.menu?.kind === 'slash' ? this.menu.index : 0;
+        this.menu = { kind: 'slash', items, index: Math.min(prevIdx, items.length - 1) };
+        this.ghost = '';
+        return;
+      }
+      this.menu = null;
       return;
     }
-    const q = t.toLowerCase();
-    const all = this.opts.commands ?? [];
-    const matches = all.filter(
-      (c) =>
-        c.name.toLowerCase().startsWith(q) ||
-        (c.aliases ?? []).some((a) => a.toLowerCase().startsWith(q))
-    );
-    this.menu = matches;
-    if (this.menuIndex >= matches.length) this.menuIndex = Math.max(0, matches.length - 1);
+    // @path menu
+    if (this.updateFileMenu(false)) return;
+    this.menu = null;
+    this.updateGhost();
+  }
+
+  private updateGhost(): void {
+    this.ghost = '';
+    if (!this.text || this.text.length < 3 || this.cursor !== this.text.length || this.text.includes('\n')) return;
+    for (let i = this.history.length - 1; i >= 0; i--) {
+      const h = this.history[i];
+      if (h.length > this.text.length && h.startsWith(this.text) && !h.includes('\n')) {
+        this.ghost = h.slice(this.text.length);
+        return;
+      }
+    }
+  }
+
+  /** Build a file-completion menu for an `@token` under the cursor. Returns true if shown. */
+  private updateFileMenu(force: boolean): boolean {
+    const before = this.text.slice(0, this.cursor);
+    const m = before.match(/(?:^|\s)@([^\s@]*)$/);
+    if (!m) {
+      if (this.menu?.kind === 'file') this.menu = null;
+      return false;
+    }
+    const partial = m[1];
+    if (!force && partial.length === 0 && this.menu?.kind !== 'file') {
+      // show top-level listing immediately after typing '@'
+    }
+    const tokenStart = this.cursor - partial.length;
+    const cwd = this.opts.cwd ?? process.cwd();
+    const items = this.completePath(cwd, partial).map(p => ({ name: p, description: '' }));
+    if (!items.length) {
+      this.menu = null;
+      return false;
+    }
+    const prevIdx = this.menu?.kind === 'file' ? this.menu.index : 0;
+    this.menu = { kind: 'file', items, index: Math.min(prevIdx, items.length - 1), tokenStart, tokenEnd: this.cursor };
+    return true;
+  }
+
+  private completePath(cwd: string, partial: string): string[] {
+    const IGNORE = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage', '__pycache__', '.venv', 'target']);
+    const slash = partial.lastIndexOf('/');
+    const dirPart = slash >= 0 ? partial.slice(0, slash + 1) : '';
+    const filePart = slash >= 0 ? partial.slice(slash + 1) : partial;
+    const dirAbs = join(cwd, dirPart);
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(dirAbs);
+    } catch {
+      return [];
+    }
+    const q = filePart.toLowerCase();
+    const out: string[] = [];
+    for (const e of entries) {
+      if (IGNORE.has(e)) continue;
+      if (q && !e.toLowerCase().startsWith(q)) continue;
+      if (!q && e.startsWith('.') && !filePart.startsWith('.')) continue;
+      let isDir = false;
+      try {
+        isDir = statSync(join(dirAbs, e)).isDirectory();
+      } catch {
+        continue;
+      }
+      out.push(dirPart + e + (isDir ? '/' : ''));
+    }
+    // fuzzy fallback: substring match
+    if (out.length === 0 && q) {
+      for (const e of entries) {
+        if (IGNORE.has(e) || !e.toLowerCase().includes(q)) continue;
+        let isDir = false;
+        try {
+          isDir = statSync(join(dirAbs, e)).isDirectory();
+        } catch {
+          continue;
+        }
+        out.push(dirPart + e + (isDir ? '/' : ''));
+      }
+    }
+    out.sort((a, b) => (a.endsWith('/') === b.endsWith('/') ? a.localeCompare(b) : a.endsWith('/') ? -1 : 1));
+    return out.slice(0, 40);
+  }
+
+  private applyFileCompletion(): void {
+    if (!this.menu || this.menu.kind !== 'file') return;
+    const sel = this.menu.items[this.menu.index].name;
+    const start = this.menu.tokenStart ?? this.cursor;
+    const end = this.menu.tokenEnd ?? this.cursor;
+    const isDir = sel.endsWith('/');
+    this.text = this.text.slice(0, start) + sel + (isDir ? '' : ' ') + this.text.slice(end);
+    this.cursor = start + sel.length + (isDir ? 0 : 1);
+    this.menu = null;
+    if (isDir) this.updateFileMenu(true);
+    void this.render();
   }
 
   // ─── Commit / region handling ────────────────────────────────────────────
 
-  /** Erase the rendered region and print the submitted line as chat output. */
   private commit(submit: CommitSubmit): void {
     if (this.closed) return;
     this.renderChain = this.renderChain.then(() => this.doCommit(submit)).catch(() => {});
   }
 
   private async doCommit(submit: CommitSubmit): Promise<void> {
+    const shownText = submit.kind === 'text' ? this.text : submit.name;
     if (submit.kind === 'text') {
-      const t = submit.text.trim();
+      const t = this.text.trim();
       if (t && this.history[this.history.length - 1] !== t) {
         this.history.push(t);
         if (this.history.length > MAX_HISTORY) this.history.shift();
       }
+      if (this.opts.historyFile) this.saveHistory(this.opts.historyFile);
     }
 
     await this.eraseRegion();
     if (this.closed) return;
 
-    const shown = submit.kind === 'text' ? submit.text : submit.name;
-    const parts = shown.split('\n');
-    const styled = `${this.opts.prompt}${parts.join('\r\n')}`;
+    const parts = shownText.split('\n');
+    const cont = ' '.repeat(Math.max(0, this.promptWidth() - 2)) + chalk.hex(theme.dim)('│ ');
+    const styled = `${this.opts.prompt}${parts.map((l, i) => (i === 0 ? l : cont + l)).join('\r\n')}`;
     process.stdout.write('\r\n' + styled + '\r\n');
 
     this.regionTop = null;
     this.prevCursorRow = 0;
+    this.ghost = '';
 
     const resolve = this.readPromise;
     this.readPromise = null;
     resolve?.resolve(submit);
   }
 
-  /** Erase the rendered region so normal output can take its place. */
   private closeRegion(): Promise<void> {
     this.renderChain = this.renderChain.then(() => this.doCloseRegion()).catch(() => {});
     return this.renderChain;
@@ -564,13 +1044,14 @@ export class TextArea {
     this.prevCursorRow = 0;
   }
 
-  /** Print a single transient line below the (now closed) input region. */
   private printLine(line: string): void {
-    this.renderChain = this.renderChain.then(() => {
-      process.stdout.write('\r\n' + line + '\r\n');
-      this.regionTop = null;
-      this.prevCursorRow = 0;
-    }).catch(() => {});
+    this.renderChain = this.renderChain
+      .then(() => {
+        process.stdout.write('\r\n' + line + '\r\n');
+        this.regionTop = null;
+        this.prevCursorRow = 0;
+      })
+      .catch(() => {});
   }
 
   // ─── Rendering ───────────────────────────────────────────────────────────
@@ -589,66 +1070,88 @@ export class TextArea {
   }
 
   private async doRender(): Promise<void> {
-    if (this.closed) return;
+    if (this.closed || !this.readPromise) return;
     const W = this.width();
     const promptW = this.promptWidth();
 
-    // Slash menu lines
+    const headerLines: string[] = [];
+    const status = this.opts.statusLine?.();
+    if (status) headerLines.push(status);
+
     const menuLines: string[] = [];
-    if (this.menu.length > 0) {
-      const max = Math.min(this.menu.length, MAX_MENU_ROWS);
-      const startIdx = Math.max(0, Math.min(this.menuIndex - Math.floor(max / 2), this.menu.length - max));
-      for (let i = startIdx; i < startIdx + max; i++) {
-        menuLines.push(this.menuLine(this.menu[i], i));
-      }
+    if (this.menu) {
+      const items = this.menu.items;
+      const max = Math.min(items.length, MAX_MENU_ROWS);
+      const startIdx = Math.max(0, Math.min(this.menu.index - Math.floor(max / 2), items.length - max));
+      for (let i = startIdx; i < startIdx + max; i++) menuLines.push(this.menuLine(items[i], i));
+      if (items.length > max) menuLines.push(chalk.hex(theme.dim)(`    … ${items.length - max} more · ↑/↓ to scroll · Tab to complete`));
     }
 
-    const rows = buildInputRows(promptW, this.text, W);
+    const rows = buildInputRows(promptW, this.text, W, promptW);
     const placeholderShown = this.text.length === 0 && !!this.opts.placeholder;
 
     await this.eraseRegion();
     if (this.closed) return;
 
-    if (menuLines.length > 0) {
-      process.stdout.write(menuLines.join('\r\n') + '\r\n');
-    }
+    const above = [...headerLines, ...menuLines];
+    if (above.length) process.stdout.write(above.join('\r\n') + '\r\n');
 
-    // Draw the input
     process.stdout.write(this.opts.prompt);
     if (placeholderShown) {
       process.stdout.write(chalk.hex(theme.dim)(this.opts.placeholder));
     } else {
-      process.stdout.write(this.text.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n'));
+      const cont = ' '.repeat(Math.max(0, promptW - 2)) + chalk.hex(theme.dim)('│ ');
+      const body = this.text.replace(/\r\n/g, '\n').split('\n');
+      // Continuation lines get a subtle gutter so multi-line prompts read well.
+      // (Row math in text-area-utils assumes full width for continuation rows,
+      //  which still holds because the gutter replaces the prompt width.)
+      const rendered = body.map((l, i) => (i === 0 ? l : cont + l)).join('\r\n');
+      process.stdout.write(this.highlight(rendered));
+      if (this.ghost) process.stdout.write(chalk.hex(theme.dim)(this.ghost));
     }
 
-    // Place the cursor absolutely. Relative moves after drawing can land on the
-    // wrong column because terminals clamp the column when moving up from a
-    // wider row; absolute positioning avoids that class of off-by-one.
     const cpos = posOfIndexInput(rows, this.cursor, this.text);
-    const absRow = (this.regionTop ?? 1) + menuLines.length + cpos.row;
-    const absCol = (cpos.row === 0 ? promptW : 0) + cpos.col;
+    const absRow = (this.regionTop ?? 1) + above.length + cpos.row;
+    // First row of every logical line is prefixed by the prompt (row 0) or the gutter.
+    const rowStart = rows[cpos.row]?.start ?? 0;
+    const isLogicalLineStart = rowStart === 0 || this.text[rowStart - 1] === '\n';
+    const gutter = isLogicalLineStart ? promptW : 0;
+    const absCol = gutter + cpos.col + 1;
     process.stdout.write(`\x1b[${absRow};${absCol}H`);
+    this.prevCursorRow = above.length + cpos.row;
+  }
 
-    this.prevCursorRow = menuLines.length + cpos.row;
+  /** Light syntax colouring for the composer: slash cmd, @paths, !shell, paste placeholders. */
+  private highlight(s: string): string {
+    if (s.startsWith('/')) {
+      const sp = s.indexOf(' ');
+      const cmd = sp === -1 ? s : s.slice(0, sp);
+      return chalk.hex(theme.green).bold(cmd) + (sp === -1 ? '' : s.slice(sp));
+    }
+    if (s.startsWith('!')) return chalk.hex(theme.amber)(s);
+    return s
+      .replace(/(^|\s)(@[^\s@]+)/g, (_m, pre, tok) => pre + chalk.hex(theme.greenGlow)(tok))
+      .replace(/\[Pasted text #\d+: [^\]]*\]/g, m => chalk.hex(theme.amber)(m));
   }
 
   private menuLine(item: SlashMenuItem, idx: number): string {
     const W = this.width();
-    const selected = idx === this.menuIndex;
+    const selected = !!this.menu && idx === this.menu.index;
+    const isFile = this.menu?.kind === 'file';
 
-    const namePlain = item.name;
-    const descPlain = item.description ?? '';
-    const descMax = Math.max(6, W - 2 - visLen(namePlain) - 4);
-    const descTrunc =
-      visLen(descPlain) > descMax ? descPlain.slice(0, descMax - 1) + '…' : descPlain;
+    const namePlain = isFile ? basename(item.name.replace(/\/$/, '')) + (item.name.endsWith('/') ? '/' : '') : item.name;
+    const hint = item.argumentHint ? ` ${item.argumentHint}` : '';
+    const descPlain = isFile ? dirname(item.name) === '.' ? '' : dirname(item.name) + sep : item.description ?? '';
+    const descMax = Math.max(6, W - 2 - visLen(namePlain) - visLen(hint) - 6);
+    const descTrunc = visLen(descPlain) > descMax ? descPlain.slice(0, descMax - 1) + '…' : descPlain;
 
-    const prefix = selected ? chalk.hex(theme.green).bold(' ❯') : '   ';
-    const name = selected
-      ? chalk.bgHex(theme.green).hex(theme.black).bold(` ${namePlain} `)
-      : chalk.hex(theme.green).bold(namePlain);
+    const prefix = selected ? chalk.hex(theme.green).bold(' ❯') : '  ';
+    const badge = item.kind === 'skill' ? chalk.hex(theme.amber)('◆ ') : item.kind === 'quick' ? chalk.hex(theme.greenGlow)('⚡') : isFile ? chalk.hex(theme.greenGlow)(item.name.endsWith('/') ? '▸ ' : '· ') : '  ';
+    const name = selected ? chalk.bgHex(theme.green).hex(theme.black).bold(` ${namePlain} `) : chalk.hex(theme.green).bold(namePlain);
+    const hintS = hint ? chalk.hex(theme.dim)(hint) : '';
     const desc = descTrunc ? chalk.hex(theme.muted)(descTrunc) : '';
 
-    return `${prefix} ${name}  ${desc}`;
+    return `${prefix} ${badge}${name}${hintS}  ${desc}`;
   }
 
   // ─── Erase / cursor position ─────────────────────────────────────────────
@@ -657,13 +1160,11 @@ export class TextArea {
     const pos = await this.cursorPos();
     if (this.closed) return;
     if (this.regionTop === null) {
-      // Nothing drawn yet — just record where the region starts.
       this.regionTop = pos.row;
       return;
     }
     const top = pos.row - this.prevCursorRow;
     if (top < 1) {
-      // The region scrolled off the top of the screen (rare): full clear.
       process.stdout.write('\x1b[2J\x1b[H');
       this.regionTop = 1;
       return;
@@ -676,7 +1177,7 @@ export class TextArea {
   private cursorPos(): Promise<{ row: number; col: number }> {
     if (this.pendingPos) return this.pendingPos.promise;
     let resolveFn!: (p: { row: number; col: number }) => void;
-    const promise = new Promise<{ row: number; col: number }>((resolve) => {
+    const promise = new Promise<{ row: number; col: number }>(resolve => {
       resolveFn = resolve;
     });
     const timer = setTimeout(() => {
@@ -690,26 +1191,40 @@ export class TextArea {
 
   // ─── Non-TTY fallback (piped input, tests, CI) ──────────────────────────
 
+  private nonTTYBuf = '';
+  private nonTTYEnded = false;
+
   private readLineNonTTY(): Promise<TextAreaSubmit> {
-    return new Promise<TextAreaSubmit>((resolve) => {
-      let buf = '';
+    return new Promise<TextAreaSubmit>(resolve => {
+      const takeLine = (): TextAreaSubmit | null => {
+        const nl = this.nonTTYBuf.indexOf('\n');
+        if (nl !== -1) {
+          const line = this.nonTTYBuf.slice(0, nl);
+          this.nonTTYBuf = this.nonTTYBuf.slice(nl + 1);
+          return { kind: 'text', text: line.replace(/\r$/, '') };
+        }
+        if (this.nonTTYEnded) {
+          const rest = this.nonTTYBuf;
+          this.nonTTYBuf = '';
+          return rest.trim() ? { kind: 'text', text: rest.replace(/\r$/, '') } : { kind: 'exit' };
+        }
+        return null;
+      };
+      const ready = takeLine();
+      if (ready) return resolve(ready);
+
       const onData = (chunk: Buffer) => {
-        buf += chunk.toString('utf-8');
-        if (buf.includes('\n')) {
-          const nl = buf.indexOf('\n');
-          const line = buf.slice(0, nl);
-          buf = buf.slice(nl + 1);
+        this.nonTTYBuf += chunk.toString('utf-8');
+        const r = takeLine();
+        if (r) {
           cleanup();
-          resolve({ kind: 'text', text: line.replace(/\r$/, '') });
+          resolve(r);
         }
       };
       const onEnd = () => {
+        this.nonTTYEnded = true;
         cleanup();
-        if (buf.trim()) {
-          resolve({ kind: 'text', text: buf.replace(/\r$/, '') });
-        } else {
-          resolve({ kind: 'exit' });
-        }
+        resolve(takeLine() ?? { kind: 'exit' });
       };
       const cleanup = () => {
         process.stdin.removeListener('data', onData);

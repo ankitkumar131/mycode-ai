@@ -110,12 +110,28 @@ describe('TextArea (simulated TTY)', () => {
     expect(submit).toEqual({ kind: 'text', text: 'a\nb' });
   });
 
+  it('inserts a newline with Ctrl+Enter (CSI-u / kitty encoding)', async () => {
+    const p = textarea.read();
+    await tick();
+    type('a');
+    // kitty / CSI-u encoding of Ctrl+Enter: ESC [ 13 ; 5 u
+    stdin.emit('data', Buffer.from('\x1b[13;5u', 'utf-8'));
+    await tick();
+    type('b');
+    // Ctrl+J (LF) also inserts a newline
+    press('\n', { name: 'enter', ctrl: false, sequence: '\n' });
+    type('c');
+    press('\r', { name: 'return', sequence: '\r' });
+    const submit = await p;
+    expect(submit).toEqual({ kind: 'text', text: 'a\nb\nc' });
+  });
+
   it('filters the inline slash menu while typing and selects with Enter', async () => {
     const p = textarea.read();
     await tick();
     type('/he');
     await tick();
-    const menu: SlashMenuItem[] = (textarea as any).menu;
+    const menu: SlashMenuItem[] = (textarea as any).menu.items;
     expect(menu.length).toBe(1);
     expect(menu[0].name).toBe('/help');
     press('\r', { name: 'return', sequence: '\r' });
@@ -128,7 +144,7 @@ describe('TextArea (simulated TTY)', () => {
     await tick();
     type('/m');
     await tick();
-    const menu: SlashMenuItem[] = (textarea as any).menu;
+    const menu: SlashMenuItem[] = (textarea as any).menu.items;
     expect(menu.length).toBe(1);
     expect(menu[0].name).toBe('/model');
     press('\r', { name: 'return', sequence: '\r' });

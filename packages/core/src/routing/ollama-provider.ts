@@ -72,11 +72,42 @@ export class OllamaProvider extends BaseProvider {
       if (tools.length > 0 && this.supportsTools()) {
         params.tools = tools;
       }
+      if (typeof options.onStream === 'function') {
+        params.stream = true;
+        const stream: any = await this.client.chat(params);
+        this.recordSuccess();
+        let content = '';
+        let toolCalls: any[] = [];
+        let last: any = null;
+        for await (const chunk of stream) {
+          if (options.abortSignal?.aborted) break;
+          last = chunk;
+          if (chunk.message?.content) {
+            content += chunk.message.content;
+            options.onStream(chunk.message.content);
+          }
+          if (chunk.message?.tool_calls?.length) toolCalls = toolCalls.concat(chunk.message.tool_calls);
+        }
+        const norm = this.normalizeToolCalls(toolCalls);
+        return {
+          content,
+          toolCalls: norm,
+          tool_calls: norm,
+          usage: {
+            prompt_tokens: last?.prompt_eval_count || 0,
+            completion_tokens: last?.eval_count || 0,
+            total_tokens: (last?.prompt_eval_count || 0) + (last?.eval_count || 0),
+          },
+          finish_reason: norm.length ? 'tool_calls' : 'stop',
+        };
+      }
       const response: any = await this.client.chat(params);
       this.recordSuccess();
+      const normalized = this.normalizeToolCalls(response.message?.tool_calls || []);
       return {
         content: response.message?.content || '',
-        tool_calls: this.normalizeToolCalls(response.message?.tool_calls || []),
+        toolCalls: normalized,
+        tool_calls: normalized,
         usage: {
           prompt_tokens: response.prompt_eval_count || 0,
           completion_tokens: response.eval_count || 0,

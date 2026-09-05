@@ -7,7 +7,7 @@ export const listDirTool: ToolModule = {
   definition: {
     type: 'function',
     function: {
-      name: 'list-dir',
+      name: 'list_dir',
       description: 'List files and directories in a given path',
       parameters: {
         type: 'object',

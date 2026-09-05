@@ -23,7 +23,7 @@ export const searchFilesTool: ToolModule = {
   definition: {
     type: 'function',
     function: {
-      name: 'search-files',
+      name: 'search_files',
       description: 'Search for files matching a pattern or containing specific content',
       parameters: {
         type: 'object',

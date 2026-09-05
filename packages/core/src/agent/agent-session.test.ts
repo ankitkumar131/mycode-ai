@@ -17,6 +17,9 @@ vi.mock('../tools/tool-registry.js', () => ({
   ToolRegistry: vi.fn(() => ({
     getDefinitions: mockGetDefinitions,
     executeTool: mockExecuteTool,
+    canonical: (n: string) => n,
+    isWriteTool: () => false,
+    getToolNames: () => ['read-file'],
   })),
 }));
 
@@ -25,6 +28,8 @@ vi.mock('../prompts/system-prompt.js', () => ({
     buildSystemPrompt: mockBuildSystemPrompt,
     default: vi.fn(),
   },
+  findContextFiles: vi.fn(() => []),
+  readMemory: vi.fn(() => ''),
 }));
 
 vi.mock('./event-translator.js', () => ({
@@ -43,7 +48,14 @@ vi.mock('./context.js', () => ({
       addAssistantWithTools: vi.fn(),
       addToolResult: vi.fn(),
       getHistory: vi.fn(() => messages),
+      getMessages: vi.fn(() => messages),
       trimToLimit: vi.fn(),
+      estimateTokens: vi.fn(() => 100),
+      setSystem: vi.fn(),
+      addMessage: vi.fn((m: any) => messages.push(m)),
+      replaceMessages: vi.fn(),
+      breakdown: vi.fn(() => ({ system: 0, user: 0, assistant: 0, tool: 0, total: 0 })),
+      maxTokens: 128000,
       length: 0,
     };
   }),
@@ -52,7 +64,7 @@ vi.mock('./context.js', () => ({
 const { AgentSession } = await import('./agent-session.js');
 
 function makeSession(opts?: Partial<import('./agent-session.js').SessionConfig>) {
-  const router = { chat: mockChat, stream: vi.fn() };
+  const router = { chat: mockChat, stream: vi.fn(), getCurrentProvider: () => ({ name: 'test', model: 'gpt-4o' }) };
   return new AgentSession({
     providerRouter: router as any,
     ...opts,
@@ -134,7 +146,7 @@ describe('AgentSession', () => {
     expect(mockChat).toHaveBeenCalledTimes(2);
     expect(mockExecuteTool).toHaveBeenCalledWith('read-file', { path: 'test.txt' }, expect.any(String), expect.any(Object));
     expect(onToolCall).toHaveBeenCalledWith('read-file', { path: 'test.txt' });
-    expect(onToolResult).toHaveBeenCalledWith('read-file', 'File content: hello');
+    expect(onToolResult).toHaveBeenCalledWith('read-file', 'File content: hello', expect.anything());
   });
 
   it('handles empty tool definitions gracefully', async () => {
@@ -202,7 +214,7 @@ describe('AgentSession', () => {
     resolveChat?.({ content: '', toolCalls: [] });
 
     const result = await runPromise;
-    expect(result).toBe('Session aborted.');
+    expect(result).toBe('Interrupted.');
   });
 
   it('returns correct state after execution', async () => {

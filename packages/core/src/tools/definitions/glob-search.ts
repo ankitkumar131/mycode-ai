@@ -9,7 +9,7 @@ export const globSearchTool: ToolModule = {
   definition: {
     type: 'function',
     function: {
-      name: 'globSearch',
+      name: 'glob',
       description: 'Find files matching glob patterns (e.g. "**/*.ts", "src/**/*.js"). Fast way to discover files by extension or directory pattern.',
       parameters: {
         type: 'object',

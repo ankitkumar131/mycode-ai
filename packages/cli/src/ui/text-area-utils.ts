@@ -116,17 +116,17 @@ export function indexAtVisual(text: string, row: number, col: number, W: number)
  * Same as buildRows but the first row is prefixed by a fixed visible-width
  * prompt (so it only has `W - promptWidth` columns available).
  */
-export function buildInputRows(promptWidth: number, text: string, W: number): RowSpan[] {
+export function buildInputRows(promptWidth: number, text: string, W: number, gutterWidth = 0): RowSpan[] {
   const rows: RowSpan[] = [];
   const parts = text.split('\n');
   let idx = 0;
   let avail = Math.max(1, W - promptWidth);
   for (let pi = 0; pi < parts.length; pi++) {
     const part = parts[pi];
+    if (pi > 0) avail = Math.max(1, W - gutterWidth);
     if (part.length === 0) {
       rows.push({ start: idx, len: 0 });
       idx += 1;
-      avail = W;
       continue;
     }
     let start = 0;
