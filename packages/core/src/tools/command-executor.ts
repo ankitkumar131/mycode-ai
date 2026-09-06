@@ -13,12 +13,18 @@ export interface ExecutorOptions {
   onLog?: (line: string) => void;
 }
 
-function getShell(): string[] {
+/**
+ * Build the shell invocation. On Windows we must bypass Node's automatic
+ * argument quoting (windowsVerbatimArguments) — otherwise every quote inside
+ * the command is escaped as \" and cmd.exe receives a mangled command line.
+ * `cmd /d /s /c "<command>"` strips exactly the outer quotes we add.
+ */
+export function buildShellInvocation(command: string): { file: string; args: string[]; verbatim: boolean } {
   if (platform() === 'win32') {
-    return ['cmd.exe', '/c'];
+    const file = process.env.COMSPEC || 'cmd.exe';
+    return { file, args: ['/d', '/s', '/c', `"${command}"`], verbatim: true };
   }
-  const shell = process.env.SHELL || '/bin/bash';
-  return [shell, '-c'];
+  return { file: process.env.SHELL || '/bin/bash', args: ['-c', command], verbatim: false };
 }
 
 export function executeCommand(
@@ -28,7 +34,7 @@ export function executeCommand(
 ): Promise<ExecutionResult> {
   return new Promise(resolve => {
     const startTime = Date.now();
-    const [shell, ...shellArgs] = getShell();
+    const inv = buildShellInvocation(command);
     const timeout = options.timeout ?? 30_000;
     let timedOut = false;
     let killed = false;
@@ -36,11 +42,12 @@ export function executeCommand(
     let stderr = '';
     let lineCount = 0;
 
-    const proc = spawn(shell, [...shellArgs, command], {
+    const proc = spawn(inv.file, inv.args, {
       cwd,
       env: { ...process.env, ...options.env },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
+      windowsVerbatimArguments: inv.verbatim,
     });
 
     let abortHandler: (() => void) | undefined;

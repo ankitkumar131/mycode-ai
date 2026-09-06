@@ -96,6 +96,10 @@ export class SystemPromptBuilder {
     // ── Environment ───────────────────────────────────────────────────────
     const shell = platform() === 'win32' ? process.env.COMSPEC || 'cmd.exe' : process.env.SHELL || '/bin/bash';
     const envLines = [`- OS: ${platform()} ${arch()} ${release()}`, `- Host: ${hostname()}`, `- Shell: ${shell}`, `- Working directory: ${cwd}`, `- Date: ${new Date().toISOString().slice(0, 10)}`];
+    if (platform() === 'win32') {
+      envLines.push(`- Home / Desktop: ${process.env.USERPROFILE ?? ''} / ${process.env.USERPROFILE ?? ''}\\Desktop`);
+      envLines.push('- terminal runs commands through cmd.exe. Prefer plain cmd built-ins (move, copy, dir, del, mkdir, type) with double-quoted paths. Use `powershell -NoProfile -Command "..."` only when cmd cannot do it; keep it to a single simple expression.');
+    }
     b.addSection(`Environment:\n${envLines.join('\n')}`);
 
     // ── Project ───────────────────────────────────────────────────────────
@@ -196,7 +200,9 @@ export class SystemPromptBuilder {
 4. Never fabricate file contents, command output, or APIs. If a tool fails, read the error and adapt; don't retry the identical call.
 5. Safety: never run destructive commands (rm -rf, git reset --hard, force-push, dropping databases) or touch secrets without an explicit request. Ask when in doubt.
 6. Keep responses tight: what you did, what changed (files), how you verified, and anything the user must do next. Use markdown sparingly; paths and commands in backticks.
-7. Long tasks: plan with todo_write, work step by step, and summarise at the end.`
+7. Long tasks: plan with todo_write, work step by step, and summarise at the end.
+8. Trust tool results. A command that returns [exit 0 · SUCCESS] worked — do not re-check the same fact with a second command, and never verify more than once. For simple file operations (move/copy/rename/delete) run ONE command, then report.
+9. Every terminal call costs the user an approval prompt: batch related steps into one command and keep the total number of commands minimal.`
     );
 
     for (const s of options.extraSections ?? []) b.addSection(s);

@@ -384,7 +384,10 @@ export function classifyCommand(command: string): SafetyResult {
     }
   }
 
-  const hasShellMeta = /[;|&`$(){}[\]<>]/.test(trimmed);
+  // Only backticks, command substitution and chained execution count as "elevated".
+  // Pipes, redirects, `&&`, and `$env:VAR` are everyday shell usage.
+  const stripped = trimmed.replace(/"[^"]*"|'[^']*'/g, '""');
+  const hasShellMeta = /`|\$\(|;\s*\S/.test(stripped) && !/^powershell\b/i.test(trimmed);
   const isLong = trimmed.length > 200;
 
   if (warnings.length > 0) {

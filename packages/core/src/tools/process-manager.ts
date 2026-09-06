@@ -8,6 +8,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { platform } from 'node:os';
 import treeKill from 'tree-kill';
+import { buildShellInvocation } from './command-executor.js';
 
 export interface ManagedProcess {
   id: string;
@@ -27,22 +28,19 @@ export interface ManagedProcess {
 
 const MAX_LOG_LINES = 4000;
 
-function shellFor(): [string, string[]] {
-  if (platform() === 'win32') return ['cmd.exe', ['/d', '/s', '/c']];
-  return [process.env.SHELL || '/bin/bash', ['-c']];
-}
 
 export class ProcessManager {
   private procs = new Map<string, ManagedProcess>();
   private counter = 0;
 
   start(command: string, cwd: string, opts: { env?: Record<string, string | undefined>; label?: string } = {}): ManagedProcess {
-    const [sh, args] = shellFor();
-    const child = spawn(sh, [...args, command], {
+    const inv = buildShellInvocation(command);
+    const child = spawn(inv.file, inv.args, {
       cwd,
       env: { ...process.env, ...opts.env, FORCE_COLOR: '0', NO_COLOR: '1' },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
+      windowsVerbatimArguments: inv.verbatim,
       detached: platform() !== 'win32',
     });
     const id = `p${++this.counter}`;
