@@ -6,7 +6,7 @@ export const gitStatusTool: ToolModule = {
   definition: {
     type: 'function',
     function: {
-      name: 'git-status',
+      name: 'git_status',
       description: 'Get the current git repository status including branch, changes, and recent commits',
       parameters: {
         type: 'object',

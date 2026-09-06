@@ -57,7 +57,7 @@ export const webSearchTool: ToolModule = {
   definition: {
     type: 'function',
     function: {
-      name: 'webSearch',
+      name: 'web_search',
       description: 'Search the web for up-to-date information, documentation, news, or technical questions using web search.',
       parameters: {
         type: 'object',

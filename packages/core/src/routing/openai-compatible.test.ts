@@ -63,10 +63,13 @@ describe('OpenAICompatibleProvider', () => {
     const tools = [{ type: 'function', function: { name: 'foo', parameters: { type: 'object' } } }];
     await p.chat([{ role: 'user', content: 'Do it' }], tools);
 
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      tools,
-      tool_choice: 'auto',
-    }));
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools,
+        tool_choice: 'auto',
+      }),
+      expect.anything()
+    );
   });
 
   it('chat throws RateLimitError on 429', async () => {

@@ -40,7 +40,7 @@ export const fetchWebPageTool: ToolModule = {
   definition: {
     type: 'function',
     function: {
-      name: 'fetchWebPage',
+      name: 'web_fetch',
       description: 'Fetch web page content from a URL and convert HTML to clean markdown/text. Useful for reading online docs, READMEs, or articles.',
       parameters: {
         type: 'object',

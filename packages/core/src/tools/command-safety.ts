@@ -218,20 +218,11 @@ export const DANGEROUS_PATTERNS: RegExp[] = [
   /chmod\s+666/m,
   /chmod\s+000/m,
   /chown\s+/m,
-  /mv\s+[\w.\/-]+\s+[\w.\/-]+/m,
-  /cp\s+-r\s+/m,
-  /cp\s+-f\s+/m,
   /dd\s+if=/m,
   /dd\s+of=/m,
-  />\s*\/dev\//m,
-  /\/dev\/null/m,
-  /\/dev\/zero/m,
-  /\/dev\/random/m,
-  /\/dev\/urandom/m,
-  /SIGKILL/m,
-  /SIGTERM/m,
+  />\s*\/dev\/(?:sd|hd|nvme|mmcblk|disk)/m,
+  /\bof=\/dev\/(?:sd|hd|nvme|mmcblk|disk)/m,
   /kill\s+-9/m,
-  /kill\s+-15/m,
   /killall\s+/m,
   /pkill\s+/m,
   /git\s+reset\s+--hard/m,
@@ -384,7 +375,10 @@ export function classifyCommand(command: string): SafetyResult {
     }
   }
 
-  const hasShellMeta = /[;|&`$(){}[\]<>]/.test(trimmed);
+  // Only backticks, command substitution and chained execution count as "elevated".
+  // Pipes, redirects, `&&`, and `$env:VAR` are everyday shell usage.
+  const stripped = trimmed.replace(/"[^"]*"|'[^']*'/g, '""');
+  const hasShellMeta = /`|\$\(|;\s*\S/.test(stripped) && !/^powershell\b/i.test(trimmed);
   const isLong = trimmed.length > 200;
 
   if (warnings.length > 0) {

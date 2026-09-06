@@ -1,68 +1,28 @@
 /**
- * readPdfTool — Extract text content from PDF files
- * Built-in PDF reading capability inspired by Gemini CLI's multimodal features.
+ * read_pdf — Convenience alias of read_document specialised for PDFs.
+ * Kept as a distinct tool so models that "know" a PDF tool find it.
  */
 
-import { readFileSync, existsSync, statSync } from 'fs';
-import { resolve, basename } from 'path';
+import { existsSync, statSync } from 'fs';
+import { resolve } from 'path';
 import type { ToolModule } from '../types.js';
+import { extractDocument, renderDocument } from '../../documents/document-reader.js';
 
 const MAX_TEXT_LENGTH = 80_000;
-
-async function extractPdfText(filePath: string): Promise<{ text: string; pages: number; info: Record<string, string> }> {
-  const buffer = readFileSync(filePath);
-
-  // Suppress pdf.js polyfill console warnings during pdf parsing
-  const origWarn = console.warn;
-  const origError = console.error;
-
-  try {
-    console.warn = () => {};
-    console.error = () => {};
-
-    const pdfModule = await (import('pdf-parse' as any) as Promise<any>);
-    const pdfParse = pdfModule.default || pdfModule;
-    const data = await pdfParse(buffer);
-
-    return {
-      text: data.text || '',
-      pages: data.numpages || 0,
-      info: {
-        title: data.info?.Title || '',
-        author: data.info?.Author || '',
-        creator: data.info?.Creator || '',
-        pages: String(data.numpages || 0),
-      },
-    };
-  } catch (err: any) {
-    if (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'MODULE_NOT_FOUND' || err.message?.includes('Cannot find module')) {
-      const stat = statSync(filePath);
-      return {
-        text: `[PDF file detected but pdf-parse is not installed. Install it with: npm install pdf-parse]\n\nFile: ${basename(filePath)}\nSize: ${(stat.size / 1024).toFixed(1)} KB`,
-        pages: 0,
-        info: { note: 'pdf-parse not installed' },
-      };
-    }
-    throw err;
-  } finally {
-    console.warn = origWarn;
-    console.error = origError;
-  }
-}
 
 export const readPdfTool: ToolModule = {
   definition: {
     type: 'function',
     function: {
-      name: 'readPDF',
-      description: 'Read and extract text content from a PDF file. Returns text with page numbers. Useful for reading PDF docs, manuals, research papers.',
+      name: 'read_pdf',
+      description: 'Read and extract text from a PDF file, page by page. Supports page selection and offsets for long documents.',
       parameters: {
         type: 'object',
         properties: {
-          path: {
-            type: 'string',
-            description: 'Absolute or relative path to the PDF file',
-          },
+          path: { type: 'string', description: 'Absolute or relative path to the PDF file' },
+          page: { type: 'number', description: 'Return only this 1-based page' },
+          offset: { type: 'number', description: 'Character offset to continue from' },
+          maxChars: { type: 'number', description: 'Maximum characters to return (default 80000)' },
         },
         required: ['path'],
       },
@@ -72,40 +32,17 @@ export const readPdfTool: ToolModule = {
   async execute(args, cwd) {
     const pathArg = typeof args.path === 'string' ? args.path : '';
     if (!pathArg) throw new Error('Path is required');
-
     const filePath = resolve(cwd, pathArg);
-
-    if (!existsSync(filePath)) {
-      throw new Error(`File not found: ${pathArg}`);
-    }
-
-    const stat = statSync(filePath);
-    if (stat.isDirectory()) {
-      throw new Error(`Path is a directory: ${pathArg}`);
-    }
+    if (!existsSync(filePath)) throw new Error(`File not found: ${pathArg}`);
+    if (statSync(filePath).isDirectory()) throw new Error(`Path is a directory: ${pathArg}`);
 
     try {
-      const { text, pages, info } = await extractPdfText(filePath);
-      const parts: string[] = [];
-      parts.push(`PDF: ${basename(filePath)}`);
-      parts.push(`Pages: ${pages}`);
-
-      if (info.title) parts.push(`Title: ${info.title}`);
-      if (info.author) parts.push(`Author: ${info.author}`);
-
-      parts.push('');
-      parts.push('--- Content ---');
-
-      let content = text;
-      if (content.length > MAX_TEXT_LENGTH) {
-        content = content.slice(0, MAX_TEXT_LENGTH);
-        parts.push(content);
-        parts.push(`\n... [Truncated: showing first ${MAX_TEXT_LENGTH} of ${text.length} chars]`);
-      } else {
-        parts.push(content);
-      }
-
-      return parts.join('\n');
+      const doc = await extractDocument(filePath);
+      return renderDocument(doc, {
+        page: typeof args.page === 'number' ? args.page : undefined,
+        offset: typeof args.offset === 'number' ? args.offset : undefined,
+        maxChars: typeof args.maxChars === 'number' ? args.maxChars : MAX_TEXT_LENGTH,
+      });
     } catch (err: any) {
       throw new Error(`Failed to read PDF: ${err.message}`);
     }
