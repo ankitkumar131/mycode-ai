@@ -14,7 +14,22 @@ const skill = (name: string, skillMd: string, extra: Record<string, string> = {}
   files: { 'SKILL.md': skillMd.trim() + '\n', ...extra },
 });
 
+import { GRAPHIFY_SKILL_FILES } from './bundled/graphify.js';
+
+/** graphify — upstream skill bundled verbatim (Apache-2.0), plus a MyCode preamble. */
+const graphifySkill: BundledSkill = {
+  name: 'graphify',
+  files: {
+    ...GRAPHIFY_SKILL_FILES,
+    'SKILL.md': GRAPHIFY_SKILL_FILES['SKILL.md'].replace(
+      /\n# \/graphify\n/,
+      `\n# /graphify\n\n> **MyCode notes:** run every shell snippet below with the \`terminal\` tool (bash on Linux/macOS, cmd/PowerShell on Windows). Read \`references/*.md\` with \`skill_view(name="graphify", path="references/<file>")\`. Requires Python 3.10+; if \`graphify\` is missing the skill installs the PyPI package \`graphifyy\` via uv or pipx — tell the user before doing so.\n`
+    ),
+  },
+};
+
 export const BUNDLED_SKILLS: BundledSkill[] = [
+  graphifySkill,
   skill(
     'plan',
     `---

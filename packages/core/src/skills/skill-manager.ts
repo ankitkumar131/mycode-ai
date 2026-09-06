@@ -15,8 +15,9 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, statSync, readdirSync } from 'fs';
 import { join, resolve, relative, isAbsolute, dirname, delimiter } from 'path';
 import { homedir } from 'os';
+import { createHash } from 'crypto';
 import { SkillLoader, stripFrontmatter, isPlatformCompatible, listSkillFiles } from './skill-loader.js';
-import { BUNDLED_SKILLS } from './bundled-skills.js';
+import { BUNDLED_SKILLS, type BundledSkill } from './bundled-skills.js';
 import type { InstalledSkill, SkillDefinition, SkillsLockFile, SkillIndexEntry } from './types.js';
 
 export interface SkillManagerOptions {
@@ -41,6 +42,14 @@ const HUB_REPOS = [
   { repo: 'NousResearch/hermes-agent', dir: 'skills' },
   { repo: 'anthropics/skills', dir: 'skills' },
 ];
+
+const sha = (t: string) => createHash('sha1').update(t).digest('hex').slice(0, 16);
+/** Manifest written next to a seeded bundled skill so upgrades can tell "untouched" from "user-edited". */
+function bundledManifest(b: BundledSkill): { version: string; files: Record<string, string> } {
+  const files: Record<string, string> = {};
+  for (const k of Object.keys(b.files).sort()) files[k] = sha(b.files[k]);
+  return { version: sha(JSON.stringify(files)), files };
+}
 
 export class SkillManager {
   private loader = new SkillLoader();
@@ -112,12 +121,32 @@ export class SkillManager {
     const seeded: string[] = [];
     for (const b of BUNDLED_SKILLS) {
       const target = join(dir, b.name);
-      if (existsSync(join(target, 'SKILL.md'))) continue;
+      const stampPath = join(target, '.bundled.json');
+      const shipped = bundledManifest(b);
+      if (existsSync(join(target, 'SKILL.md'))) {
+        // Present already. Upgrade only if it's an untouched copy of an older bundled version.
+        let prev: { version: string; files: Record<string, string> } | null = null;
+        try {
+          prev = JSON.parse(readFileSync(stampPath, 'utf-8'));
+        } catch {
+          /* user-authored or pre-manifest install → never overwrite */
+        }
+        if (!prev || prev.version === shipped.version) continue;
+        const edited = Object.entries(prev.files).some(([rel, hash]) => {
+          try {
+            return sha(readFileSync(join(target, rel), 'utf-8')) !== hash;
+          } catch {
+            return false; // deleted file — fine to restore
+          }
+        });
+        if (edited) continue;
+      }
       for (const [rel, content] of Object.entries(b.files)) {
         const p = join(target, rel);
         mkdirSync(dirname(p), { recursive: true });
         writeFileSync(p, content, 'utf-8');
       }
+      writeFileSync(stampPath, JSON.stringify(shipped, null, 2), 'utf-8');
       seeded.push(b.name);
     }
     if (seeded.length) this.invalidate();
@@ -130,6 +159,7 @@ export class SkillManager {
     if (!b) return false;
     const target = join(this.getSkillsDir(), b.name);
     rmSync(target, { recursive: true, force: true });
+    writeFileSync((mkdirSync(target, { recursive: true }), join(target, '.bundled.json')), JSON.stringify(bundledManifest(b), null, 2), 'utf-8');
     for (const [rel, content] of Object.entries(b.files)) {
       const p = join(target, rel);
       mkdirSync(dirname(p), { recursive: true });
