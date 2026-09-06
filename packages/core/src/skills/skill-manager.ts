@@ -365,9 +365,18 @@ export class SkillManager {
 
     if (!installedViaApi) {
       const rawUrl = `https://raw.githubusercontent.com/${spec.repo}/${spec.ref}/${spec.path}/SKILL.md`;
-      const resp = await fetch(rawUrl);
-      if (!resp.ok) throw new Error(`Failed to download skill from ${rawUrl} (HTTP ${resp.status})`);
-      const content = await resp.text();
+      let content: string | null = null;
+      try {
+        const resp = await fetch(rawUrl, { headers: { 'User-Agent': 'mycode-cli' } });
+        if (resp.ok) content = await resp.text();
+      } catch {
+        /* fall back to API */
+      }
+      if (content === null) {
+        const buf = await fetchFileContent({ url: `https://api.github.com/repos/${spec.repo}/contents/${spec.path}/SKILL.md?ref=${spec.ref}` });
+        if (buf) content = buf.toString('utf-8');
+      }
+      if (content === null) throw new Error(`Failed to download ${spec.repo}/${spec.path}/SKILL.md — check the URL (and network/GitHub access).`);
       mkdirSync(targetDir, { recursive: true });
       const f = join(targetDir, 'SKILL.md');
       writeFileSync(f, content, 'utf-8');
@@ -389,10 +398,9 @@ export class SkillManager {
     for (const item of listing) {
       if (item.type === 'dir') {
         await this.downloadTree(repo, ref, `${path}/${item.name}`, join(targetDir, item.name), written, depth + 1);
-      } else if (item.type === 'file' && item.download_url && item.size < 2_000_000) {
-        const r = await fetch(item.download_url);
-        if (!r.ok) continue;
-        const buf = Buffer.from(await r.arrayBuffer());
+      } else if (item.type === 'file' && item.size < 2_000_000) {
+        const buf = await fetchFileContent(item);
+        if (!buf) continue;
         const out = join(targetDir, item.name);
         writeFileSync(out, buf);
         written.push(out);
@@ -499,6 +507,27 @@ export class SkillManager {
   toDefinition(skill: InstalledSkill): SkillDefinition {
     return skill.definition;
   }
+}
+
+/** Download a file listed by the GitHub contents API: raw CDN first, API (base64) fallback. */
+async function fetchFileContent(item: { download_url?: string; url?: string; content?: string; encoding?: string }): Promise<Buffer | null> {
+  if (item.download_url) {
+    try {
+      const r = await fetch(item.download_url, { headers: { 'User-Agent': 'mycode-cli' } });
+      if (r.ok) return Buffer.from(await r.arrayBuffer());
+    } catch {
+      /* raw CDN blocked — fall back to API */
+    }
+  }
+  if (item.url) {
+    try {
+      const j = await fetchJson(item.url);
+      if (j?.content && j.encoding === 'base64') return Buffer.from(j.content.replace(/\n/g, ''), 'base64');
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
 }
 
 async function fetchJson(url: string): Promise<any> {
