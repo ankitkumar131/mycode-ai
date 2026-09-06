@@ -1,0 +1,7 @@
+/home/ankit/Desktop/mycode-ai/.mycode/MYCODE.md
+/home/ankit/Desktop/mycode-ai/README.md
+/home/ankit/Desktop/mycode-ai/implementation_plan.md
+/home/ankit/Desktop/mycode-ai/report.txt
+/home/ankit/Desktop/mycode-ai/walkthrough.md
+/home/ankit/Desktop/mycode-ai/Ankit_Kumar_Resume_ATS.pdf
+/home/ankit/Desktop/mycode-ai/project-image.jpg
