@@ -16,6 +16,8 @@ export interface SkillFrontmatter {
   category?: string;
   /** Optional "argument-hint" shown in the slash menu, e.g. "<file> [notes]" */
   argumentHint?: string;
+  /** Used when the skill is invoked with no arguments (frontmatter `default-args`) */
+  defaultArgs?: string;
   /** Any other raw frontmatter keys */
   raw: Record<string, unknown>;
 }

@@ -97,6 +97,7 @@ export function parseFrontmatter(content: string): SkillFrontmatter {
     tags: asList(pick('tags', 'metadata.mycode.tags', 'metadata.hermes.tags')),
     category: (pick('category', 'metadata.mycode.category', 'metadata.hermes.category') as string | undefined),
     argumentHint: (pick('argument-hint', 'argumentHint') as string | undefined),
+    defaultArgs: (pick('default-args', 'defaultArgs') as string | undefined),
     raw,
   };
 }
