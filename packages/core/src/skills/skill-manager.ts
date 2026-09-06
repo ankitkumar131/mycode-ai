@@ -292,8 +292,9 @@ export class SkillManager {
     const filesNote = skill.files.length
       ? `\nAdditional files in this skill (load with skill_view name="${skill.name}" path="<file>"): ${skill.files.join(', ')}`
       : '';
-    const task = args.trim()
-      ? `\n\nUser request:\n${args.trim()}`
+    const effective = args.trim() || skill.frontmatter.defaultArgs?.trim() || '';
+    const task = effective
+      ? `\n\nUser request:\n${effective}`
       : `\n\nThe user invoked this skill without a specific request. Briefly explain what it does and ask what they need, unless the skill body says otherwise.`;
     return `<skill name="${skill.name}">\n${content}${filesNote}\n</skill>${task}`;
   }
