@@ -455,9 +455,15 @@ async function extractPdf(buf: Buffer): Promise<{ sections: DocumentSection[]; m
   const warnings: string[] = [];
   const origWarn = console.warn;
   const origErr = console.error;
+  const origLog = console.log;
   try {
+    // pdf.js is chatty (font "Warning: TT: …" lines go to console.log)
     console.warn = () => {};
     console.error = () => {};
+    console.log = (...a: unknown[]) => {
+      if (typeof a[0] === 'string' && /^Warning:/.test(a[0])) return;
+      origLog(...a);
+    };
     const mod: any = await import('pdf-parse' as any);
     const pdfParse = mod.default ?? mod;
     const pages: string[] = [];
@@ -496,6 +502,7 @@ async function extractPdf(buf: Buffer): Promise<{ sections: DocumentSection[]; m
   } finally {
     console.warn = origWarn;
     console.error = origErr;
+    console.log = origLog;
   }
 }
 

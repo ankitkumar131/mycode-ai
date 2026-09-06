@@ -191,6 +191,7 @@ export class TextArea {
   async read(): Promise<TextAreaSubmit> {
     if (!process.stdin.isTTY) return this.readLineNonTTY();
     this.ensureInput();
+    this.rearmInput();
     if (this.readPromise) throw new Error('TextArea.read() already pending');
     this.clearInput();
     const promise = new Promise<TextAreaSubmit>(resolve => {
@@ -254,6 +255,22 @@ export class TextArea {
     if (typeof (process.stdout as any).on === 'function') process.stdout.on('resize', this.resizeHandler);
     // Bracketed paste
     process.stdout.write('\x1b[?2004h');
+  }
+
+  /**
+   * Re-assert raw mode + flowing stdin. Spinners, child processes and prompt
+   * libraries may pause stdin or drop raw mode between turns; if stdin stays
+   * paused the event loop drains and the process silently exits.
+   */
+  private rearmInput(): void {
+    try {
+      if (process.stdin.isTTY && !process.stdin.isRaw) process.stdin.setRawMode(true);
+    } catch {
+      /* ignore */
+    }
+    const stdin = process.stdin as any;
+    if (typeof stdin.isPaused !== 'function' || stdin.isPaused()) stdin.resume?.();
+    if (typeof stdin.ref === 'function') stdin.ref();
   }
 
   /** Ask terminals that support the kitty keyboard protocol to disambiguate Ctrl/Shift+Enter. */

@@ -450,13 +450,8 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       const result = await session.run(resolvedInput);
       stopSpinner();
       if (isStreaming && streamBuffer) {
-        // Re-render the streamed markdown cleanly when it contains block formatting
-        if (/```|^#{1,3} |^\s*[-*] |\|.*\|/m.test(streamBuffer) && process.stdout.isTTY) {
-          const lines = streamBuffer.split('\n').length + 1;
-          process.stdout.write(`\x1b[${lines}A\x1b[J`);
-          console.log();
-          console.log(decodeEntities(renderMarkdown(streamBuffer)));
-        } else console.log();
+        // Streamed text is already on screen; just terminate the line.
+        console.log();
       } else if (result?.trim()) {
         console.log();
         console.log(decodeEntities(renderMarkdown(result)));

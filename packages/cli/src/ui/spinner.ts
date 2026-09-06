@@ -48,6 +48,7 @@ export function createSpinner(providerLabel = ''): Ora {
     : `${S.brand(ICONS.sparkle)} ${S.brand('Thinking...')}`;
 
   return ora({
+    discardStdin: false,
     text: label,
     spinner: SPINNER_FRAMES.thinking,
     color: 'blue',
@@ -60,6 +61,7 @@ export function createSpinner(providerLabel = ''): Ora {
  */
 export function createToolSpinner(toolName: string): Ora {
   return ora({
+    discardStdin: false,
     text: `${S.accent(ICONS.hexEmpty)} ${S.accent(toolName)}`,
     spinner: SPINNER_FRAMES.tool,
     color: 'magenta',
@@ -72,6 +74,7 @@ export function createToolSpinner(toolName: string): Ora {
  */
 export function createCodegenSpinner(): Ora {
   return ora({
+    discardStdin: false,
     text: `${S.cyan(ICONS.sparkle)} ${S.cyan('Generating...')}`,
     spinner: SPINNER_FRAMES.codegen,
     color: 'cyan',
@@ -84,6 +87,7 @@ export function createCodegenSpinner(): Ora {
  */
 export function createSetupSpinner(message: string): Ora {
   return ora({
+    discardStdin: false,
     text: S.dim(message),
     spinner: 'dots',
     color: 'white',
