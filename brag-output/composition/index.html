@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MYCODE Launch Video</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+    
+    body, html { 
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; 
+    }
+    #main-comp { 
+      width: 100%; height: 100%; position: relative; background-color: #0a0a0a; color: #ffffff; 
+      font-family: 'Inter', sans-serif; overflow: hidden; 
+    }
+    
+    .clip { 
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+      display: flex; align-items: center; justify-content: center; 
+    }
+    .scene-content { 
+      display: flex; flex-direction: column; align-items: center; justify-content: center; 
+      width: 100%; height: 100%; position: relative; 
+    }
+    
+    /* Typography */
+    .display-text { font-family: 'Fira Code', monospace; font-weight: 700; text-align: center; }
+    .neon-cyan { color: #00e5ff; text-shadow: 0 0 20px rgba(0, 229, 255, 0.5); }
+    .neon-green { color: #4caf50; text-shadow: 0 0 20px rgba(76, 175, 80, 0.5); }
+    .neon-red { color: #ff4444; text-shadow: 0 0 20px rgba(255, 68, 68, 0.5); }
+    
+    /* Scene 1 */
+    .s1-line1 { font-size: 80px; font-weight: 800; margin-bottom: 20px; }
+    .s1-line2 { font-size: 100px; font-weight: 800; }
+    .glow-bg { 
+      position: absolute; width: 1000px; height: 1000px; 
+      background: radial-gradient(circle, rgba(0,229,255,0.15) 0%, rgba(10,10,10,0) 70%); 
+      border-radius: 50%; z-index: 0; 
+    }
+    .s1-text-container { z-index: 1; display: flex; flex-direction: column; align-items: center; }
+
+    /* Scene 2 */
+    .terminal { 
+      background-color: #111; border: 1px solid #333; border-radius: 12px; 
+      width: 1000px; padding: 0 0 20px 0; font-family: 'Fira Code', monospace; 
+      font-size: 32px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); 
+    }
+    .term-header { 
+      background: #222; padding: 15px 20px; border-radius: 12px 12px 0 0; 
+      display: flex; gap: 10px; border-bottom: 1px solid #333; 
+    }
+    .dot { width: 15px; height: 15px; border-radius: 50%; }
+    .dot.r { background: #ff5f56; } .dot.y { background: #ffbd2e; } .dot.g { background: #27c93f; }
+    .term-body { padding: 30px; display: flex; flex-direction: column; gap: 15px; text-align: left; }
+    .term-line { display: flex; gap: 20px; color: #ddd; }
+    .term-line .label { color: #888; width: 180px; }
+    
+    /* Scene 3 */
+    .provider-chain { display: flex; align-items: center; gap: 40px; margin-bottom: 60px; }
+    .provider-box { 
+      padding: 30px 40px; border: 4px solid #00e5ff; border-radius: 16px; 
+      font-size: 40px; font-weight: 700; background: rgba(0,229,255,0.05); 
+      position: relative; 
+    }
+    .arrow { font-size: 60px; color: rgb(93,93,93); display: flex; align-items: center; justify-content: center;}
+    .failover-text { font-size: 48px; font-weight: 600; }
+    .status-icon { 
+      position: absolute; top: -20px; right: -20px; width: 50px; height: 50px; 
+      border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+      font-size: 28px; font-weight: bold; background: #0a0a0a; border: 4px solid; 
+    }
+    
+    /* Scene 4 */
+    .provider-grid { display: flex; gap: 30px; margin-bottom: 60px; }
+    .p-card { 
+      width: 220px; height: 280px; background: #151515; border-radius: 16px; 
+      display: flex; flex-direction: column; align-items: center; justify-content: center; 
+      border: 2px solid #333; 
+    }
+    .p-card-title { font-size: 32px; font-weight: 700; margin-bottom: 10px; text-align: center; }
+    .p-card-sub { font-size: 20px; color: #888; text-align: center; }
+    .grid-text { font-size: 48px; font-weight: 600; }
+    
+    /* Scene 5 */
+    .logo-huge { font-size: 240px; margin-bottom: 20px; }
+    .logo-sub { font-size: 56px; color: #ccc; margin-bottom: 60px; }
+    .npm-pill { 
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); 
+      padding: 15px 30px; border-radius: 50px; font-size: 28px; font-family: 'Fira Code', monospace; 
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+</head>
+<body>
+  
+  <div id="main-comp" data-composition-id="main" data-start="0" data-duration="20" data-width="1920" data-height="1080">
+    
+    <!-- AUDIO -->
+    <audio id="bg-music" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3" data-start="0" data-duration="20" data-track-index="10" data-volume="0.35"></audio>
+    
+    <audio id="sfx-s1-1" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="0.3" data-duration="2" data-track-index="11"></audio>
+    <audio id="sfx-s1-2" src="assets/sfx/impact/impactSoft_medium_004.ogg" data-start="2.73" data-duration="2" data-track-index="12"></audio>
+    
+    <audio id="sfx-s2-click" src="assets/sfx/interface/click_003.ogg" data-start="6.5" data-duration="1" data-track-index="13"></audio>
+    
+    <audio id="sfx-s3-1" src="assets/sfx/casino/card-place-1.ogg" data-start="7.2" data-duration="1" data-track-index="14"></audio>
+    <audio id="sfx-s3-2" src="assets/sfx/casino/card-place-2.ogg" data-start="7.5" data-duration="1" data-track-index="15"></audio>
+    <audio id="sfx-s3-3" src="assets/sfx/casino/card-place-3.ogg" data-start="7.8" data-duration="1" data-track-index="16"></audio>
+    <audio id="sfx-s3-success" src="assets/sfx/impact/impactBell_heavy_000.ogg" data-start="8.74" data-duration="2" data-track-index="17"></audio>
+    
+    <audio id="sfx-s4-1" src="assets/sfx/interface/drop_001.ogg" data-start="12.4" data-duration="1" data-track-index="18"></audio>
+    <audio id="sfx-s4-2" src="assets/sfx/interface/drop_001.ogg" data-start="12.8" data-duration="1" data-track-index="19"></audio>
+    <audio id="sfx-s4-3" src="assets/sfx/interface/drop_001.ogg" data-start="13.2" data-duration="1" data-track-index="20"></audio>
+    <audio id="sfx-s4-4" src="assets/sfx/interface/drop_001.ogg" data-start="13.6" data-duration="1" data-track-index="21"></audio>
+    <audio id="sfx-s4-5" src="assets/sfx/interface/drop_001.ogg" data-start="14.0" data-duration="1" data-track-index="22"></audio>
+    
+    <audio id="sfx-s5-slam" src="assets/sfx/impact/impactBell_heavy_003.ogg" data-start="17.47" data-duration="2" data-track-index="23"></audio>
+
+
+    <!-- SCENE 1 -->
+    <div class="clip" data-start="0" data-duration="3" data-track-index="1">
+      <div class="scene-content" id="s1-content">
+        <div class="glow-bg" id="s1-glow"></div>
+        <div class="s1-text-container">
+          <div class="s1-line1" id="s1-line1">Your AI provider went down.</div>
+          <div class="s1-line2 display-text neon-cyan" id="s1-line2">Your code didn't stop.</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- SCENE 2 -->
+    <div class="clip" data-start="3" data-duration="4" data-track-index="1">
+      <div class="scene-content" id="s2-content">
+        <div class="terminal" id="s2-terminal">
+          <div class="term-header">
+            <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+          </div>
+          <div class="term-body">
+            <div class="term-line" id="t-line0"><span class="neon-cyan">⚡ MyCode Setup Wizard</span></div>
+            <div style="height: 10px;"></div>
+            <div class="term-line" id="t-line1"><span class="label">? Provider:</span> <span>openrouter</span></div>
+            <div class="term-line" id="t-line2"><span class="label">? Model:</span> <span>google/gemini-2.5-flash</span></div>
+            <div class="term-line" id="t-line3"><span class="label">? API Key:</span> <span>sk-or-••••••</span></div>
+            <div class="term-line" id="t-line4"><span class="label">? Base URL:</span> <span>https://openrouter.ai/api/v1</span></div>
+            <div style="height: 10px;"></div>
+            <div class="term-line neon-green" id="t-line5">✓ Added provider: openrouter</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- SCENE 3 -->
+    <div class="clip" data-start="7" data-duration="5" data-track-index="1">
+      <div class="scene-content" id="s3-content">
+        <div class="provider-chain">
+          <div class="provider-box" id="s3-box1">
+            OpenRouter
+            <div class="status-icon neon-red" id="s3-box1-icon" style="border-color: #ff4444;">✗</div>
+          </div>
+          <div class="arrow" id="s3-arr1">→</div>
+          <div class="provider-box" id="s3-box2">
+            Ollama
+            <div class="status-icon neon-green" id="s3-box2-icon" style="border-color: #4caf50;">✓</div>
+          </div>
+          <div class="arrow" id="s3-arr2">→</div>
+          <div class="provider-box" id="s3-box3">
+            OpenAI
+          </div>
+        </div>
+        <div class="failover-text" id="s3-text">Automatic failover. Zero downtime.</div>
+      </div>
+    </div>
+    
+    <!-- SCENE 4 -->
+    <div class="clip" data-start="12" data-duration="4" data-track-index="1">
+      <div class="scene-content" id="s4-content">
+        <div class="provider-grid">
+          <div class="p-card" id="s4-c1" style="border-color: rgba(255, 68, 68, 0.4); box-shadow: inset 0 0 20px rgba(255, 68, 68, 0.1);">
+            <div class="p-card-title">OpenRouter</div><div class="p-card-sub">Cloud</div>
+          </div>
+          <div class="p-card" id="s4-c2" style="border-color: rgba(76, 175, 80, 0.4); box-shadow: inset 0 0 20px rgba(76, 175, 80, 0.1);">
+            <div class="p-card-title">NVIDIA NIM</div><div class="p-card-sub">Cloud/Local</div>
+          </div>
+          <div class="p-card" id="s4-c3" style="border-color: rgba(76, 175, 80, 0.4); box-shadow: inset 0 0 20px rgba(76, 175, 80, 0.1);">
+            <div class="p-card-title">Ollama</div><div class="p-card-sub">Local</div>
+          </div>
+          <div class="p-card" id="s4-c4" style="border-color: rgba(255, 255, 255, 0.4); box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.1);">
+            <div class="p-card-title">OpenAI</div><div class="p-card-sub">Cloud</div>
+          </div>
+          <div class="p-card" id="s4-c5" style="border-color: rgba(0, 229, 255, 0.4); box-shadow: inset 0 0 20px rgba(0, 229, 255, 0.1);">
+            <div class="p-card-title neon-cyan">...</div><div class="p-card-sub">More</div>
+          </div>
+        </div>
+        <div class="grid-text" id="s4-text">If it has an API, MyCode can use it.</div>
+      </div>
+    </div>
+    
+    <!-- SCENE 5 -->
+    <div class="clip" data-start="16" data-duration="4" data-track-index="1">
+      <div class="scene-content" id="s5-content">
+        <div class="logo-huge display-text neon-cyan" id="s5-logo">MYCODE</div>
+        <div class="logo-sub" id="s5-sub">One Agent. Any AI. Your Way.</div>
+        <div class="npm-pill" id="s5-npm">npm install -g @ankitkumar131/mycode-ai</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    window.__timelines = window.__timelines || {};
+    window.__timelines["main"] = tl;
+    
+    // SCENE 1 (0s to 3s)
+    tl.fromTo("#s1-glow", { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 2, ease: "power2.out" }, 0);
+    tl.fromTo("#s1-line1", { opacity: 0, scale: 1.5, y: -50 }, { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: "power3.inOut" }, 0.3);
+    
+    // Beat drop at 2.73 for line 2
+    tl.fromTo("#s1-line2", { opacity: 0, scale: 2, y: 50 }, { opacity: 1, scale: 1, y: 0, duration: 0.3, ease: "power4.out" }, 2.73);
+    tl.fromTo("#s1-glow", { scale: 1 }, { scale: 1.2, opacity: 0.8, duration: 0.27, ease: "power2.out" }, 2.73);
+
+    // Fade out scene 1
+    tl.fromTo("#s1-content", { opacity: 1 }, { opacity: 0, duration: 0.3, ease: "power1.inOut" }, 3);
+
+    // SCENE 2 (3s to 7s)
+    tl.fromTo("#s2-content", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 3);
+    tl.fromTo("#s2-terminal", { y: 100, opacity: 0, scale: 0.9 }, { y: 0, opacity: 1, scale: 1, duration: 0.8, ease: "power3.out" }, 3);
+    
+    tl.fromTo("#t-line0", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 3.8);
+    tl.fromTo("#t-line1", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 4.3);
+    tl.fromTo("#t-line2", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 4.8);
+    tl.fromTo("#t-line3", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 5.3);
+    tl.fromTo("#t-line4", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 5.8);
+    tl.fromTo("#t-line5", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.2 }, 6.5);
+    
+    tl.fromTo("#s2-content", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 7);
+
+    // SCENE 3 (7s to 12s)
+    tl.fromTo("#s3-content", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 7);
+    tl.fromTo("#s3-box1", { opacity: 0, y: 50, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.5)" }, 7.2);
+    tl.fromTo("#s3-arr1", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.3 }, 7.4);
+    tl.fromTo("#s3-box2", { opacity: 0, y: 50, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.5)" }, 7.5);
+    tl.fromTo("#s3-arr2", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.3 }, 7.7);
+    tl.fromTo("#s3-box3", { opacity: 0, y: 50, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(1.5)" }, 7.8);
+    
+    // Failover sequence at ~8.5s
+    tl.fromTo("#s3-box1", { borderColor: "#00e5ff", background: "rgba(0,229,255,0.05)", boxShadow: "0 0 0px #000" }, { borderColor: "#ff4444", background: "rgba(255,68,68,0.1)", boxShadow: "0 0 30px rgba(255,68,68,0.6)", duration: 0.2 }, 8.5);
+    tl.fromTo("#s3-box1-icon", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, 8.5);
+    
+    // Pulse to box 2
+    tl.fromTo("#s3-arr1", { color: "#555" }, { color: "#ff4444", duration: 0.1 }, 8.6);
+    tl.fromTo("#s3-arr1", { color: "#ff4444" }, { color: "#4caf50", duration: 0.1 }, 8.7);
+    
+    // Success at 8.74 (beat lock)
+    tl.fromTo("#s3-box2", { borderColor: "#00e5ff", background: "rgba(0,229,255,0.05)", boxShadow: "0 0 0px #000" }, { borderColor: "#4caf50", background: "rgba(76,175,80,0.1)", boxShadow: "0 0 30px rgba(76,175,80,0.6)", duration: 0.2 }, 8.74);
+    tl.fromTo("#s3-box2-icon", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, 8.74);
+    
+    // Text fade in
+    tl.fromTo("#s3-text", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 9.2);
+    
+    tl.fromTo("#s3-content", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 12);
+    
+    // SCENE 4 (12s to 16s)
+    tl.fromTo("#s4-content", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 12);
+    
+    tl.fromTo("#s4-c1", { opacity: 0, y: 150 }, { opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.2)" }, 12.4);
+    tl.fromTo("#s4-c2", { opacity: 0, y: 150 }, { opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.2)" }, 12.8);
+    tl.fromTo("#s4-c3", { opacity: 0, y: 150 }, { opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.2)" }, 13.2);
+    tl.fromTo("#s4-c4", { opacity: 0, y: 150 }, { opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.2)" }, 13.6);
+    tl.fromTo("#s4-c5", { opacity: 0, y: 150 }, { opacity: 1, y: 0, duration: 0.5, ease: "back.out(1.2)" }, 14.0);
+    
+    tl.fromTo("#s4-text", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5 }, 14.6);
+    
+    tl.fromTo("#s4-content", { opacity: 1 }, { opacity: 0, duration: 0.3 }, 16);
+    
+    // SCENE 5 (16s to 20s)
+    tl.fromTo("#s5-content", { opacity: 0 }, { opacity: 1, duration: 0.1 }, 16);
+    
+    // Big logo slam at 17.47s
+    tl.fromTo("#s5-logo", { opacity: 0, scale: 3, y: 100 }, { opacity: 1, scale: 1, y: 0, duration: 0.4, ease: "power4.out" }, 17.47);
+    tl.fromTo("#s5-sub", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 18.0);
+    tl.fromTo("#s5-npm", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.5, ease: "power2.out" }, 18.5);
+
+  </script>
+</body>
+</html>
