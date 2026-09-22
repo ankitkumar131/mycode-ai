@@ -1,0 +1,5 @@
+One agent. Any AI provider. No lock-in. MyCode is the provider-agnostic coding agent your terminal deserves.
+
+Your AI provider went down. Your code didn't stop. Automatic failover, zero downtime.
+
+npm install -g @ankitkumar131/mycode-ai

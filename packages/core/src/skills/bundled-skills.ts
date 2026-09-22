@@ -15,6 +15,7 @@ const skill = (name: string, skillMd: string, extra: Record<string, string> = {}
 });
 
 import { GRAPHIFY_SKILL_FILES } from './bundled/graphify.js';
+import { BRAG_SKILL_FILES } from './bundled/brag.js';
 
 /**
  * graphify — knowledge-graph skill. The reference docs are bundled verbatim from
@@ -107,8 +108,14 @@ const graphifySkill: BundledSkill = {
   },
 };
 
+const bragSkill: BundledSkill = {
+  name: 'brag',
+  files: BRAG_SKILL_FILES,
+};
+
 export const BUNDLED_SKILLS: BundledSkill[] = [
   graphifySkill,
+  bragSkill,
   skill(
     'plan',
     `---
