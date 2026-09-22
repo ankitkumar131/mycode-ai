@@ -88,6 +88,33 @@ export class AgentSession {
       await this.ensureSystemPrompt(cwd);
       this.flushPendingSystemSections();
 
+      // AgentMemory-inspired: inject relevant memories at session start (first turn)
+      if (this._usage.turns === 0) {
+        try {
+          const { memoryManager } = await import('../memory/memory-manager.js');
+          const profile = memoryManager.getProjectProfile(cwd);
+          const relevantMems = memoryManager.search(input, cwd, 3, 1000);
+          if (relevantMems.length > 0 || profile.files.length > 0) {
+            const memContext = [
+              profile.files.length ? `Project context — top files: ${profile.files.slice(0, 5).join(', ')}` : '',
+              profile.concepts.length ? `Concepts: ${profile.concepts.slice(0, 5).join(', ')}` : '',
+              relevantMems.length ? `Relevant memories:\n${relevantMems.map(m => `- [${m.type}] ${m.content}`).join('\n')}` : '',
+            ].filter(Boolean).join('\n');
+            if (memContext) {
+              this.context.addSystem(`Memory context (auto-injected, token-budgeted):\n${memContext}`);
+            }
+          }
+          // Graft-inspired: codebase map quick injection for first turn
+          if (input.length > 20) {
+            try {
+              const { codebaseMapTool } = await import('../tools/definitions/code-intelligence.js');
+              // Don't block, just hint that codebase_map is available
+              this.context.addSystem('Hint: Use codebase_map tool FIRST for architecture questions — reduces 46% tool calls. Use codebase_search for symbol lookup.');
+            } catch {}
+          }
+        } catch {}
+      }
+
       this.context.addUser(input);
       this._lastUserInput = input;
       this._usage.turns++;
@@ -187,12 +214,42 @@ export class AgentSession {
             this.emit({ type: 'tool_result', name: toolName, result });
             this.config.onToolResult?.(toolName, result, { durationMs: Date.now() - t0, error: false });
             this._toolFailures.set(toolName, 0);
+
+            // AgentMemory-inspired: auto-capture observation via PostToolUse hook
+            try {
+              const { memoryManager } = await import('../memory/memory-manager.js');
+              memoryManager.captureObservation({
+                sessionId: this.id,
+                cwd,
+                tool: toolName,
+                input: args,
+                output: typeof result === 'string' ? result.slice(0, 2000) : JSON.stringify(result).slice(0, 2000),
+                success: true,
+                durationMs: Date.now() - t0,
+                tags: [toolName, typeof args.path === 'string' ? args.path : ''].filter(Boolean) as string[],
+              });
+            } catch {}
           } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
             this.context.addToolResult(call.id, `Error: ${errMsg}`, toolName);
             this.emit({ type: 'error', message: `Tool ${toolName} failed: ${errMsg}` });
             this.config.onToolResult?.(toolName, `Error: ${errMsg}`, { durationMs: Date.now() - t0, error: true });
             this._toolFailures.set(toolName, failures + 1);
+
+            // Capture failure too
+            try {
+              const { memoryManager } = await import('../memory/memory-manager.js');
+              memoryManager.captureObservation({
+                sessionId: this.id,
+                cwd,
+                tool: toolName,
+                input: args,
+                output: `Error: ${errMsg}`.slice(0, 2000),
+                success: false,
+                durationMs: Date.now() - t0,
+                tags: [toolName, 'error'],
+              });
+            } catch {}
           }
         }
       }

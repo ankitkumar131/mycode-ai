@@ -32,14 +32,22 @@ import { todoWriteTool } from './definitions/todowrite.js';
 import { readInstructionsTool } from './definitions/read-instructions.js';
 import { skillsListTool, skillViewTool, skillManageTool } from './definitions/skills.js';
 import { memoryTool } from './definitions/memory.js';
+import { codeIntelligenceTools } from './definitions/code-intelligence.js';
+import { enhancedMemoryTools } from './definitions/enhanced-memory.js';
+import { specializedAgentTools } from './definitions/delegate-enhanced.js';
+import { browserTools } from './definitions/browser.js';
+import { delegateTool } from './definitions/delegate.js';
 
 export const TOOLSETS: Record<string, string[]> = {
   files: ['read_file', 'write_file', 'patch', 'list_dir', 'glob', 'search_files', 'read_document', 'read_pdf'],
   terminal: ['terminal', 'process', 'execute_code'],
   git: ['git_status'],
-  web: ['web_search', 'web_fetch'],
+  web: ['web_search', 'web_fetch', 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_type', 'browser_extract', 'browser_history'],
   skills: ['skills_list', 'skill_view', 'skill_manage'],
-  agent: ['todo_write', 'read_instructions', 'memory'],
+  agent: ['todo_write', 'read_instructions', 'memory', 'delegate', 'memory_save', 'memory_recall', 'memory_smart_search', 'memory_file_history', 'memory_sessions', 'memory_profile', 'delegate_to_specialist', 'list_specialists', 'codebase_map', 'codebase_search', 'impact_analysis'],
+  intelligence: ['codebase_map', 'codebase_search', 'impact_analysis', 'memory_save', 'memory_recall', 'memory_smart_search', 'memory_file_history', 'memory_sessions', 'memory_profile'],
+  browser: ['browser_navigate', 'browser_snapshot', 'browser_click', 'browser_type', 'browser_extract', 'browser_history', 'web_search', 'web_fetch'],
+  specialists: ['delegate', 'delegate_to_specialist', 'list_specialists'],
 };
 
 const ALL_TOOLS: ToolModule[] = [
@@ -63,6 +71,11 @@ const ALL_TOOLS: ToolModule[] = [
   todoWriteTool,
   readInstructionsTool,
   memoryTool,
+  delegateTool,
+  ...codeIntelligenceTools,
+  ...enhancedMemoryTools,
+  ...specializedAgentTools,
+  ...browserTools,
 ];
 
 export const ALIASES: Record<string, string> = {
