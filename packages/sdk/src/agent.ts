@@ -61,8 +61,28 @@ export class MyCodeAgent {
   }
 
   private async ensureSession(options?: RunOptions): Promise<AgentSession> {
-    const ev = options?.events;
+    // Reuse existing session to preserve conversation history, unless forced new or cwd changed
     const cwd = this.config.cwd || process.cwd();
+    if (this.session && !(options as any)?.forceNew && this.session.getContext) {
+      try {
+        const existingCwd = (this.session as any).config?.cwd || cwd;
+        if (existingCwd === cwd) {
+          // Update event handlers for new run
+          const ev = options?.events;
+          if (ev) {
+            (this.session as any).config.onText = (text: string) => ev.onText?.(text);
+            (this.session as any).config.onToolCall = (name: string, args: any) => ev.onToolCall?.({ name, args });
+            (this.session as any).config.onToolResult = (name: string, result: string) => ev.onToolResult?.({ toolName: name, result });
+            (this.session as any).config.onError = (message: string) => ev.onError?.(new Error(message));
+          }
+          return this.session;
+        }
+      } catch {
+        // fall through to create new
+      }
+    }
+
+    const ev = options?.events;
     const providers = this.resolveProviders();
     this.router = new ProviderRouter(providers);
 
