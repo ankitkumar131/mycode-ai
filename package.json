@@ -1,8 +1,8 @@
 {
   "name": "@ankitkumar131/mycode-ai",
-  "version": "2.0.3",
+  "version": "3.1.0",
   "private": false,
-  "description": "Multi-provider AI coding agent for the terminal. Like Claude Code, but provider-agnostic with automatic failover.",
+  "description": "Multi-provider AI coding agent for the terminal. Claude Code-powerful by default — token-efficient, Graft code intelligence, AgentMemory, specialized agents, browser automation.",
   "type": "module",
   "bin": {
     "mycode": "./bin/mycode.js"
@@ -44,11 +44,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/mycode.git"
+    "url": "git+https://github.com/ankitkumar131/mycode-ai.git"
   },
-  "homepage": "https://github.com/anomalyco/mycode#readme",
+  "homepage": "https://github.com/ankitkumar131/mycode-ai#readme",
   "bugs": {
-    "url": "https://github.com/anomalyco/mycode/issues"
+    "url": "https://github.com/ankitkumar131/mycode-ai/issues"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -82,7 +82,5 @@
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"
   },
-  "dependencies": {
-    "@ankitkumar131/mycode-ai": "^1.0.10"
-  }
+  "dependencies": {}
 }

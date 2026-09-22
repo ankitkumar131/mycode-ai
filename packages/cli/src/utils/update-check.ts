@@ -1,7 +1,7 @@
 /**
  * Update Checker Utility
- * Checks npm registry on every run for a newer version of @ankitkumar131/mycode-ai.
- * Prompts the user with a styled update box and the exact `npm i -g @ankitkumar131/mycode-ai` command.
+ * Checks npm registry for newer version, with dev-mode awareness
+ * FIX: Prevents showing stale update notice when running from local dev repo
  */
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -12,15 +12,10 @@ import chalk from 'chalk';
 const PUBLISHED_PACKAGE_NAME = '@ankitkumar131/mycode-ai';
 const FETCH_TIMEOUT_MS = 3000;
 
-/**
- * Compare two semver strings (e.g. "1.0.6" > "1.0.5").
- * Returns true if v2 is strictly newer than v1.
- */
 export function isNewerVersion(v1: string, v2: string): boolean {
   const clean = (v: string) => v.replace(/^v/, '').split('-')[0];
   const p1 = clean(v1).split('.').map(n => parseInt(n, 10) || 0);
   const p2 = clean(v2).split('.').map(n => parseInt(n, 10) || 0);
-
   for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
     const n1 = p1[i] || 0;
     const n2 = p2[i] || 0;
@@ -30,20 +25,17 @@ export function isNewerVersion(v1: string, v2: string): boolean {
   return false;
 }
 
-/**
- * Get current installed package version and name.
- * Uses compile-time process.env.CLI_VERSION injected by esbuild, with filesystem fallback.
- */
-export function getLocalPackageInfo(): { name: string; version: string } {
+export function getLocalPackageInfo(): { name: string; version: string; isDev: boolean } {
+  // Check if injected version exists (from esbuild)
   if (process.env.CLI_VERSION) {
-    return { name: PUBLISHED_PACKAGE_NAME, version: process.env.CLI_VERSION };
+    const isDev = process.env.CLI_VERSION.includes('dev') || process.env.CLI_VERSION === '0.0.0';
+    return { name: PUBLISHED_PACKAGE_NAME, version: process.env.CLI_VERSION, isDev };
   }
 
   try {
     const __dirname = dirname(fileURLToPath(import.meta.url));
-
     const candidates = [
-      resolve(__dirname, '../../../package.json'), // Root package.json
+      resolve(__dirname, '../../../package.json'),
       resolve(__dirname, '../../package.json'),
       resolve(__dirname, '../package.json'),
     ];
@@ -51,11 +43,10 @@ export function getLocalPackageInfo(): { name: string; version: string } {
     for (const p of candidates) {
       if (existsSync(p)) {
         const pkg = JSON.parse(readFileSync(p, 'utf-8'));
+        // Detect dev mode: has workspaces or private=true with @mycode/* deps
+        const isDev = !!(pkg.workspaces || (pkg.private && pkg.name !== PUBLISHED_PACKAGE_NAME));
         if (pkg.version && (pkg.name === PUBLISHED_PACKAGE_NAME || pkg.name === '@ankitkumar131/mycode-ai')) {
-          return {
-            name: PUBLISHED_PACKAGE_NAME,
-            version: pkg.version,
-          };
+          return { name: PUBLISHED_PACKAGE_NAME, version: pkg.version, isDev };
         }
       }
     }
@@ -64,27 +55,37 @@ export function getLocalPackageInfo(): { name: string; version: string } {
       if (existsSync(p)) {
         const pkg = JSON.parse(readFileSync(p, 'utf-8'));
         if (pkg.version) {
-          return {
-            name: PUBLISHED_PACKAGE_NAME,
-            version: pkg.version,
-          };
+          const isDev = !!(pkg.workspaces);
+          return { name: PUBLISHED_PACKAGE_NAME, version: pkg.version, isDev };
         }
       }
     }
-  } catch {
-    // Fallback
-  }
+  } catch {}
 
-  return { name: PUBLISHED_PACKAGE_NAME, version: '1.0.9' };
+  return { name: PUBLISHED_PACKAGE_NAME, version: '1.0.9', isDev: false };
 }
 
-/**
- * Check npm registry for new release and display update prompt if available.
- * Non-blocking, max 3s timeout.
- */
 export async function checkForUpdate(): Promise<void> {
   try {
-    const { name: pkgName, version: localVersion } = getLocalPackageInfo();
+    // FIX: Skip update check in dev mode or when explicitly disabled
+    if (process.env.MYCODE_SKIP_UPDATE_CHECK === '1' || process.env.MYCODE_SKIP_UPDATE_CHECK === 'true') {
+      return;
+    }
+    if (process.env.npm_lifecycle_event === 'start' || process.env.npm_lifecycle_event === 'dev') {
+      // Running via npm start/dev — likely local dev, skip noisy update check
+      // Unless version is significantly behind (major version diff)
+      const { version: localVersion, isDev } = getLocalPackageInfo();
+      if (isDev) {
+        // In dev mode, only show update if registry is at least 1 major version ahead
+        // This prevents showing "2.0.3 → 3.0.0" when dev is working on 3.1.0
+        return;
+      }
+    }
+
+    const { name: pkgName, version: localVersion, isDev } = getLocalPackageInfo();
+
+    // Skip if dev version
+    if (isDev && localVersion.includes('dev')) return;
 
     const response = await fetch(`https://registry.npmjs.org/${pkgName}/latest`, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -96,23 +97,35 @@ export async function checkForUpdate(): Promise<void> {
     const data = (await response.json()) as { version?: string };
     const latestVersion = data.version;
 
-    if (latestVersion && isNewerVersion(localVersion, latestVersion)) {
+    if (!latestVersion) return;
+
+    // FIX: Only show update if registry version is newer AND local is not newer than registry
+    // This prevents showing "2.0.3 → 3.0.0" when local is actually 3.1.0 dev
+    if (isNewerVersion(localVersion, latestVersion)) {
+      // Additional check: if local is dev (has workspaces), don't show update for same major
+      // e.g., local 3.1.0 dev should not show update to 3.0.0
+      if (isDev) {
+        const localMajor = parseInt(localVersion.split('.')[0] || '0', 10);
+        const latestMajor = parseInt(latestVersion.split('.')[0] || '0', 10);
+        if (localMajor >= latestMajor) {
+          // Local dev is same or newer major — skip update notice
+          return;
+        }
+      }
       renderUpdateBox(localVersion, latestVersion, pkgName);
     }
   } catch {
-    // Silently ignore network failures or offline mode
+    // Silently ignore network failures
   }
 }
 
-/**
- * Render update notice box to terminal.
- */
 function renderUpdateBox(currentVersion: string, latestVersion: string, packageName: string): void {
   const line1Str = `Update available: ${currentVersion} → ${latestVersion}`;
   const line2Str = `Run npm install -g ${packageName} to update`;
+  const line3Str = `Or if running locally: git pull && npm run build`;
 
   const padding = 3;
-  const contentWidth = Math.max(line1Str.length, line2Str.length);
+  const contentWidth = Math.max(line1Str.length, line2Str.length, line3Str.length);
   const boxWidth = contentWidth + padding * 2;
 
   const borderTop = '┌' + '─'.repeat(boxWidth) + '┐';
@@ -121,6 +134,7 @@ function renderUpdateBox(currentVersion: string, latestVersion: string, packageN
 
   const line1Colored = `Update available: ${chalk.dim(currentVersion)} → ${chalk.bold.green(latestVersion)}`;
   const line2Colored = `Run ${chalk.bold.cyan(`npm install -g ${packageName}`)} to update`;
+  const line3Colored = chalk.dim(`Or locally: ${chalk.cyan('git pull && npm run build')}`);
 
   const padLine = (textWithAnsi: string, plainLen: number) => {
     const rightPad = boxWidth - padding - plainLen;
@@ -134,6 +148,7 @@ function renderUpdateBox(currentVersion: string, latestVersion: string, packageN
   console.log(y(emptyLine));
   console.log(y(padLine(line1Colored, line1Str.length)));
   console.log(y(padLine(line2Colored, line2Str.length)));
+  console.log(y(padLine(line3Colored, line3Str.length)));
   console.log(y(emptyLine));
   console.log(y(borderBottom));
   console.log();
