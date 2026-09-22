@@ -8,6 +8,7 @@ import {
   ProviderServerError,
   AllProvidersExhaustedError,
   NoProvidersConfiguredError,
+  InvalidJsonToolCallError,
 } from '../errors.js';
 import { logger } from '../output/logger.js';
 import type { ProviderConfig, ProviderStats } from './types.js';
@@ -116,14 +117,39 @@ export class ProviderRouter {
   private async attemptWithFailover(providers: BaseProvider[], messages: unknown[], tools?: unknown[], options?: any): Promise<any> {
     const errors: Error[] = [];
     for (const provider of providers) {
-      try {
-        logger.provider(`Using ${provider.name} (${provider.model})`);
-        const result = await provider.chat(messages, tools, options);
-        this._currentIndex = this.providers.indexOf(provider);
-        return result;
-      } catch (err: any) {
-        errors.push(err);
-        this.handleProviderError(provider, err, providers);
+      let retries = 0;
+      const maxRetries = provider.name.includes('openrouter') || provider.name.includes('free') ? 2 : 1;
+      
+      while (retries < maxRetries) {
+        try {
+          if (retries > 0) {
+            logger.provider(`Retrying ${provider.name} (${provider.model}) after Invalid JSON fix (attempt ${retries + 1})`);
+          } else {
+            logger.provider(`Using ${provider.name} (${provider.model})`);
+          }
+          const result = await provider.chat(messages, tools, options);
+          this._currentIndex = this.providers.indexOf(provider);
+          return result;
+        } catch (err: any) {
+          // Invalid JSON in tool args — retry same provider once after injecting correction hint
+          if (err instanceof InvalidJsonToolCallError && retries === 0) {
+            errors.push(err);
+            logger.switchProviders(provider.name, provider.name, 'Invalid JSON in tool args — retrying with forward-slash hint');
+            // Inject correction into messages for retry
+            try {
+              const correctionMsg = {
+                role: 'system',
+                content: 'CRITICAL FIX: Your last tool call had Invalid JSON due to Windows backslashes (e.g. C:\\Users\\...). ALWAYS use forward slashes: C:/Users/... not C:\\Users\\... . Also ensure JSON strings are properly escaped — no unescaped newlines or quotes inside tool args. Retry the same action with forward slashes.',
+              };
+              (messages as any[]).push(correctionMsg);
+            } catch {}
+            retries++;
+            continue;
+          }
+          errors.push(err);
+          this.handleProviderError(provider, err, providers);
+          break;
+        }
       }
     }
     throw new AllProvidersExhaustedError(errors);

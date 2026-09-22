@@ -8,23 +8,60 @@ function fixToolArgsJson(args: string): string {
     JSON.parse(args);
     return args;
   } catch {
-    // Fix unescaped backslashes that are not valid JSON escapes: \d, \D, \space etc -> \\ + char
-    // Valid escapes are: ", \, /, b, f, n, r, t, u
-    let fixed = args.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+    // 1. Fix unescaped backslashes not valid JSON escapes
+    let fixed = args.replace(/\\(?![\"\\/bfnrtu])/g, '\\\\');
     try {
       JSON.parse(fixed);
       return fixed;
-    } catch {
-      // Fallback: convert all backslashes to forward slashes (Windows path fix)
-      const directSlash = args.replace(/\\/g, '/');
-      try {
-        JSON.parse(directSlash);
-        return directSlash;
-      } catch {
-        // Last resort: fix then slash
-        return fixed.replace(/\\/g, '/');
+    } catch {}
+
+    // 2. Convert all backslashes to forward slashes (Windows path fix)
+    const directSlash = args.replace(/\\/g, '/');
+    try {
+      JSON.parse(directSlash);
+      return directSlash;
+    } catch {}
+
+    const fixedSlash = fixed.replace(/\\/g, '/');
+    try {
+      JSON.parse(fixedSlash);
+      return fixedSlash;
+    } catch {}
+
+    // 3. Try to salvage via regex for write_file — extract path, try to reconstruct
+    try {
+      const pathMatch = args.match(/\"path\"\s*:\s*\"([^\"]+)\"/);
+      if (pathMatch) {
+        let pathVal = pathMatch[1].replace(/\\/g, '/');
+        // For content, try to extract and escape minimally
+        const contentIdx = args.indexOf('\"content\"');
+        if (contentIdx !== -1) {
+          let contentPart = args.slice(contentIdx);
+          // Find start of content string
+          const startQuote = contentPart.indexOf('\"', contentPart.indexOf(':') + 1);
+          if (startQuote !== -1) {
+            let contentVal = contentPart.slice(startQuote + 1);
+            // Remove trailing } and maybe trailing quote
+            const lastBrace = contentVal.lastIndexOf('}');
+            if (lastBrace !== -1) contentVal = contentVal.slice(0, lastBrace);
+            // Trim trailing quote/comma
+            contentVal = contentVal.replace(/\"\s*,?\s*$/, '').replace(/\"\s*$/, '');
+            // Escape for JSON
+            contentVal = contentVal
+              .replace(/\\/g, '/')
+              .replace(/\n/g, '\\n')
+              .replace(/\r/g, '\\r')
+              .replace(/\t/g, '\\t')
+              .replace(/\"/g, '\\"')
+              .slice(0, 100000);
+            return `{\"path\": \"${pathVal}\", \"content\": \"${contentVal}\"}`;
+          }
+        }
+        return `{\"path\": \"${pathVal}\"}`;
       }
-    }
+    } catch {}
+
+    return fixedSlash || directSlash || args.replace(/\\/g, '/');
   }
 }
 
@@ -62,21 +99,10 @@ export class OpenAICompatibleProvider extends BaseProvider {
     });
   }
 
-  get name(): string {
-    return this._name;
-  }
-
-  get model(): string {
-    return this._model;
-  }
-
-  get canRead(): boolean {
-    return true;
-  }
-
-  get canWrite(): boolean {
-    return true;
-  }
+  get name(): string { return this._name; }
+  get model(): string { return this._model; }
+  get canRead(): boolean { return true; }
+  get canWrite(): boolean { return true; }
 
   private buildParams(messages: unknown[], tools: unknown[] = [], options: any = {}): any {
     const params: any = {
@@ -85,18 +111,15 @@ export class OpenAICompatibleProvider extends BaseProvider {
       temperature: options.temperature ?? 0.3,
       max_tokens: options.max_tokens ?? 4096,
     };
-
     if (options.top_p !== undefined) params.top_p = options.top_p;
     if (options.seed !== undefined) params.seed = options.seed;
     if (options.reasoning_effort) params.reasoning_effort = options.reasoning_effort;
     if (options.chat_template_kwargs) params.chat_template_kwargs = options.chat_template_kwargs;
     if (options.extra_body) params.extra_body = options.extra_body;
-
     if (tools.length > 0) {
       params.tools = tools;
       params.tool_choice = options.tool_choice ?? 'auto';
     }
-
     return params;
   }
 
@@ -111,10 +134,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       const choice = response.choices[0];
       const rawToolCalls = (choice.message.tool_calls || []).map((tc: any) => ({
         ...tc,
-        function: {
-          ...tc.function,
-          arguments: fixToolArgsJson(tc.function.arguments),
-        },
+        function: { ...tc.function, arguments: fixToolArgsJson(tc.function.arguments) },
       }));
       return {
         content: choice.message.content || '',
@@ -205,21 +225,14 @@ export class OpenAICompatibleProvider extends BaseProvider {
     try {
       const params = this.buildParams(messages, tools, options);
       params.stream = true;
-
       const stream = await this.client.chat.completions.create(params);
       this.recordSuccess();
-
       const toolCallBuffers: Map<number, { id: string; name: string; arguments: string }> = new Map();
-
       for await (const chunk of stream as any) {
         const choice = chunk.choices?.[0];
         if (!choice) continue;
-
         const delta = choice.delta;
-        if (delta?.content) {
-          yield { type: 'text', content: delta.content };
-        }
-
+        if (delta?.content) yield { type: 'text', content: delta.content };
         if (delta?.tool_calls) {
           for (const tc of delta.tool_calls) {
             const idx = tc.index ?? 0;
@@ -233,25 +246,15 @@ export class OpenAICompatibleProvider extends BaseProvider {
             if (tc.function?.arguments) buf.arguments += tc.function.arguments;
           }
         }
-
         if (choice.finish_reason) {
           for (const [, buf] of toolCallBuffers) {
             yield {
               type: 'tool_call',
-              tool_call: {
-                id: buf.id,
-                type: 'function',
-                function: { name: buf.name, arguments: fixToolArgsJson(buf.arguments) },
-              },
+              tool_call: { id: buf.id, type: 'function', function: { name: buf.name, arguments: fixToolArgsJson(buf.arguments) } },
             };
           }
           toolCallBuffers.clear();
-
-          yield {
-            type: 'finish',
-            finish_reason: choice.finish_reason,
-            usage: chunk.usage || {},
-          };
+          yield { type: 'finish', finish_reason: choice.finish_reason, usage: chunk.usage || {} };
         }
       }
     } catch (err: any) {

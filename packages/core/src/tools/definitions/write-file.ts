@@ -13,9 +13,43 @@
 
 import { writeFile, mkdir, readFile, appendFile, rename, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { resolve, dirname, relative, isAbsolute } from 'node:path';
+import { resolve, dirname, relative, isAbsolute, join } from 'node:path';
+import { homedir } from 'node:os';
 import { createTwoFilesPatch } from 'diff';
 import type { ToolModule } from '../types.js';
+
+function expandHomeAndDesktop(p: string): string {
+  let path = p.replace(/\\/g, '/').trim();
+  // Expand ~/
+  if (path.startsWith('~/') || path === '~') {
+    path = join(homedir(), path.slice(2)).replace(/\\/g, '/');
+  }
+  // Expand %USERPROFILE% or $HOME Desktop references
+  if (path.toLowerCase().includes('desktop') && !isAbsolute(path) && !path.startsWith('/') && !path.match(/^[A-Za-z]:\//)) {
+    // If path is like Desktop/file.html or ~/Desktop/file.html already handled, try to resolve to actual desktop
+    if (path.toLowerCase().startsWith('desktop/')) {
+      const desktopCandidates = [
+        join(homedir(), 'Desktop'),
+        join(homedir(), 'OneDrive/Desktop'),
+        join(homedir(), 'OneDrive - Personal/Desktop'),
+      ];
+      for (const cand of desktopCandidates) {
+        try {
+          if (existsSync(cand)) {
+            path = join(cand, path.slice(8)).replace(/\\/g, '/');
+            break;
+          }
+        } catch {}
+      }
+      // Fallback to homedir Desktop even if not exists, it will be created
+      if (path.toLowerCase().startsWith('desktop/')) {
+        path = join(homedir(), path).replace(/\\/g, '/');
+      }
+    }
+  }
+  // Handle C:/Users/.../Desktop - keep as is but normalized
+  return path;
+}
 
 const MAX_FILE_SIZE_WRITE = 2_000_000; // 2MB warning threshold
 const BINARY_EXTENSIONS = new Set(['.exe', '.dll', '.so', '.dylib', '.bin', '.zip', '.tar', '.gz', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.pdf', '.woff', '.woff2']);
@@ -70,11 +104,23 @@ export const writeFileTool: ToolModule = {
 
   async execute(args, cwd, options) {
     let filePath = typeof args.path === 'string' ? args.path : '';
-    filePath = filePath.replace(/\\/g, '/');
+    filePath = expandHomeAndDesktop(filePath);
     const content = typeof args.content === 'string' ? args.content : '';
     const mode = args.mode === 'append' ? 'append' : 'overwrite';
     let batchRaw = typeof args.batch === 'string' ? args.batch : undefined;
-    if (batchRaw) batchRaw = batchRaw.replace(/\\/g, '/');
+    if (batchRaw) {
+      batchRaw = batchRaw.replace(/\\/g, '/');
+      // Expand home in batch too
+      try {
+        const parsed = JSON.parse(batchRaw);
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            if (item.path) item.path = expandHomeAndDesktop(item.path);
+          }
+          batchRaw = JSON.stringify(parsed);
+        }
+      } catch {}
+    }
 
     if (!filePath && !batchRaw) throw new Error('Path is required (or batch JSON)');
 

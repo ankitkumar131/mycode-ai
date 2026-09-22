@@ -74,9 +74,18 @@ export class ToolExecutionError extends Error {
   }
 }
 
+export class InvalidJsonToolCallError extends Error {
+  providerName: string;
+  constructor(providerName: string, message: string) {
+    super(message);
+    this.name = 'InvalidJsonToolCallError';
+    this.providerName = providerName;
+  }
+}
+
 export function classifyError(err: any, providerName: string): Error {
   const status = err.status || err.statusCode || err?.response?.status;
-  const message: string = err.message || '';
+  const message: string = err.message || err.error?.message || err.response?.data?.error?.message || '';
 
   if (status === 429 || message.includes('rate limit') || message.includes('Rate limit')) {
     const retryAfter = err.headers?.['retry-after']
@@ -98,12 +107,28 @@ export function classifyError(err: any, providerName: string): Error {
     return new ContextLengthError(providerName);
   }
 
+  // 410 Gone = model deprecated/removed, treat as server error to skip quickly
+  if (status === 410) {
+    return new ProviderServerError(providerName, status);
+  }
+
+  // Invalid JSON in tool call arguments — retriable with correction, not a provider failure
+  if (
+    message.includes('Invalid JSON in tool call arguments') ||
+    message.includes('invalid_request_error') ||
+    (message.includes('Invalid JSON') && message.includes('tool')) ||
+    (status === 400 && (message.includes('tool') || message.includes('JSON')))
+  ) {
+    return new InvalidJsonToolCallError(providerName, `Invalid JSON in tool call arguments — model generated unescaped backslashes or invalid JSON. Use forward slashes (C:/ not C:\\). Original: ${message.slice(0, 300)}`);
+  }
+
   if (status >= 500 && status < 600) {
     return new ProviderServerError(providerName, status);
   }
 
-  const wrapped = new Error(`Provider "${providerName}" error: ${message}`);
+  const wrapped = new Error(`Provider "${providerName}" error: ${message || err.message || String(err)}`);
   (wrapped as any).providerName = providerName;
   (wrapped as any).originalError = err;
+  (wrapped as any).status = status;
   return wrapped;
 }

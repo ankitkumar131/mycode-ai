@@ -178,7 +178,8 @@ export class SystemPromptBuilder {
 8. Trust tool results: exit 0 = success, don't re-check
 9. Batch terminal calls (&&) to minimize approvals
 10. Token-efficient: use outline mode, codebase_map, memory_recall
-11. CRITICAL Windows: ALWAYS use forward slashes for paths (C:/Users/... not C:\\Users\\...) — backslashes cause Invalid JSON in tool args (\\d \\r etc are invalid escapes). Normalize all paths to / before calling tools.`
+11. CRITICAL Windows: ALWAYS use forward slashes for paths (C:/Users/... not C:\Users\...) — backslashes cause Invalid JSON in tool args (\d \r etc invalid escapes). Normalize ALL paths to / before calling tools. For Desktop use ~/Desktop/ or C:/Users/<name>/Desktop/ with forward slashes. NEVER use backslashes in tool args.
+12. When writing HTML/portfolio: single file, CDN anime.js (https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js), inline CSS/JS.`
     );
 
     for (const s of options.extraSections ?? []) b.addSection(s);
