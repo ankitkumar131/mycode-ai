@@ -105,7 +105,38 @@ export const writeFileTool: ToolModule = {
   async execute(args, cwd, options) {
     let filePath = typeof args.path === 'string' ? args.path : '';
     filePath = expandHomeAndDesktop(filePath);
-    const content = typeof args.content === 'string' ? args.content : '';
+    let content = typeof args.content === 'string' ? args.content : '';
+
+    // Unmangle content if it was double-escaped (e.g. file contains literal \n and \" from previous failed fix)
+    // Detect: content has \n literal but very few real newlines, and has \" literal
+    if (content.includes('\\n') && content.includes('\\"') && !content.includes('\n')) {
+      // Looks mangled — try to unescape
+      try {
+        // Try JSON parse trick: wrap in quotes and parse
+        const unmangled = JSON.parse(`"${content.replace(/"/g, '\\"')}"`);
+        // If unmangled has real newlines and looks like HTML, use it
+        if (unmangled.includes('\n') && unmangled.length > content.length * 0.5) {
+          content = unmangled;
+        }
+      } catch {
+        // Fallback manual unescape
+        content = content
+          .replace(/\\n/g, '\n')
+          .replace(/\\r/g, '\r')
+          .replace(/\\t/g, '\t')
+          .replace(/\\"/g, '"')
+          .replace(/\\'/g, "'")
+          .replace(/\\\//g, '/');
+      }
+    }
+
+    // Also handle case where content has escaped newlines but should have real newlines
+    // If content is HTML and has no newlines but has \n literal, unescape
+    if (content.includes('\\n') && (content.match(/\n/g) || []).length < 3 && content.includes('<html') || content.includes('<!DOCTYPE')) {
+      if (!content.includes('\n') || content.split('\n').length < 5) {
+        content = content.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+      }
+    }
     const mode = args.mode === 'append' ? 'append' : 'overwrite';
     let batchRaw = typeof args.batch === 'string' ? args.batch : undefined;
     if (batchRaw) {

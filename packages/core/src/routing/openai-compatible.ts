@@ -7,62 +7,110 @@ function fixToolArgsJson(args: string): string {
   try {
     JSON.parse(args);
     return args;
-  } catch {
-    // 1. Fix unescaped backslashes not valid JSON escapes
-    let fixed = args.replace(/\\(?![\"\\/bfnrtu])/g, '\\\\');
-    try {
-      JSON.parse(fixed);
-      return fixed;
-    } catch {}
+  } catch {}
 
-    // 2. Convert all backslashes to forward slashes (Windows path fix)
-    const directSlash = args.replace(/\\/g, '/');
-    try {
-      JSON.parse(directSlash);
-      return directSlash;
-    } catch {}
+  // 1. Fix unescaped backslashes not valid JSON escapes: \d, \r etc
+  let fixed = args.replace(/\\(?![\"\\/bfnrtu])/g, '\\\\');
+  try {
+    JSON.parse(fixed);
+    return fixed;
+  } catch {}
 
-    const fixedSlash = fixed.replace(/\\/g, '/');
-    try {
-      JSON.parse(fixedSlash);
-      return fixedSlash;
-    } catch {}
+  // 2. Slash conversion for Windows paths
+  let slash = args.replace(/\\/g, '/');
+  try {
+    JSON.parse(slash);
+    return slash;
+  } catch {}
 
-    // 3. Try to salvage via regex for write_file — extract path, try to reconstruct
-    try {
-      const pathMatch = args.match(/\"path\"\s*:\s*\"([^\"]+)\"/);
-      if (pathMatch) {
-        let pathVal = pathMatch[1].replace(/\\/g, '/');
-        // For content, try to extract and escape minimally
-        const contentIdx = args.indexOf('\"content\"');
-        if (contentIdx !== -1) {
-          let contentPart = args.slice(contentIdx);
-          // Find start of content string
-          const startQuote = contentPart.indexOf('\"', contentPart.indexOf(':') + 1);
-          if (startQuote !== -1) {
-            let contentVal = contentPart.slice(startQuote + 1);
-            // Remove trailing } and maybe trailing quote
-            const lastBrace = contentVal.lastIndexOf('}');
-            if (lastBrace !== -1) contentVal = contentVal.slice(0, lastBrace);
-            // Trim trailing quote/comma
-            contentVal = contentVal.replace(/\"\s*,?\s*$/, '').replace(/\"\s*$/, '');
-            // Escape for JSON
-            contentVal = contentVal
-              .replace(/\\/g, '/')
-              .replace(/\n/g, '\\n')
-              .replace(/\r/g, '\\r')
-              .replace(/\t/g, '\\t')
-              .replace(/\"/g, '\\"')
-              .slice(0, 100000);
-            return `{\"path\": \"${pathVal}\", \"content\": \"${contentVal}\"}`;
+  let fixedSlash = fixed.replace(/\\/g, '/');
+  try {
+    JSON.parse(fixedSlash);
+    return fixedSlash;
+  } catch {}
+
+  // 3. Robust extraction for write_file / read_file etc — handle literal newlines and unescaped quotes
+  function extractStringValue(json: string, key: string): string | null {
+    const keyPattern = `"${key}"`;
+    const idx = json.indexOf(keyPattern);
+    if (idx === -1) return null;
+    let colonIdx = json.indexOf(':', idx + keyPattern.length);
+    if (colonIdx === -1) return null;
+    let start = colonIdx + 1;
+    while (start < json.length && /\s/.test(json[start])) start++;
+    if (json[start] !== '"') return null;
+    start++;
+    let result = '';
+    let i = start;
+    while (i < json.length) {
+      const ch = json[i];
+      if (ch === '\\') {
+        if (i + 1 < json.length) {
+          const next = json[i + 1];
+          if (next === 'n') { result += '\n'; i += 2; continue; }
+          if (next === 'r') { result += '\r'; i += 2; continue; }
+          if (next === 't') { result += '\t'; i += 2; continue; }
+          if (next === '"' || next === '\\' || next === '/') { result += next; i += 2; continue; }
+          if (next === 'u') {
+            // unicode escape \uXXXX
+            const hex = json.slice(i + 2, i + 6);
+            if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+              result += String.fromCharCode(parseInt(hex, 16));
+              i += 6;
+              continue;
+            }
           }
+          // Unknown escape like \d — treat as literal \ + char
+          result += '\\' + next;
+          i += 2;
+          continue;
         }
-        return `{\"path\": \"${pathVal}\"}`;
       }
-    } catch {}
-
-    return fixedSlash || directSlash || args.replace(/\\/g, '/');
+      if (ch === '"') {
+        let j = i + 1;
+        while (j < json.length && /\s/.test(json[j])) j++;
+        if (j >= json.length || json[j] === ',' || json[j] === '}' || json[j] === ']') {
+          break;
+        }
+        // Unescaped quote inside content — treat as literal
+        result += ch;
+        i++;
+        continue;
+      }
+      result += ch;
+      i++;
+    }
+    return result;
   }
+
+  try {
+    const pathVal = extractStringValue(args, 'path') || extractStringValue(fixed, 'path') || extractStringValue(slash, 'path');
+    if (pathVal) {
+      const fixedPath = pathVal.replace(/\\/g, '/');
+      const contentVal = extractStringValue(args, 'content') || extractStringValue(fixed, 'content') || extractStringValue(slash, 'content');
+      if (contentVal !== null) {
+        return JSON.stringify({ path: fixedPath, content: contentVal });
+      } else {
+        // For other tools, try to reconstruct with path only and preserve other fields if possible
+        // Try to extract common fields
+        const result: any = { path: fixedPath };
+        // Try to extract other simple string fields
+        for (const key of ['old_string', 'new_string', 'pattern', 'query', 'url']) {
+          const val = extractStringValue(args, key);
+          if (val) result[key] = val;
+        }
+        // If we have at least path, return it; otherwise try full slash version
+        if (Object.keys(result).length > 1 || contentVal === null) {
+          // If content was null but we have path, return path only — better than failing
+          // But try to include content if we can find it via alternative method
+          return JSON.stringify(result);
+        }
+        return JSON.stringify({ path: fixedPath });
+      }
+    }
+  } catch {}
+
+  return fixedSlash || slash || args.replace(/\\/g, '/');
 }
 
 export class OpenAICompatibleProvider extends BaseProvider {
