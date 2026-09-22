@@ -177,7 +177,8 @@ export class SystemPromptBuilder {
 7. Long tasks: todo_write plan→execute→verify
 8. Trust tool results: exit 0 = success, don't re-check
 9. Batch terminal calls (&&) to minimize approvals
-10. Token-efficient: use outline mode, codebase_map, memory_recall`
+10. Token-efficient: use outline mode, codebase_map, memory_recall
+11. CRITICAL Windows: ALWAYS use forward slashes for paths (C:/Users/... not C:\\Users\\...) — backslashes cause Invalid JSON in tool args (\\d \\r etc are invalid escapes). Normalize all paths to / before calling tools.`
     );
 
     for (const s of options.extraSections ?? []) b.addSection(s);

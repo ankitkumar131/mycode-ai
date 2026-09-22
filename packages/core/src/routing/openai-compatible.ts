@@ -2,6 +2,32 @@ import OpenAI from 'openai';
 import { BaseProvider } from './base-provider.js';
 import { classifyError } from '../errors.js';
 
+function fixToolArgsJson(args: string): string {
+  if (!args || args.trim() === '' || args.trim() === '{}') return args;
+  try {
+    JSON.parse(args);
+    return args;
+  } catch {
+    // Fix unescaped backslashes that are not valid JSON escapes: \d, \D, \space etc -> \\ + char
+    // Valid escapes are: ", \, /, b, f, n, r, t, u
+    let fixed = args.replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+    try {
+      JSON.parse(fixed);
+      return fixed;
+    } catch {
+      // Fallback: convert all backslashes to forward slashes (Windows path fix)
+      const directSlash = args.replace(/\\/g, '/');
+      try {
+        JSON.parse(directSlash);
+        return directSlash;
+      } catch {
+        // Last resort: fix then slash
+        return fixed.replace(/\\/g, '/');
+      }
+    }
+  }
+}
+
 export class OpenAICompatibleProvider extends BaseProvider {
   private client: OpenAI;
   private _name: string;
@@ -75,8 +101,6 @@ export class OpenAICompatibleProvider extends BaseProvider {
   }
 
   async chat(messages: unknown[], tools: unknown[] = [], options: any = {}): Promise<any> {
-    // When a stream callback is supplied, stream tokens live and assemble the
-    // final response (text + tool calls + usage) — this is what the CLI uses.
     if (typeof options.onStream === 'function' || typeof options.onReasoning === 'function') {
       return this.chatStreaming(messages, tools, options);
     }
@@ -85,7 +109,13 @@ export class OpenAICompatibleProvider extends BaseProvider {
       const response = await this.client.chat.completions.create(params, { signal: options.abortSignal });
       this.recordSuccess();
       const choice = response.choices[0];
-      const rawToolCalls = choice.message.tool_calls || [];
+      const rawToolCalls = (choice.message.tool_calls || []).map((tc: any) => ({
+        ...tc,
+        function: {
+          ...tc.function,
+          arguments: fixToolArgsJson(tc.function.arguments),
+        },
+      }));
       return {
         content: choice.message.content || '',
         reasoning: (choice.message as any).reasoning_content || (choice.message as any).reasoning || '',
@@ -116,7 +146,6 @@ export class OpenAICompatibleProvider extends BaseProvider {
       try {
         stream = await this.client.chat.completions.create(params, { signal: options.abortSignal });
       } catch (err: any) {
-        // Some servers reject stream_options — retry without it once.
         if (/stream_options/i.test(err?.message ?? '')) {
           delete params.stream_options;
           stream = await this.client.chat.completions.create(params, { signal: options.abortSignal });
@@ -162,7 +191,11 @@ export class OpenAICompatibleProvider extends BaseProvider {
 
     const toolCalls = Array.from(toolCallBuffers.entries())
       .sort((a, b) => a[0] - b[0])
-      .map(([i, b]) => ({ id: b.id || `call_${i}`, type: 'function', function: { name: b.name, arguments: b.arguments || '{}' } }))
+      .map(([i, b]) => ({
+        id: b.id || `call_${i}`,
+        type: 'function',
+        function: { name: b.name, arguments: fixToolArgsJson(b.arguments || '{}') },
+      }))
       .filter(t => t.function.name);
 
     return { content, reasoning, toolCalls, usage, finish_reason };
@@ -208,7 +241,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
               tool_call: {
                 id: buf.id,
                 type: 'function',
-                function: { name: buf.name, arguments: buf.arguments },
+                function: { name: buf.name, arguments: fixToolArgsJson(buf.arguments) },
               },
             };
           }

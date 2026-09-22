@@ -54,11 +54,11 @@ export const writeFileTool: ToolModule = {
     type: 'function',
     function: {
       name: 'write_file',
-      description: 'Create or overwrite file atomically. Parent dirs auto-created. Diff preview for overwrites. Token-efficient. For small changes prefer patch tool. Supports append mode and batch writes.',
+      description: 'Create or overwrite file atomically. Parent dirs auto-created. Diff preview for overwrites. Token-efficient. For small changes prefer patch tool. Supports append mode and batch writes. USE FORWARD SLASHES even on Windows.',
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Absolute or relative path to file' },
+          path: { type: 'string', description: 'Absolute or relative path to file - USE FORWARD SLASHES even on Windows' },
           content: { type: 'string', description: 'Full content to write' },
           mode: { type: 'string', enum: ['overwrite', 'append'], description: 'overwrite (default) or append' },
           batch: { type: 'string', description: 'Optional JSON array of {path, content} for batch writes (atomic per file, efficient)' },
@@ -69,10 +69,12 @@ export const writeFileTool: ToolModule = {
   },
 
   async execute(args, cwd, options) {
-    const filePath = typeof args.path === 'string' ? args.path : '';
+    let filePath = typeof args.path === 'string' ? args.path : '';
+    filePath = filePath.replace(/\\/g, '/');
     const content = typeof args.content === 'string' ? args.content : '';
     const mode = args.mode === 'append' ? 'append' : 'overwrite';
-    const batchRaw = typeof args.batch === 'string' ? args.batch : undefined;
+    let batchRaw = typeof args.batch === 'string' ? args.batch : undefined;
+    if (batchRaw) batchRaw = batchRaw.replace(/\\/g, '/');
 
     if (!filePath && !batchRaw) throw new Error('Path is required (or batch JSON)');
 

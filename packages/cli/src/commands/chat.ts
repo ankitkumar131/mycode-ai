@@ -397,6 +397,11 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         console.log(`  ${chalk.hex(theme.amber)('↪')} ${chalk.hex(theme.dim)('steering note queued')}`);
         return;
       }
+      // Prevent queuing same failed prompt
+      if (lastFailedPrompt && t === lastFailedPrompt && Date.now() - lastFailTime < 10000) {
+        console.log(`  ${chalk.hex(theme.dim)('[Skipped — same prompt failed, not queuing]')}`);
+        return;
+      }
       session.queuePrompt(t);
       console.log(`  ${chalk.hex(theme.amber)('⏳')} ${chalk.hex(theme.dim)(`queued for next turn (${session.queuedCount} pending) — Ctrl+C to interrupt now`)}`);
     },
@@ -431,17 +436,29 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
 
   // ─── Agent turn ─────────────────────────────────────────────────────────
 
-  // FIX: Prevent double execution — track last prompt and dedup
+  // FIX: Prevent double execution + provider failure loop — track last prompt, failed prompt, dedup
   let lastPrompt = '';
   let lastPromptTime = 0;
+  let lastFailedPrompt: string | null = null;
+  let lastFailTime = 0;
   let isProcessing = false;
 
   const sendPrompt = async (prompt: string, opts: { display?: string } = {}): Promise<void> => {
+    // Block re-execution of failed prompt within 10s (prevents loop after All providers failed)
+    if (lastFailedPrompt && prompt === lastFailedPrompt && Date.now() - lastFailTime < 10000) {
+      console.log(`  ${chalk.hex(theme.dim)('[Skipped — same prompt failed recently, not re-executing to avoid loop. Try /model or different prompt]')}`);
+      return;
+    }
+
     // Guard against concurrent sendPrompt calls (double execution)
     if (isProcessing) {
       const now = Date.now();
       if (prompt === lastPrompt && now - lastPromptTime < 2000) {
         console.log(`  ${chalk.hex(theme.dim)('[Skipped duplicate prompt — already processing]')}`);
+        return;
+      }
+      if (lastFailedPrompt && prompt === lastFailedPrompt && now - lastFailTime < 10000) {
+        console.log(`  ${chalk.hex(theme.dim)('[Skipped — same prompt failed, not queuing]')}`);
         return;
       }
       // Queue instead of double-executing
@@ -497,6 +514,10 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         currentSpinner.fail(S.error(err.message));
         currentSpinner = null;
       } else console.log(`\n  ${S.error(ICONS.cross)} ${err.message}`);
+      if (err.message?.includes('All providers failed')) {
+        lastFailedPrompt = prompt;
+        lastFailTime = Date.now();
+      }
     } finally {
       isStreaming = false;
       reasoningShown = false;
@@ -504,14 +525,42 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       textArea!.setBusy(false);
       isProcessing = false;
       autosave();
+
+      // Check if session returned All providers failed error — clear queue to prevent loop
+      try {
+        const msgs = session.getContext().getMessages();
+        const lastMsg = msgs[msgs.length - 1];
+        if (lastMsg?.content?.includes('All providers failed') || lastMsg?.content?.includes('No providers configured')) {
+          lastFailedPrompt = prompt;
+          lastFailTime = Date.now();
+          // Clear duplicate failed prompts from queue
+          let nextCheck: string | undefined;
+          while ((nextCheck = session.dequeuePrompt())) {
+            if (nextCheck === lastFailedPrompt) {
+              console.log(`  ${chalk.hex(theme.dim)('[Cleared duplicate failed prompt from queue to prevent loop]')}`);
+              continue;
+            } else {
+              // Put back non-failed prompt
+              session.queuePrompt(nextCheck);
+              break;
+            }
+          }
+          // Don't drain queue if last run failed — prevents auto re-execution loop
+          if (session.getContext().getMessages().slice(-1)[0]?.content?.includes('All providers failed')) {
+            return;
+          }
+        }
+      } catch {}
     }
 
-    // Drain queued prompts — with dedup guard
+    // Drain queued prompts — with dedup guard and failed prompt guard
     const next = session.dequeuePrompt();
     if (next) {
       // Skip if next is same as just processed (double-queue protection)
       if (next === lastPrompt && Date.now() - lastPromptTime < 3000) {
         console.log(`  ${chalk.hex(theme.dim)('[Skipped duplicate queued prompt]')}`);
+      } else if (lastFailedPrompt && next === lastFailedPrompt && Date.now() - lastFailTime < 10000) {
+        console.log(`  ${chalk.hex(theme.dim)('[Skipped queued prompt that just failed — preventing loop]')}`);
       } else {
         console.log(`  ${chalk.hex(theme.amber)('▶')} ${chalk.hex(theme.dim)('queued:')} ${next.slice(0, 100)}`);
         await dispatch(next);
@@ -597,6 +646,11 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       // Extra guard: skip if same as last prompt within 1s (TextArea double-Enter)
       if (input === lastPrompt && Date.now() - lastPromptTime < 1000) {
         console.log(`  ${chalk.hex(theme.dim)('[Skipped duplicate input — double Enter protection]')}`);
+        continue;
+      }
+      // Block re-execution of failed prompt within 10s
+      if (lastFailedPrompt && input === lastFailedPrompt && Date.now() - lastFailTime < 10000) {
+        console.log(`  ${chalk.hex(theme.dim)('[Skipped — same prompt failed recently. Try /model or different prompt]')}`);
         continue;
       }
       const r = await dispatch(input);

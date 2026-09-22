@@ -17,11 +17,11 @@ export const readDocumentTool: ToolModule = {
     function: {
       name: 'read_document',
       description:
-        'Extract text from documents: PDF (.pdf), Word (.docx/.doc), Excel (.xlsx/.xls/.csv/.tsv), PowerPoint (.pptx/.ppt), OpenDocument (.odt/.ods/.odp), EPUB, RTF, HTML and Jupyter notebooks. Returns page/slide/sheet-labelled text. Supports paging via page/offset. NEVER write scripts to parse documents — use this tool.',
+        'Extract text from documents: PDF (.pdf), Word (.docx/.doc), Excel (.xlsx/.xls/.csv/.tsv), PowerPoint (.pptx/.ppt), OpenDocument (.odt/.ods/.odp), EPUB, RTF, HTML and Jupyter notebooks. Returns page/slide/sheet-labelled text. Supports paging via page/offset. NEVER write scripts to parse documents — use this tool. USE FORWARD SLASHES even on Windows.',
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Path to the document file' },
+          path: { type: 'string', description: 'Path to the document file - USE FORWARD SLASHES even on Windows' },
           page: { type: 'number', description: 'Return only this 1-based page/slide/sheet' },
           offset: { type: 'number', description: 'Character offset to start from (for long documents)' },
           maxChars: { type: 'number', description: 'Maximum characters to return (default 100000)' },
@@ -32,8 +32,9 @@ export const readDocumentTool: ToolModule = {
   },
 
   async execute(args, cwd) {
-    const pathArg = typeof args.path === 'string' ? args.path : '';
+    let pathArg = typeof args.path === 'string' ? args.path : '';
     if (!pathArg) throw new Error('Path is required');
+    pathArg = pathArg.replace(/\\/g, '/');
 
     const filePath = resolve(cwd, pathArg);
     if (!existsSync(filePath)) throw new Error(`File not found: ${pathArg}`);

@@ -8,13 +8,13 @@ export const listDirTool: ToolModule = {
     type: 'function',
     function: {
       name: 'list_dir',
-      description: 'List files and directories in a given path',
+      description: 'List files and directories in a given path. USE FORWARD SLASHES even on Windows.',
       parameters: {
         type: 'object',
         properties: {
           path: {
             type: 'string',
-            description: 'Absolute or relative path to the directory',
+            description: 'Absolute or relative path to the directory - USE FORWARD SLASHES even on Windows',
           },
           maxDepth: {
             type: 'number',
@@ -35,7 +35,8 @@ export const listDirTool: ToolModule = {
   },
 
   async execute(args, cwd) {
-    const dirPath = typeof args.path === 'string' ? args.path : '.';
+    let dirPath = typeof args.path === 'string' ? args.path : '.';
+    dirPath = dirPath.replace(/\\/g, '/');
     const maxDepth = typeof args.maxDepth === 'number' ? args.maxDepth : 1;
     const showHidden = args.showHidden === true;
     const pattern = typeof args.pattern === 'string' ? args.pattern : undefined;

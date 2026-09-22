@@ -115,11 +115,11 @@ export const editFileTool: ToolModule = {
     function: {
       name: 'patch',
       description:
-        'Edit an existing file by replacing an exact block of text (old_string) with new_string. Include 3+ lines of surrounding context so the match is unique. Matching tolerates indentation/whitespace differences. Prefer this over write_file for modifying existing files.',
+        'Edit an existing file by replacing an exact block of text (old_string) with new_string. Include 3+ lines of surrounding context so the match is unique. Matching tolerates indentation/whitespace differences. Prefer this over write_file for modifying existing files. USE FORWARD SLASHES even on Windows.',
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Path to the file' },
+          path: { type: 'string', description: 'Path to the file - USE FORWARD SLASHES even on Windows' },
           old_string: { type: 'string', description: 'Exact text to find (must be unique unless replace_all=true). Empty string with create_if_missing=true creates a new file.' },
           new_string: { type: 'string', description: 'Replacement text' },
           replace_all: { type: 'boolean', description: 'Replace every occurrence (default false)' },
@@ -135,7 +135,8 @@ export const editFileTool: ToolModule = {
   },
 
   async execute(args, cwd, options) {
-    const filePath = typeof args.path === 'string' ? args.path : '';
+    let filePath = typeof args.path === 'string' ? args.path : '';
+    filePath = filePath.replace(/\\/g, '/');
     const oldString = String(args.old_string ?? args.oldString ?? '');
     const newString = String(args.new_string ?? args.newString ?? '');
     const createIfMissing = args.create_if_missing === true || args.createIfMissing === true;

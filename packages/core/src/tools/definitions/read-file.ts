@@ -141,13 +141,13 @@ export const readFileTool: ToolModule = {
     type: 'function',
     function: {
       name: 'read_file',
-      description: `Read file with token-efficient, Claude Code style. Default 100 lines. Use offset/limit for pagination. For large files, returns outline + first chunk. Supports code files, docs, PDFs. Always search before reading large files.`,
+      description: `Read file with token-efficient, Claude Code style. Default 100 lines. Use offset/limit for pagination. For large files, returns outline + first chunk. Supports code files, docs, PDFs. Always search before reading large files. USE FORWARD SLASHES even on Windows (e.g. C:/Users/... not C:\\Users\\...).`,
       parameters: {
         type: 'object',
         properties: {
           path: {
             type: 'string',
-            description: 'Absolute or relative path to file',
+            description: 'Absolute or relative path to file - USE FORWARD SLASHES even on Windows',
           },
           offset: {
             type: 'number',
@@ -169,13 +169,15 @@ export const readFileTool: ToolModule = {
   },
 
   async execute(args, cwd, options) {
-    const filePath = typeof args.path === 'string' ? args.path : '';
+    let filePath = typeof args.path === 'string' ? args.path : '';
     const offset = typeof args.offset === 'number' ? Math.max(1, Math.floor(args.offset)) : 1;
     const limit = typeof args.limit === 'number' ? Math.min(MAX_LINE_LIMIT, Math.max(1, Math.floor(args.limit))) : DEFAULT_LINE_LIMIT;
     const mode = typeof args.mode === 'string' ? args.mode : 'content';
 
     if (!filePath) throw new Error('Path is required');
 
+    // Normalize Windows backslashes to forward slashes to prevent Invalid JSON and dedup issues
+    filePath = filePath.replace(/\\/g, '/');
     const resolvedPath = resolve(cwd, filePath);
     const ext = extname(resolvedPath).toLowerCase();
 
