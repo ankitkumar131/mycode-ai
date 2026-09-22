@@ -1006,8 +1006,19 @@ export class TextArea {
 
   // ─── Commit / region handling ────────────────────────────────────────────
 
+  private lastCommitText = '';
+  private lastCommitTime = 0;
+
   private commit(submit: CommitSubmit): void {
     if (this.closed) return;
+    // FIX: Prevent double commit (double Enter) — same text within 1s
+    const text = submit.kind === 'text' ? submit.text : submit.name;
+    const now = Date.now();
+    if (text === this.lastCommitText && now - this.lastCommitTime < 1000) {
+      return; // Skip duplicate commit
+    }
+    this.lastCommitText = text;
+    this.lastCommitTime = now;
     this.renderChain = this.renderChain.then(() => this.doCommit(submit)).catch(() => {});
   }
 

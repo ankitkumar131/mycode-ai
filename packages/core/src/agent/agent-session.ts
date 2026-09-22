@@ -72,7 +72,30 @@ export class AgentSession {
 
   // ─── Public API ───────────────────────────────────────────────────────────
 
+  private _lastInputHash = '';
+  private _lastInputTime = 0;
+
   async run(input: string): Promise<string> {
+    // FIX: Prevent double execution — guard against concurrent runs and duplicate prompts
+    if (this._running) {
+      // If already running, queue this prompt instead of running twice
+      const isDuplicate = input === this._lastUserInput && Date.now() - this._lastInputTime < 3000;
+      if (isDuplicate) {
+        return `[Skipped duplicate prompt — already processing: "${input.slice(0, 50)}..."]`;
+      }
+      this.queuePrompt(input);
+      return `[Already processing — queued for next turn (${this.queuedCount} pending): "${input.slice(0, 50)}..."]`;
+    }
+
+    // FIX: Prevent same prompt processed twice within 2 seconds (double-enter protection)
+    const inputHash = `${input.length}:${input.slice(0, 100)}`;
+    const now = Date.now();
+    if (inputHash === this._lastInputHash && now - this._lastInputTime < 2000) {
+      return `[Skipped duplicate prompt within 2s — likely double-enter: "${input.slice(0, 50)}..."]`;
+    }
+    this._lastInputHash = inputHash;
+    this._lastInputTime = now;
+
     this._running = true;
     this._iterations = 0;
     this._aborted = false;
@@ -88,7 +111,7 @@ export class AgentSession {
       await this.ensureSystemPrompt(cwd);
       this.flushPendingSystemSections();
 
-      // AgentMemory-inspired: inject relevant memories at session start (first turn)
+      // AgentMemory-inspired: inject relevant memories at session start (first turn) — only once
       if (this._usage.turns === 0) {
         try {
           const { memoryManager } = await import('../memory/memory-manager.js');
@@ -104,18 +127,19 @@ export class AgentSession {
               this.context.addSystem(`Memory context (auto-injected, token-budgeted):\n${memContext}`);
             }
           }
-          // Graft-inspired: codebase map quick injection for first turn
+          // Graft-inspired: hint only once
           if (input.length > 20) {
-            try {
-              const { codebaseMapTool } = await import('../tools/definitions/code-intelligence.js');
-              // Don't block, just hint that codebase_map is available
-              this.context.addSystem('Hint: Use codebase_map tool FIRST for architecture questions — reduces 46% tool calls. Use codebase_search for symbol lookup.');
-            } catch {}
+            this.context.addSystem('Hint: Use codebase_map tool FIRST for architecture questions — reduces 46% tool calls. Use codebase_search for symbol lookup.');
           }
         } catch {}
       }
 
-      this.context.addUser(input);
+      // FIX: addUser now returns boolean — false if duplicate detected
+      const added = this.context.addUser(input);
+      if (!added) {
+        this._running = false;
+        return `[Skipped duplicate prompt — already in history: "${input.slice(0, 50)}..."]`;
+      }
       this._lastUserInput = input;
       this._usage.turns++;
       let finalText = '';

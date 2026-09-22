@@ -1,10 +1,11 @@
 // Claude Code style: token efficient, aggressive truncation, smart history
+// FIX: Removed aggressive file read dedup that caused model to retry and waste tokens
 const DEFAULT_MAX_TOKENS = 128_000;
 const TOKEN_ESTIMATE_RATIO = 4;
-const RESERVED_TOKENS = 6000; // More reserved for response
-const MAX_TOOL_RESULT_CHARS = 4000; // Reduced from 8000 - Claude Code style aggressive
-const MAX_TOOL_ARG_CHARS = 2000; // Reduced from 4000
-const MAX_TOOL_RESULT_LINES = 100; // New: line-based limit
+const RESERVED_TOKENS = 6000;
+const MAX_TOOL_RESULT_CHARS = 4000;
+const MAX_TOOL_ARG_CHARS = 2000;
+const MAX_TOOL_RESULT_LINES = 100;
 
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -24,7 +25,8 @@ export interface Message {
 export class ConversationContext {
   private messages: Message[] = [];
   private _maxTokens: number;
-  private _fileReadCache = new Map<string, string>(); // Deduplicate file reads
+  private _recentUserHashes = new Map<string, number>(); // Prevent duplicate prompts
+  private _lastUserContent = '';
 
   constructor(maxTokens = DEFAULT_MAX_TOKENS) {
     this._maxTokens = maxTokens;
@@ -66,8 +68,41 @@ export class ConversationContext {
     return out;
   }
 
-  addUser(content: string): void {
+  addUser(content: string): boolean {
+    // Prevent duplicate prompt within 2 seconds (double-enter protection)
+    const hash = this.simpleHash(content);
+    const now = Date.now();
+    const lastSeen = this._recentUserHashes.get(hash);
+    
+    // Cleanup old hashes (older than 5s)
+    for (const [h, ts] of this._recentUserHashes) {
+      if (now - ts > 5000) this._recentUserHashes.delete(h);
+    }
+    
+    if (lastSeen && now - lastSeen < 2000) {
+      // Same prompt within 2s — likely double-enter, skip
+      return false;
+    }
+    
+    // Also check if last user message is identical (immediate duplicate)
+    if (this._lastUserContent === content && this.messages.length > 0) {
+      const lastMsg = this.messages[this.messages.length - 1];
+      // If last message is user with same content, skip
+      if (lastMsg.role === 'user' && lastMsg.content === content) {
+        return false;
+      }
+      // If we just had user->assistant->... and user repeats same, check timing
+      const recentUserMsgs = this.messages.filter(m => m.role === 'user').slice(-2);
+      if (recentUserMsgs.length > 0 && recentUserMsgs[recentUserMsgs.length - 1].content === content) {
+        // Check if last assistant response was recent (< 3s ago) — might be accidental double send
+        // We still allow it but log
+      }
+    }
+    
+    this._recentUserHashes.set(hash, now);
+    this._lastUserContent = content;
     this.messages.push({ role: 'user', content });
+    return true;
   }
 
   addAssistant(content: string): void {
@@ -90,7 +125,6 @@ export class ConversationContext {
       if (argsStr.length > MAX_TOOL_ARG_CHARS) {
         try {
           const parsed = JSON.parse(argsStr);
-          // Truncate large content fields aggressively - Claude Code style
           if (typeof parsed.content === 'string' && parsed.content.length > 500) {
             const origLen = parsed.content.length;
             parsed.content = parsed.content.slice(0, 300) + `\n...[${origLen - 600} chars truncated]...\n` + parsed.content.slice(-300);
@@ -125,21 +159,10 @@ export class ConversationContext {
   addToolResult(toolCallId: string, rawContent: string, name?: string): void {
     let content = rawContent;
 
-    // Deduplicate file reads - if same file content already in history, reference it
-    if (name === 'read_file' && content.length > 500) {
-      const hash = this.simpleHash(content);
-      if (this._fileReadCache.has(hash)) {
-        content = `[File content previously read — see earlier read_file result for ${hash.slice(0, 8)}]`;
-      } else {
-        this._fileReadCache.set(hash, content.slice(0, 100));
-        if (this._fileReadCache.size > 50) {
-          const firstKey = this._fileReadCache.keys().next().value;
-          if (firstKey) this._fileReadCache.delete(firstKey);
-        }
-      }
-    }
+    // FIX: Removed aggressive file read dedup that caused model to retry
+    // Old code replaced duplicate file reads with reference message, causing model to re-read and waste tokens
+    // Now we just truncate, keeping actual content
 
-    // Aggressive truncation - Claude Code style
     if (content.length > MAX_TOOL_RESULT_CHARS) {
       const lines = content.split('\n');
       if (lines.length > MAX_TOOL_RESULT_LINES) {
@@ -195,14 +218,12 @@ export class ConversationContext {
   }
 
   trimToLimit(): number {
-    // Keep system + last 2 turns verbatim, compress middle
     while (this.estimateTokens() > this._maxTokens - RESERVED_TOKENS && this.messages.length > 4) {
       const systemMsgs = this.messages.filter(m => m.role === 'system');
       const nonSystem = this.messages.filter(m => m.role !== 'system');
       
       if (nonSystem.length <= 4) break;
       
-      // Remove oldest non-system messages (2 at a time: user + assistant)
       const toRemove = Math.min(2, nonSystem.length - 4);
       let removed = 0;
       const newMessages: Message[] = [...systemMsgs];
@@ -218,7 +239,6 @@ export class ConversationContext {
       
       this.messages = newMessages;
       
-      // If still over, force truncate oldest tool results
       if (this.estimateTokens() > this._maxTokens - RESERVED_TOKENS) {
         for (let i = systemMsgs.length; i < this.messages.length; i++) {
           if (this.messages[i].role === 'tool' && this.messages[i].content.length > 500) {
@@ -241,7 +261,8 @@ export class ConversationContext {
 
   clear(): void {
     this.messages = [];
-    this._fileReadCache.clear();
+    this._recentUserHashes.clear();
+    this._lastUserContent = '';
   }
 
   get length(): number {

@@ -431,7 +431,35 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
 
   // ─── Agent turn ─────────────────────────────────────────────────────────
 
+  // FIX: Prevent double execution — track last prompt and dedup
+  let lastPrompt = '';
+  let lastPromptTime = 0;
+  let isProcessing = false;
+
   const sendPrompt = async (prompt: string, opts: { display?: string } = {}): Promise<void> => {
+    // Guard against concurrent sendPrompt calls (double execution)
+    if (isProcessing) {
+      const now = Date.now();
+      if (prompt === lastPrompt && now - lastPromptTime < 2000) {
+        console.log(`  ${chalk.hex(theme.dim)('[Skipped duplicate prompt — already processing]')}`);
+        return;
+      }
+      // Queue instead of double-executing
+      session.queuePrompt(prompt);
+      console.log(`  ${chalk.hex(theme.amber)('⏳')} ${chalk.hex(theme.dim)(`already processing — queued (${session.queuedCount} pending)`)}`);
+      return;
+    }
+
+    // Dedup same prompt within 2s
+    const now = Date.now();
+    if (prompt === lastPrompt && now - lastPromptTime < 2000) {
+      console.log(`  ${chalk.hex(theme.dim)('[Skipped duplicate prompt within 2s]')}`);
+      return;
+    }
+    lastPrompt = prompt;
+    lastPromptTime = now;
+    isProcessing = true;
+
     textArea!.setBusy(true);
     isStreaming = false;
     reasoningShown = false;
@@ -474,14 +502,20 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       reasoningShown = false;
       streamBuffer = '';
       textArea!.setBusy(false);
+      isProcessing = false;
       autosave();
     }
 
-    // Drain queued prompts
+    // Drain queued prompts — with dedup guard
     const next = session.dequeuePrompt();
     if (next) {
-      console.log(`  ${chalk.hex(theme.amber)('▶')} ${chalk.hex(theme.dim)('queued:')} ${next.slice(0, 100)}`);
-      await dispatch(next);
+      // Skip if next is same as just processed (double-queue protection)
+      if (next === lastPrompt && Date.now() - lastPromptTime < 3000) {
+        console.log(`  ${chalk.hex(theme.dim)('[Skipped duplicate queued prompt]')}`);
+      } else {
+        console.log(`  ${chalk.hex(theme.amber)('▶')} ${chalk.hex(theme.dim)('queued:')} ${next.slice(0, 100)}`);
+        await dispatch(next);
+      }
     }
   };
 
@@ -560,6 +594,11 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       if (!submit || submit.kind === 'exit') break;
       const input = submit.kind === 'slash' ? submit.name : submit.text.trim();
       if (!input) continue;
+      // Extra guard: skip if same as last prompt within 1s (TextArea double-Enter)
+      if (input === lastPrompt && Date.now() - lastPromptTime < 1000) {
+        console.log(`  ${chalk.hex(theme.dim)('[Skipped duplicate input — double Enter protection]')}`);
+        continue;
+      }
       const r = await dispatch(input);
       if (r === 'exit') break;
     }
