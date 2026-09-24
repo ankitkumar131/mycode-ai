@@ -23,6 +23,8 @@ export interface ProviderHealth {
   failureCount: number;
   lastError?: string;
   isAvailable: boolean;
+  /** Epoch ms before which this provider is skipped. 0 means ready now. */
+  cooldownUntil?: number;
 }
 
 export type SafetyLevel = 'blocked' | 'dangerous' | 'elevated' | 'normal';
