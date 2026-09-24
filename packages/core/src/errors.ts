@@ -44,6 +44,28 @@ export class ProviderServerError extends Error {
   }
 }
 
+/**
+ * The endpoint or model no longer exists (HTTP 404/410).
+ *
+ * Distinct from ProviderServerError because it is not transient: a deprecated
+ * model route will keep returning 410 forever, so retrying it every cooldown
+ * cycle just burns turns. Providers park these for a long time.
+ */
+export class ProviderGoneError extends Error {
+  providerName: string;
+  statusCode: number;
+
+  constructor(providerName: string, statusCode: number = 410) {
+    super(
+      `Provider "${providerName}" endpoint is gone (HTTP ${statusCode}). ` +
+        `This model or route has been removed upstream — update the model name or drop this provider.`
+    );
+    this.name = 'ProviderGoneError';
+    this.providerName = providerName;
+    this.statusCode = statusCode;
+  }
+}
+
 export class AllProvidersExhaustedError extends Error {
   errors: Error[];
 
@@ -51,7 +73,18 @@ export class AllProvidersExhaustedError extends Error {
     const summary = errors
       .map((e: any) => `  \u2022 ${e.providerName || 'unknown'}: ${e.message}`)
       .join('\n');
-    super(`All providers failed:\n${summary}`);
+
+    // A raw list of HTTP codes does not tell anyone what to do. Point at the
+    // most common causes of a whole-chain failure.
+    const hasAuth = errors.some((e) => e instanceof AuthError);
+    const hasGone = errors.some((e) => e instanceof ProviderGoneError);
+    const hasRateLimit = errors.some((e) => e instanceof RateLimitError);
+    const hints: string[] = [];
+    if (hasAuth) hints.push('  \u2022 A provider rejected your API key \u2014 run /config to update it.');
+    if (hasGone) hints.push('  \u2022 A model was removed upstream (HTTP 410) \u2014 update its model name or remove the provider.');
+    if (hasRateLimit) hints.push('  \u2022 Free-tier quotas are exhausted \u2014 wait for the reset or use a paid key.');
+
+    super(`All providers failed:\n${summary}${hints.length ? `\n\nHow to fix:\n${hints.join('\n')}` : ''}`);
     this.name = 'AllProvidersExhaustedError';
     this.errors = errors;
   }
@@ -96,6 +129,10 @@ export function classifyError(err: any, providerName: string): Error {
     message.includes('max_tokens')
   ) {
     return new ContextLengthError(providerName);
+  }
+
+  if (status === 410 || status === 404) {
+    return new ProviderGoneError(providerName, status);
   }
 
   if (status >= 500 && status < 600) {

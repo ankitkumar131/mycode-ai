@@ -6,6 +6,7 @@ import {
   AuthError,
   ContextLengthError,
   ProviderServerError,
+  ProviderGoneError,
   AllProvidersExhaustedError,
   NoProvidersConfiguredError,
 } from '../errors.js';
@@ -15,6 +16,7 @@ import type { ProviderConfig, ProviderStats } from './types.js';
 const AUTH_COOLDOWN_MS = 10 * 60_000;
 const RATE_LIMIT_COOLDOWN_MS = 60_000;
 const TRANSIENT_COOLDOWN_MS = 30_000;
+const GONE_COOLDOWN_MS = 60 * 60_000;
 
 /**
  * How long to park a provider after a given failure.
@@ -26,6 +28,9 @@ const TRANSIENT_COOLDOWN_MS = 30_000;
  */
 function cooldownForError(err: Error): number {
   if (err instanceof AuthError) return AUTH_COOLDOWN_MS;
+  // A gone endpoint never comes back on its own — park it long so we do not
+  // burn a turn on it every cycle, but not forever (models get re-published).
+  if (err instanceof ProviderGoneError) return GONE_COOLDOWN_MS;
   if (err instanceof RateLimitError) {
     const retryAfter = err.retryAfterMs;
     if (typeof retryAfter === 'number' && retryAfter > 0) {
@@ -96,6 +101,8 @@ export class ProviderRouter {
       logger.switchProviders(provider.name, nextLabel, 'context too long');
     } else if (err instanceof ProviderServerError) {
       logger.switchProviders(provider.name, nextLabel, `server error (${err.statusCode})`);
+    } else if (err instanceof ProviderGoneError) {
+      logger.switchProviders(provider.name, nextLabel, `endpoint gone (HTTP ${err.statusCode}) — model removed upstream`);
     } else {
       logger.switchProviders(provider.name, nextLabel, err.message || 'unknown error');
     }
