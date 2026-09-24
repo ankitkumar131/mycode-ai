@@ -52,6 +52,7 @@ vi.mock('@mycode/core', () => {
     memoryPath: () => '/tmp/MEMORY.md',
     findContextFiles: () => [],
     TOOLSETS: {},
+    setLoggerWriteHooks: vi.fn(),
   };
 });
 

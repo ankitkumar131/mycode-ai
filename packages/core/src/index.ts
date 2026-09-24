@@ -114,6 +114,7 @@ export type { MyCodeConfig } from './config/types.js';
 // Output
 export { OutputFormatter } from './output/output-formatter.js';
 export type { OutputFormat } from './output/types.js';
+export { logger, setLoggerWriteHooks } from './output/logger.js';
 
 // Prompts
 export { SystemPromptBuilder, findContextFiles, readMemory, CONTEXT_FILE_NAMES } from './prompts/system-prompt.js';

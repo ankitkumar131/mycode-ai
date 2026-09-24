@@ -37,6 +37,7 @@ import type { Ora } from 'ora';
 import { renderBanner } from '../ui/banner.js';
 import { renderMarkdown } from '../ui/renderer.js';
 import { createSpinner, createToolSpinner } from '../ui/spinner.js';
+import { setLoggerWriteHooks } from '@mycode/core';
 import { COLORS, S, ICONS, TOOL_ICONS, theme, stripAnsi } from '../ui/themes/theme.js';
 import { TextArea } from '../ui/text-area.js';
 import { handleSlashCommand, buildMenuItems, type SlashCommandContext } from './slash-commands.js';
@@ -241,6 +242,23 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       currentSpinner = null;
     }
   };
+
+  // ora redraws its line in place, so a log line written while the thinking
+  // spinner is spinning lands underneath its current frame and the two
+  // interleave. That is why provider switches came out prefixed by a stray
+  // sparkle glyph followed by the spinner's own text. Clearing the spinner
+  // around every logger write keeps them on their own lines.
+  setLoggerWriteHooks({
+    before: () => stopSpinner(),
+    after: () => {
+      // Only restore it while a turn is in flight and nothing else owns the
+      // line (streamed text or a reasoning block).
+      if (textArea && textArea.isBusy() && !isStreaming && !reasoningShown) {
+        currentSpinner = createSpinner(formatProviderLabel(router.getCurrentProvider()));
+        currentSpinner.start();
+      }
+    },
+  });
   const out = (line: string) => (textArea && textArea.isBusy() === false ? textArea.log(line) : console.log(line));
   const stamp = () => (ui.timestamps ? chalk.hex(theme.dim)(`[${new Date().toTimeString().slice(0, 5)}] `) : '');
 
