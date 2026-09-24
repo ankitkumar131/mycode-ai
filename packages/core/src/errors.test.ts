@@ -56,6 +56,50 @@ describe('classifyError', () => {
     expect(err.name).toBe('Error');
     expect(err).not.toBeInstanceOf(ProviderGoneError);
   });
+
+  it('does NOT call an error auth just because its body mentions an author', () => {
+    // Regression: the auth check was a bare substring match on "auth", which
+    // also matches "author", "authority" and "authored". A 400 whose body merely
+    // named an author was reported as "Authentication failed. Check your API
+    // key." - pointing at a credential problem that did not exist.
+    const bodies = [
+      'Invalid request: author field is required',
+      'model authored by an unknown author',
+      'insufficient authority to call tools',
+      'the author of this model has restricted access',
+    ];
+    for (const body of bodies) {
+      const err = classifyError({ status: 400, message: body }, 'pokee');
+      expect(err, body).not.toBeInstanceOf(AuthError);
+    }
+  });
+
+  it('still recognises real auth failures by message alone', () => {
+    const bodies = [
+      'Unauthorized',
+      'Invalid API key provided',
+      'Incorrect API key provided: sk-or-v1-***',
+      'authentication failed',
+      'No API key provided',
+      'invalid_api_key',
+    ];
+    for (const body of bodies) {
+      const err = classifyError({ message: body }, 'p');
+      expect(err, body).toBeInstanceOf(AuthError);
+    }
+  });
+
+  it('treats an unsupported-tools rejection as a plain error, not auth', () => {
+    // Pokee-style providers that do not implement function calling answer 400
+    // with something like this. It must not be dressed up as a key problem.
+    const err = classifyError(
+      { status: 400, message: 'This model does not support tool use' },
+      'pokee'
+    );
+    expect(err).not.toBeInstanceOf(AuthError);
+    expect(err).not.toBeInstanceOf(RateLimitError);
+    expect(err).not.toBeInstanceOf(ProviderGoneError);
+  });
 });
 
 describe('AllProvidersExhaustedError', () => {

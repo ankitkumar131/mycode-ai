@@ -126,7 +126,15 @@ export function classifyError(err: any, providerName: string): Error {
     return new RateLimitError(providerName, retryAfter);
   }
 
-  if (status === 401 || status === 403 || message.includes('auth') || message.includes('Unauthorized')) {
+  // Only a genuine auth signal counts. The old check was a bare
+  // `message.includes('auth')`, which also matches "author", "authority" and
+  // "authored" — so a 400 whose body merely mentioned an author was reported as
+  // "Authentication failed. Check your API key." and sent people hunting for a
+  // credential problem that did not exist.
+  const AUTH_MESSAGE =
+    /\b(unauthori[sz]ed|unauthenticated|invalid[_ ]?api[_ ]?key|incorrect api key|api key (?:is )?(?:invalid|missing|incorrect|not provided)|authentication (?:failed|error|required)|invalid credentials|no api key provided)\b/i;
+
+  if (status === 401 || status === 403 || AUTH_MESSAGE.test(message)) {
     return new AuthError(providerName);
   }
 
