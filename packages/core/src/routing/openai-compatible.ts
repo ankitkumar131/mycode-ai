@@ -1,11 +1,13 @@
 import OpenAI from 'openai';
 import { BaseProvider } from './base-provider.js';
 import { classifyError } from '../errors.js';
+import { DEFAULT_MAX_OUTPUT_TOKENS } from './base-provider.js';
 
 export class OpenAICompatibleProvider extends BaseProvider {
   private client: OpenAI;
   private _name: string;
   private _model: string;
+  private _maxOutputTokens?: number;
 
   constructor(options: {
     name: string;
@@ -16,10 +18,12 @@ export class OpenAICompatibleProvider extends BaseProvider {
     apiProvider?: string;
     timeout?: number;
     maxRetries?: number;
+    maxOutputTokens?: number;
   }) {
     super();
     this._name = options.name;
     this._model = options.model;
+    this._maxOutputTokens = options.maxOutputTokens;
     let url = options.baseURL || options.baseUrl;
     if (!url) {
       if (options.apiProvider === 'openrouter') {
@@ -57,7 +61,7 @@ export class OpenAICompatibleProvider extends BaseProvider {
       model: this._model,
       messages,
       temperature: options.temperature ?? 0.3,
-      max_tokens: options.max_tokens ?? 4096,
+      max_tokens: options.max_tokens ?? this._maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     };
 
     if (options.top_p !== undefined) params.top_p = options.top_p;

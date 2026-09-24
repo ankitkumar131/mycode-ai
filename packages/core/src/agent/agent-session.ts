@@ -46,6 +46,8 @@ export class AgentSession {
   private _running = false;
   private _iterations = 0;
   private _aborted = false;
+  /** Set when the model hit the output-token cap, so the caller can say so. */
+  private _truncated = false;
   private _abortController: AbortController;
   private _toolFailures: Map<string, number> = new Map();
   private _executedToolCalls: Set<string> = new Set();
@@ -76,6 +78,7 @@ export class AgentSession {
     this._running = true;
     this._iterations = 0;
     this._aborted = false;
+    this._truncated = false;
     this._toolFailures.clear();
     this._executedToolCalls.clear();
     if (this._abortController.signal.aborted) this._abortController = new AbortController();
@@ -112,6 +115,19 @@ export class AgentSession {
           });
           response = result.content ?? '';
           toolCalls = result.toolCalls;
+          // A response cut off at the token cap is not a failure the model can
+          // recover from by retrying: it will simply be truncated again. The
+          // finish_reason was available all along but never read, so a task that
+          // needed a long tool call ended with nothing on screen and no
+          // explanation. Record it so the caller can report it.
+          if (result.finish_reason === 'length') {
+            this._truncated = true;
+            const errMsg =
+              'Response hit the output token limit and was cut off. ' +
+              'This usually means a single tool call (e.g. writing a large file) needs more room than the model allows.';
+            this.config.onError?.(errMsg);
+            this.emit({ type: 'error', message: errMsg });
+          }
           if (result.usage) {
             usage = { promptTokens: result.usage.prompt_tokens ?? 0, completionTokens: result.usage.completion_tokens ?? 0 };
             this._usage.promptTokens += usage.promptTokens;
@@ -408,6 +424,7 @@ export class AgentSession {
       running: this._running,
       iterations: this._iterations,
       aborted: this._aborted,
+      truncated: this._truncated,
       messageCount: this.context.length,
       estimatedTokens: this.context.estimateTokens(),
       contextWindow: this.config.contextWindow ?? this.context.maxTokens,

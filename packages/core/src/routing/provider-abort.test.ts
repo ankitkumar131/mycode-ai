@@ -81,13 +81,12 @@ describe('abort stops failover', () => {
     // This is the real Ctrl+C case: the request is already in flight when the
     // user interrupts, so provider A does get called — but B must not be.
     const tried: string[] = [];
-    let controller: AbortController;
+    const controller = new AbortController();
     const router = new ProviderRouter([
       { name: 'a', apiProvider: 'openai', model: 'm', apiKey: 'k' },
       { name: 'b', apiProvider: 'openai', model: 'm', apiKey: 'k' },
       { name: 'c', apiProvider: 'openai', model: 'm', apiKey: 'k' },
     ]);
-    controller = new AbortController();
     (router as any).providers = ['a', 'b', 'c'].map((n) =>
       make(n, async () => {
         tried.push(n);

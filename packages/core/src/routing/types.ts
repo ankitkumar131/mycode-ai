@@ -8,6 +8,15 @@ export interface ProviderConfig {
   read?: boolean;
   write?: boolean;
   maxRetries?: number;
+  /**
+   * Cap on generated tokens per response.
+   *
+   * Defaults to DEFAULT_MAX_OUTPUT_TOKENS. The old hard-coded 4096 was too low
+   * for agentic work: writing a React component as a `write_file` tool call
+   * routinely exceeds it, the response is truncated mid-JSON, the arguments
+   * fail to parse, and the turn ends having done nothing visible.
+   */
+  maxOutputTokens?: number;
 }
 
 export interface ProviderStats {

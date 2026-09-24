@@ -1,6 +1,16 @@
 /** Default cooldown after a failure, when the caller does not specify one. */
 export const DEFAULT_COOLDOWN_MS = 30_000;
 
+/**
+ * Default cap on generated tokens per response.
+ *
+ * 4096 was too small for agentic work: a `write_file` call carrying a React
+ * component routinely exceeds it, so the response was truncated mid-JSON, the
+ * tool arguments failed to parse, and the turn ended having done nothing
+ * visible. Raise per provider with `maxOutputTokens` if a model allows more.
+ */
+export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+
 export abstract class BaseProvider {
   protected _health = {
     successCount: 0,

@@ -89,7 +89,10 @@ export class ProviderRouter {
       case 'openai':
       case 'custom':
       default:
-        return new OpenAICompatibleProvider(config);
+        return new OpenAICompatibleProvider({
+          ...config,
+          maxOutputTokens: config.maxOutputTokens,
+        });
     }
   }
 

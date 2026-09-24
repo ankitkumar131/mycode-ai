@@ -474,6 +474,21 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       } else if (result?.trim()) {
         console.log();
         console.log(decodeEntities(renderMarkdown(result)));
+      } else {
+        // A turn that produced no text and no tool output used to return
+        // silently to the prompt, which reads as "mycode ignored me". Say what
+        // happened instead - usually a truncated response or a provider that
+        // returned nothing usable.
+        const st2 = session.getState();
+        console.log();
+        console.log(
+          S.warning(
+            `  ${ICONS.warning} The model returned no output for this turn.` +
+              (st2.truncated
+                ? ' Its response was cut off at the output token limit.'
+                : ' Check /status and try again, or switch provider with /model.')
+          )
+        );
       }
       const u = session.getUsage();
       const st = session.getState();
