@@ -38,7 +38,13 @@ import {
   type ProviderRouter,
   type MyCodeConfig,
 } from '@mycode/core';
-import { pickChoiceArrowKeys } from '../ui/prompt.js';
+import {
+  pickChoiceArrowKeys,
+  setAllowAllCommands,
+  isAllowAllCommands,
+  clearSessionApprovals,
+  listAlwaysAllowed,
+} from '../ui/prompt.js';
 import type { SlashMenuItem } from '../ui/text-area.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -416,7 +422,7 @@ export const COMMANDS: CommandDef[] = [
         ['Tokens', `${fmtTokens(st.usage.promptTokens)} in / ${fmtTokens(st.usage.completionTokens)} out`],
         ['Context', `${fmtTokens(st.estimatedTokens)} / ${fmtTokens(st.contextWindow)} ${bar((st.estimatedTokens / st.contextWindow) * 100, 12)}`],
         ['Compressions', String(st.usage.compressions)],
-        ['Mode', [ctx.ui.yolo ? chalk.hex(theme.error)('YOLO') : 'approvals on', ctx.ui.plan ? chalk.hex(theme.amber)('plan') : null, ctx.ui.personality ? `personality: ${ctx.ui.personality}` : null].filter(Boolean).join(' · ')],
+        ['Mode', [ctx.ui.yolo ? chalk.hex(theme.error)('YOLO') : isAllowAllCommands() ? chalk.hex(theme.warning)('allow-all commands') : 'approvals on', ctx.ui.plan ? chalk.hex(theme.amber)('plan') : null, ctx.ui.personality ? `personality: ${ctx.ui.personality}` : null].filter(Boolean).join(' · ')],
       ];
       for (const [k, v] of rows) console.log(`  ${chalk.hex(theme.muted)(k.padEnd(14))} ${v}`);
       if (st.filesTouched.length || st.topTools.length) {
@@ -655,6 +661,49 @@ export const COMMANDS: CommandDef[] = [
       ctx.ui.yolo = !ctx.ui.yolo;
       if (ctx.ui.yolo) console.log(`  ${chalk.hex(theme.error).bold('⚠ YOLO mode ON')} — commands and edits run without confirmation.`);
       else ok('YOLO mode off — approvals restored.');
+      return { handled: true };
+    },
+  },
+  {
+    name: '/allow-all',
+    aliases: ['/allowall'],
+    description: 'Run every command this session without asking. File writes are still confirmed.',
+    argumentHint: '[on|off|list|clear]',
+    category: 'Configuration',
+    handler: async (args, ctx) => {
+      const a = args.trim().toLowerCase();
+
+      if (a === 'list') {
+        const prefixes = listAlwaysAllowed();
+        console.log(`  Allow ALL commands: ${isAllowAllCommands() ? chalk.hex(theme.error).bold('ON') : dim('off')}`);
+        console.log(`  Per-command approvals (${prefixes.length}):`);
+        if (prefixes.length) for (const p of prefixes) console.log(`    ${dim('$')} ${p}`);
+        else console.log(`    ${dim('(none)')}`);
+        return { handled: true };
+      }
+
+      if (a === 'clear') {
+        clearSessionApprovals();
+        ok('Cleared all session approvals — every command will be confirmed again.');
+        return { handled: true };
+      }
+
+      if (a && a !== 'on' && a !== 'off') {
+        usage('/allow-all [on|off|list|clear]');
+        return { handled: true };
+      }
+
+      const next = a ? a === 'on' : !isAllowAllCommands();
+      setAllowAllCommands(next);
+
+      if (next) {
+        console.log(
+          `  ${chalk.hex(theme.warning).bold('⚡ Allow-all ON')} — commands run without confirmation for this session.`
+        );
+        console.log(`  ${dim('File writes are still confirmed. Blocked commands are still refused. /allow-all off to undo.')}`);
+      } else {
+        ok('Allow-all off — commands will be confirmed again.');
+      }
       return { handled: true };
     },
   },

@@ -20,6 +20,38 @@ interface SafetyResult {
 /** Commands the user approved with "Always allow this command for current session". */
 const ALWAYS_ALLOW = new Set<string>();
 
+/**
+ * Session-scoped "run every command without asking".
+ *
+ * Deliberately narrower than YOLO mode: this covers command execution only.
+ * File writes still go through their own confirmation unless `--yolo` or
+ * `preferences.confirmWrites=false` says otherwise.
+ *
+ * This never weakens the hard safety floor — `blocked` commands are rejected in
+ * the `terminal` tool (exec-command.ts) before confirmFn is ever consulted, so
+ * auto-approval cannot let a blocklisted command through.
+ */
+let ALLOW_ALL_COMMANDS = false;
+
+export function setAllowAllCommands(on: boolean): void {
+  ALLOW_ALL_COMMANDS = on;
+}
+
+export function isAllowAllCommands(): boolean {
+  return ALLOW_ALL_COMMANDS;
+}
+
+/** Drop every session-scoped approval (per-command list and the allow-all flag). */
+export function clearSessionApprovals(): void {
+  ALWAYS_ALLOW.clear();
+  ALLOW_ALL_COMMANDS = false;
+}
+
+/** The per-command prefixes approved for this session, for display. */
+export function listAlwaysAllowed(): string[] {
+  return Array.from(ALWAYS_ALLOW);
+}
+
 function normalizeCommand(command: string): string {
   return command.trim().toLowerCase();
 }
@@ -152,6 +184,11 @@ export async function confirmCommand(
   safety: SafetyResult | null = null,
   description?: string | null,
 ): Promise<boolean> {
+  const isCommand = !!safety;
+
+  // Session-wide command approval. Commands only — file writes (safety === null)
+  // fall through to their normal prompt.
+  if (isCommand && ALLOW_ALL_COMMANDS) return true;
   if (isAlwaysAllowed(command)) return true;
 
   const level = safety?.level ?? 'normal';
@@ -171,7 +208,6 @@ export async function confirmCommand(
 
   // Command / target box
   console.log();
-  const isCommand = !!safety;
   console.log(chalk.hex('#475569')('  ┌─ ') + chalk.hex('#E2E8F0').bold(`${isCommand ? '$ ' : '✍ '}${command}`));
   console.log(chalk.hex('#475569')('  └─ ') + chalk.dim(`cwd: ${cwd}`));
   if (description) {
@@ -187,10 +223,16 @@ export async function confirmCommand(
   const choices = [
     { name: 'Yes — execute once', value: 'yes' },
     { name: 'Always allow this command for current session', value: 'always' },
+    ...(isCommand ? [{ name: 'Always allow ALL commands for current session', value: 'always-all' }] : []),
     { name: 'No — skip', value: 'no' },
   ];
 
-  const selectedValue = await pickChoiceArrowKeys('Execute command?', choices);
+  const selectedValue = await pickChoiceArrowKeys(isCommand ? 'Execute command?' : 'Apply change?', choices);
+
+  if (selectedValue === 'always-all') {
+    ALLOW_ALL_COMMANDS = true;
+    return true;
+  }
 
   if (selectedValue === 'always') {
     addAlwaysAllow(command);

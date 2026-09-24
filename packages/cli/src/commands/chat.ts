@@ -42,7 +42,7 @@ import { TextArea } from '../ui/text-area.js';
 import { handleSlashCommand, buildMenuItems, type SlashCommandContext } from './slash-commands.js';
 import { decodeEntities } from '../utils/html.js';
 import { getLocalPackageInfo } from '../utils/update-check.js';
-import { confirmCommand } from '../ui/prompt.js';
+import { confirmCommand, isAllowAllCommands } from '../ui/prompt.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -364,6 +364,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       chalk.hex(theme.dim)(fmtDuration(st.elapsedMs)),
     ];
     if (ui.yolo) parts.push(chalk.hex(theme.error).bold('YOLO'));
+    else if (isAllowAllCommands()) parts.push(chalk.hex(theme.warning).bold('ALLOW-ALL'));
     if (st.queued) parts.push(chalk.hex(theme.amber)(`${st.queued} queued`));
     if (textArea?.stashCount) parts.push(chalk.hex(theme.amber)(`${textArea.stashCount} stashed`));
     if (ui.personality) parts.push(chalk.hex(theme.dim)(ui.personality));
