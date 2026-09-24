@@ -183,7 +183,9 @@ export class SystemPromptBuilder {
     if (has('glob')) guide.push('- glob: find files by pattern (e.g. "src/**/*.ts").');
     if (has('search_files')) guide.push('- search_files: regex search inside files (ripgrep-like).');
     if (has('patch')) guide.push('- patch: targeted edits — supply a unique old_string with a few lines of context. Preferred for modifying existing files.');
-    if (has('write_file')) guide.push('- write_file: create new files or full rewrites only.');
+    if (has('write_file')) guide.push(
+      '- write_file: create new files or full rewrites only. NEVER emit a large file in one call: a single response has a hard output-token cap and gets truncated mid-JSON, which loses the entire call. Write a small skeleton first, then extend it with patch. Keep any single write_file under ~150 lines.'
+    );
     if (has('terminal')) guide.push('- terminal: run shell commands (tests, builds, git, installs). Use background=true for servers/watchers and manage them with process.');
     if (has('execute_code')) guide.push('- execute_code: run a short script (python/node/bash) when computation is easier than shell.');
     if (has('web_search')) guide.push('- web_search / web_fetch: look up current docs, errors, APIs when unsure.');
@@ -198,11 +200,12 @@ export class SystemPromptBuilder {
 2. Make minimal, surgical changes that match the project's existing style, naming and conventions. Don't reformat unrelated code.
 3. Verify: run the relevant tests/build/lint after changes and fix what you broke. Never claim something works without running it.
 4. Never fabricate file contents, command output, or APIs. If a tool fails, read the error and adapt; don't retry the identical call.
-5. Safety: never run destructive commands (rm -rf, git reset --hard, force-push, dropping databases) or touch secrets without an explicit request. Ask when in doubt.
-6. Keep responses tight: what you did, what changed (files), how you verified, and anything the user must do next. Use markdown sparingly; paths and commands in backticks.
-7. Long tasks: plan with todo_write, work step by step, and summarise at the end.
-8. Trust tool results. A command that returns [exit 0 · SUCCESS] worked — do not re-check the same fact with a second command, and never verify more than once. For simple file operations (move/copy/rename/delete) run ONE command, then report.
-9. Every terminal call costs the user an approval prompt: batch related steps into one command and keep the total number of commands minimal.`
+5. Build big files incrementally: a response is capped, so a long file written in one call is truncated and lost. Skeleton with write_file, then extend with patch - one section at a time.
+6. Safety: never run destructive commands (rm -rf, git reset --hard, force-push, dropping databases) or touch secrets without an explicit request. Ask when in doubt.
+7. Keep responses tight: what you did, what changed (files), how you verified, and anything the user must do next. Use markdown sparingly; paths and commands in backticks.
+8. Long tasks: plan with todo_write, work step by step, and summarise at the end.
+9. Trust tool results. A command that returns [exit 0 · SUCCESS] worked — do not re-check the same fact with a second command, and never verify more than once. For simple file operations (move/copy/rename/delete) run ONE command, then report.
+10. Every terminal call costs the user an approval prompt: batch related steps into one command and keep the total number of commands minimal.`
     );
 
     for (const s of options.extraSections ?? []) b.addSection(s);
