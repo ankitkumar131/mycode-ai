@@ -1,6 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { statSync, readFileSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
+import { glob } from 'glob';
 import type { ToolModule } from '../types.js';
 
 const BINARY_EXTENSIONS = new Set([
@@ -94,17 +95,6 @@ export const searchFilesTool: ToolModule = {
       }
     }
 
-    function matchGlob(name: string, glob: string): boolean {
-      if (glob === '*') return true;
-      if (glob.startsWith('*.')) {
-        return name.endsWith(glob.slice(1));
-      }
-      if (glob.endsWith('/**')) {
-        return true; // match all children
-      }
-      return name.includes(glob.replace(/\*/g, ''));
-    }
-
     async function walk(dir: string): Promise<void> {
       let names: string[];
       try {
@@ -135,24 +125,41 @@ export const searchFilesTool: ToolModule = {
           if (isDir) {
             await walk(fullPath);
           }
-        } else if (pattern) {
-          // Pattern search mode
-          if (matchGlob(name, pattern) && shouldInclude(fullPath)) {
-            const relativePath = fullPath.startsWith(searchPath)
-              ? fullPath.slice(searchPath.length + 1).replace(/\\/g, '/')
-              : fullPath;
-            results.push(`${relativePath}${isDir ? '/' : ''}`);
-            if (results.length >= maxResults) return;
-          }
-          if (isDir) {
-            await walk(fullPath);
-          }
         }
       }
     }
 
+    /**
+     * Filename-pattern mode. Delegates to the `glob` package (same engine the
+     * `glob` tool uses) so that real glob syntax works: "**\/*.ts",
+     * "src/**\/*.ts", "src/*.ts", brace expansion, etc.
+     *
+     * This replaced a hand-rolled matcher that compared the glob against the
+     * *basename* only, which silently returned zero results for any pattern
+     * containing a path separator — including the "src/**\/*.ts" example in
+     * this tool's own description.
+     */
+    async function matchPattern(): Promise<void> {
+      const matches = await glob(pattern!, {
+        cwd: searchPath,
+        nodir: true,
+        dot: false,
+        ignore: ['**/node_modules/**', '**/.git/**'],
+      });
+      for (const rel of matches) {
+        if (results.length >= maxResults) return;
+        const fullPath = resolve(searchPath, rel);
+        if (!shouldInclude(fullPath)) continue;
+        results.push(rel.replace(/\\/g, '/'));
+      }
+    }
+
     const startTime = Date.now();
-    await walk(searchPath);
+    if (content) {
+      await walk(searchPath);
+    } else if (pattern) {
+      await matchPattern();
+    }
     const elapsed = Date.now() - startTime;
 
     if (results.length === 0) {
