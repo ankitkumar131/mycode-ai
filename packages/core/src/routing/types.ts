@@ -16,6 +16,10 @@ export interface ProviderStats {
   priority: number;
   status: 'active' | 'fallback' | 'error';
   latency?: number;
+  /** Last failure message, when the provider is currently failing. */
+  lastError?: string;
+  /** Milliseconds left on the cooldown. 0 when the provider is ready. */
+  cooldownRemainingMs?: number;
 }
 
 export interface ProviderHealth {

@@ -36,17 +36,29 @@ describe('BaseProvider', () => {
 
   it('toJSON returns expected shape', () => {
     const p = new TestProvider();
+    // `priority` is deliberately absent: a provider has no knowledge of the
+    // order it was configured in — only the router does. It used to be
+    // hardcoded to 0 here, which made every consumer report priority 0.
     expect(p.toJSON()).toEqual({
       name: 'test-provider',
       model: 'test-model',
-      priority: 0,
       status: 'active',
+      successCount: 0,
+      failureCount: 0,
+      lastError: undefined,
     });
   });
 
-  it('toJSON shows error status after failures', () => {
+  it('toJSON status comes from the cooldown, not a flag that is always true', () => {
     const p = new TestProvider();
-    (p as any)._health.isAvailable = false;
+    // A brand-new provider must read as active.
+    expect(p.toJSON().status).toBe('active');
+    // Parking it must flip the status even though nothing sets isAvailable.
+    p.recordFailure(60_000, 'endpoint gone');
     expect(p.toJSON().status).toBe('error');
+    expect(p.toJSON().lastError).toBe('endpoint gone');
+    // And recovering must clear it.
+    p.recordSuccess();
+    expect(p.toJSON().status).toBe('active');
   });
 });

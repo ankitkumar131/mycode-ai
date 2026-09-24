@@ -8,6 +8,7 @@ export abstract class BaseProvider {
     isAvailable: true,
     /** Epoch ms before which this provider is skipped. 0 means ready now. */
     cooldownUntil: 0,
+    lastError: undefined as string | undefined,
   };
 
   abstract get name(): string;
@@ -24,6 +25,7 @@ export abstract class BaseProvider {
     this._health.failureCount = 0;
     this._health.cooldownUntil = 0;
     this._health.isAvailable = true;
+    this._health.lastError = undefined;
   }
 
   /**
@@ -31,9 +33,10 @@ export abstract class BaseProvider {
    * is what lets a primary recover after a transient blip instead of staying
    * demoted for the rest of the session.
    */
-  recordFailure(cooldownMs: number = DEFAULT_COOLDOWN_MS): void {
+  recordFailure(cooldownMs: number = DEFAULT_COOLDOWN_MS, message?: string): void {
     this._health.failureCount++;
     this._health.cooldownUntil = Date.now() + Math.max(0, cooldownMs);
+    if (message) this._health.lastError = message;
   }
 
   /** Eligible for a new request: not disabled, and out of cooldown. */
@@ -52,11 +55,17 @@ export abstract class BaseProvider {
   }
 
   toJSON() {
+    // `isAvailable` is only ever written as `true`, so status must come from the
+    // cooldown window. Serializing it as always-'active' made every diagnostic
+    // downstream report a dead provider as healthy.
+    const ready = this.isReady();
     return {
       name: this.name,
       model: this.model,
-      priority: 0,
-      status: this._health.isAvailable ? ('active' as const) : ('error' as const),
+      status: ready ? ('active' as const) : ('error' as const),
+      successCount: this._health.successCount,
+      failureCount: this._health.failureCount,
+      lastError: this._health.lastError,
     };
   }
 }

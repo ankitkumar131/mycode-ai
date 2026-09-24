@@ -44,6 +44,8 @@ function cooldownForError(err: Error): number {
 export class ProviderRouter {
   private providers: BaseProvider[] = [];
   private _currentIndex = 0;
+  /** Configured priority per provider, kept so stats do not have to lie with 0. */
+  private priorities = new Map<BaseProvider, number>();
 
   constructor(configs: ProviderConfig[] = []) {
     if (!configs.length) {
@@ -52,7 +54,11 @@ export class ProviderRouter {
     this.providers = configs
       .slice()
       .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
-      .map((c) => this.createProvider(c));
+      .map((c) => {
+        const provider = this.createProvider(c);
+        this.priorities.set(provider, c.priority ?? 99);
+        return provider;
+      });
   }
 
   private createProvider(config: ProviderConfig): BaseProvider {
@@ -88,7 +94,7 @@ export class ProviderRouter {
   }
 
   private handleProviderError(provider: BaseProvider, err: Error, remaining: BaseProvider[]): void {
-    provider.recordFailure(cooldownForError(err));
+    provider.recordFailure(cooldownForError(err), err.message);
 
     const idx = remaining.indexOf(provider);
     const nextLabel = idx >= 0 && idx + 1 < remaining.length ? remaining[idx + 1].name : 'none available';
@@ -113,13 +119,24 @@ export class ProviderRouter {
   }
 
   getStats(): ProviderStats[] {
-    return this.providers.map((p) => {
+    const now = Date.now();
+    return this.providers.map((p, i) => {
       const h = p.getHealth();
+      // `isAvailable` is only ever written as `true`, so it cannot be the source
+      // of truth for status. A provider is really out when it is inside its
+      // cooldown window, which is what `isReady` measures.
+      const ready = p.isReady(now);
+      const cooling = !ready && h.cooldownUntil > now;
+      let status: ProviderStats['status'];
+      if (!ready) status = 'error';
+      else status = i === this._currentIndex ? 'active' : 'fallback';
       return {
         name: p.name,
         model: p.model,
-        priority: 0,
-        status: h.isAvailable ? 'active' : 'error',
+        priority: this.priorities.get(p) ?? i,
+        status,
+        lastError: h.lastError,
+        cooldownRemainingMs: cooling ? h.cooldownUntil - now : 0,
       };
     });
   }

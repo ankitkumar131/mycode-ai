@@ -75,7 +75,21 @@ export type { SkillManagerOptions, SkillSearchResult } from './skills/skill-mana
 // Providers
 export { BaseProvider } from './routing/base-provider.js';
 export { ProviderRouter } from './routing/provider-router.js';
-export type { ProviderConfig, ProviderStats } from './routing/types.js';
+export type { ProviderConfig, ProviderStats, ProviderHealth } from './routing/types.js';
+
+// Errors — exported so callers can classify a provider failure themselves
+// (used by `mycode config test` to report *why* a provider is down).
+export {
+  classifyError,
+  AuthError,
+  RateLimitError,
+  ContextLengthError,
+  ProviderServerError,
+  ProviderGoneError,
+  AllProvidersExhaustedError,
+  NoProvidersConfiguredError,
+  ToolExecutionError,
+} from './errors.js';
 
 // Hooks
 export { HookAggregator, HookRunner } from './hooks/hooks.js';
