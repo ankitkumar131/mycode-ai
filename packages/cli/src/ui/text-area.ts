@@ -300,6 +300,36 @@ export class TextArea {
   private onData(chunk: Buffer): void {
     let s = chunk.toString('utf-8');
 
+    // ── Bracketed paste FIRST ────────────────────────────────────────────────
+    //
+    // This must run before the stray-report filter below. Terminals emit focus
+    // events (\x1b[I / \x1b[O) and cursor/attribute reports at arbitrary times,
+    // and on Windows ConPTY they routinely land in the same stdin chunk as the
+    // start of a paste. When the filter ran first it matched, re-emitted the
+    // chunk and returned — so pasteMode never engaged and the pasted text was
+    // handed to readline as ordinary keystrokes. That both corrupted the input
+    // and fired one render per character, which reads as the status line being
+    // printed over and over.
+    if (s.includes('\x1b[200~')) {
+      this.pasteMode = true;
+      this.pasteBuffer = '';
+    }
+    if (this.pasteMode) {
+      const body = s
+        .replace(/\x1b\[200~|\x1b\[201~/g, '')
+        .replace(/\x1b\[(?:\d+;\d+R|\?[\d;]*c|>[\d;]*c|[IO])/g, '');
+      if (body) this.pasteBuffer += body;
+      if (s.includes('\x1b[201~')) {
+        this.pasteMode = false;
+        if (!this.busy && !this.closed && this.pasteBuffer) {
+          this.insertPaste(this.pasteBuffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n'));
+          void this.render();
+        }
+        this.pasteBuffer = '';
+      }
+      return;
+    }
+
     // Swallow stray terminal reports (cursor position, device attributes, focus events).
     if (/\x1b\[(?:\d+;\d+R|\?[\d;]*c|>[\d;]*c|[IO])/.test(s)) {
       const rest = s.replace(/\x1b\[(?:\d+;\d+R|\?[\d;]*c|>[\d;]*c|[IO])/g, '');
@@ -329,24 +359,6 @@ export class TextArea {
       s = s.replace(/\x1b\[13u/g, '');
       if (!this.busy && !this.closed) this.handleEnter();
       if (s) process.stdin.emit('data', Buffer.from(s));
-      return;
-    }
-
-    if (s.includes('\x1b[200~')) {
-      this.pasteMode = true;
-      this.pasteBuffer = '';
-    }
-    if (this.pasteMode) {
-      const body = s.replace(/\x1b\[200~|\x1b\[201~/g, '');
-      if (body) this.pasteBuffer += body;
-      if (s.includes('\x1b[201~')) {
-        this.pasteMode = false;
-        if (!this.busy && !this.closed && this.pasteBuffer) {
-          this.insertPaste(this.pasteBuffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n'));
-          void this.render();
-        }
-        this.pasteBuffer = '';
-      }
       return;
     }
   }
