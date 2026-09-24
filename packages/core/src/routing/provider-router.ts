@@ -26,6 +26,25 @@ const GONE_COOLDOWN_MS = 60 * 60_000;
  * so the preferred provider comes back on its own. Rate limits honour the
  * server's Retry-After when one is supplied.
  */
+/**
+ * True when the caller cancelled the turn.
+ *
+ * An abort is not a provider failure. Treating it as one both walks the rest of
+ * the chain for no reason and parks a perfectly healthy provider on a cooldown,
+ * so it has to be recognised before any failure bookkeeping happens.
+ */
+function isAbort(err: any, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true;
+  if (err?.name === 'AbortError') return true;
+  return /abort/i.test(String(err?.message ?? ''));
+}
+
+function abortError(): Error {
+  const err = new Error('Request aborted');
+  err.name = 'AbortError';
+  return err;
+}
+
 function cooldownForError(err: Error): number {
   if (err instanceof AuthError) return AUTH_COOLDOWN_MS;
   // A gone endpoint never comes back on its own — park it long so we do not
@@ -94,6 +113,12 @@ export class ProviderRouter {
   }
 
   private handleProviderError(provider: BaseProvider, err: Error, remaining: BaseProvider[]): void {
+    // A cancelled turn is not a provider fault. Recording it would park a
+    // healthy provider on a cooldown, which is the same class of bug as a
+    // transient blip demoting the primary — the provider never did anything
+    // wrong and would be skipped for no reason.
+    if (isAbort(err)) return;
+
     provider.recordFailure(cooldownForError(err), err.message);
 
     const idx = remaining.indexOf(provider);
@@ -168,6 +193,10 @@ export class ProviderRouter {
   private async attemptWithFailover(providers: BaseProvider[], messages: unknown[], tools?: unknown[], options?: any): Promise<any> {
     const errors: Error[] = [];
     for (const provider of providers) {
+      // Ctrl+C must stop the turn here, not after the whole chain has been
+      // walked. Continuing used to burn every remaining provider and log a
+      // misleading "Switching X -> Y (Request aborted)" for each one.
+      if (options?.abortSignal?.aborted) throw abortError();
       try {
         logger.provider(`Using ${provider.name} (${provider.model})`);
         const result = await provider.chat(messages, tools, options);
@@ -175,6 +204,7 @@ export class ProviderRouter {
         this._currentIndex = this.providers.indexOf(provider);
         return result;
       } catch (err: any) {
+        if (isAbort(err, options?.abortSignal)) throw err;
         errors.push(err);
         this.handleProviderError(provider, err, providers);
       }
@@ -185,6 +215,7 @@ export class ProviderRouter {
   private async *attemptStreamWithFailover(providers: BaseProvider[], messages: unknown[], tools?: unknown[], options?: any): AsyncGenerator<any> {
     const errors: Error[] = [];
     for (const provider of providers) {
+      if (options?.abortSignal?.aborted) throw abortError();
       let yielded = false;
       try {
         logger.provider(`Using ${provider.name} (${provider.model})`);
@@ -197,6 +228,7 @@ export class ProviderRouter {
         this._currentIndex = this.providers.indexOf(provider);
         return;
       } catch (err: any) {
+        if (isAbort(err, options?.abortSignal)) throw err;
         errors.push(err);
         this.handleProviderError(provider, err, providers);
         // Chunks already reached the caller and cannot be un-sent. Falling over

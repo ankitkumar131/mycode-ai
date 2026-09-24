@@ -111,7 +111,15 @@ export function classifyError(err: any, providerName: string): Error {
   const status = err.status || err.statusCode || err?.response?.status;
   const message: string = err.message || '';
 
-  if (status === 429 || message.includes('rate limit') || message.includes('Rate limit')) {
+  // Quota exhaustion arrives under several names: HTTP 429, a Retry-After
+  // header, or a gRPC-style ResourceExhausted / "request limit reached" body.
+  // All of them mean "back off", so they all belong in the rate-limit bucket —
+  // otherwise a quota error falls through to the generic branch and only gets
+  // the short transient cooldown.
+  if (
+    status === 429 ||
+    /rate limit|too many requests|ResourceExhausted|quota|request limit reached/i.test(message)
+  ) {
     const retryAfter = err.headers?.['retry-after']
       ? parseInt(err.headers['retry-after'], 10) * 1000
       : null;
