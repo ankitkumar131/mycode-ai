@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import readline from 'readline';
+import { enterModal, exitModal } from './input-modal.js';
 import * as readlinePromises from 'readline/promises';
 
 const SAFETY_LEVELS = {
@@ -23,11 +24,10 @@ const ALWAYS_ALLOW = new Set<string>();
 /**
  * Session-scoped "run every command without asking".
  *
- * Deliberately narrower than YOLO mode: this covers command execution only.
- * File writes still go through their own confirmation unless `--yolo` or
- * `preferences.confirmWrites=false` says otherwise.
+ * Session-scoped equivalent of YOLO mode, set from the UI rather than a flag.
+ * Covers command execution and file writes.
  *
- * This never weakens the hard safety floor — `blocked` commands are rejected in
+ * This never weakens the hard safety floor: `blocked` commands are rejected in
  * the `terminal` tool (exec-command.ts) before confirmFn is ever consulted, so
  * auto-approval cannot let a blocklisted command through.
  */
@@ -100,6 +100,11 @@ export function pickChoiceArrowKeys(
   let renderedLines = 0;
 
   return new Promise<string>((resolve) => {
+    // Take the keyboard away from the composer for the lifetime of this picker.
+    // Otherwise the composer's own keypress listener is still attached during a
+    // turn, so arrow keys move both and Enter resolves both - the user's choice
+    // and the value returned do not match.
+    enterModal();
     const stdin = process.stdin;
     const wasRaw = stdin.isRaw;
     readline.emitKeypressEvents(stdin);
@@ -154,11 +159,13 @@ export function pickChoiceArrowKeys(
         const chosen = choices[selectedIndex];
         process.stdout.write(`  ${chalk.hex('#34D399').bold('✔')} ${chalk.hex('#E2E8F0')(chosen.name)}\n`);
         cleanup();
+        exitModal();
         resolve(chosen.value);
       } else if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
         clearRendered();
         process.stdout.write(`  ${chalk.hex('#94A3B8')('✖ Cancelled')}\n`);
         cleanup();
+        exitModal();
         resolve(choices[choices.length - 1].value);
       }
     };
@@ -186,9 +193,11 @@ export async function confirmCommand(
 ): Promise<boolean> {
   const isCommand = !!safety;
 
-  // Session-wide command approval. Commands only — file writes (safety === null)
-  // fall through to their normal prompt.
-  if (isCommand && ALLOW_ALL_COMMANDS) return true;
+  // Session-wide approval. This used to cover commands only, so an agentic
+  // task - which is mostly file writes - still stopped to ask on every write
+  // and the mode looked broken. File writes are included now; the hard safety
+  // floor in exec-command.ts still refuses blocked commands regardless.
+  if (ALLOW_ALL_COMMANDS) return true;
   if (isAlwaysAllowed(command)) return true;
 
   const level = safety?.level ?? 'normal';

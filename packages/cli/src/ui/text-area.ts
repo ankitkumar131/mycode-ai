@@ -47,6 +47,7 @@ import {
   lineStart,
   lineEnd,
 } from './text-area-utils.js';
+import { registerInputGuard } from './input-modal.js';
 
 export interface SlashMenuItem {
   name: string;
@@ -201,6 +202,28 @@ export class TextArea {
     return promise;
   }
 
+  /**
+   * Detach stdin listeners so a modal UI (approval picker, etc.) can own the
+   * keyboard. Without this the composer keeps consuming keypresses during a
+   * turn and fights the modal for arrows and Enter.
+   */
+  suspendInput(): void {
+    if (this.keyHandler) process.stdin.removeListener('keypress', this.keyHandler);
+    if (this.dataHandler) process.stdin.removeListener('data', this.dataHandler);
+  }
+
+  /** Re-attach after the modal is done. Only re-adds what suspend removed. */
+  resumeInput(): void {
+    const keys = process.stdin.listeners('keypress');
+    if (this.keyHandler && !keys.includes(this.keyHandler)) {
+      process.stdin.on('keypress', this.keyHandler);
+    }
+    const data = process.stdin.listeners('data');
+    if (this.dataHandler && !data.includes(this.dataHandler)) {
+      process.stdin.prependListener('data', this.dataHandler);
+    }
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;
@@ -252,6 +275,12 @@ export class TextArea {
 
     process.stdin.on('keypress', this.keyHandler);
     process.stdin.prependListener('data', this.dataHandler);
+
+    // Let modal UI take the keyboard away from the composer while it is open.
+    registerInputGuard({
+      suspend: () => this.suspendInput(),
+      resume: () => this.resumeInput(),
+    });
     if (typeof (process.stdout as any).on === 'function') process.stdout.on('resize', this.resizeHandler);
     // Bracketed paste
     process.stdout.write('\x1b[?2004h');

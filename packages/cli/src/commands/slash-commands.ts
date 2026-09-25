@@ -667,7 +667,7 @@ export const COMMANDS: CommandDef[] = [
   {
     name: '/allow-all',
     aliases: ['/allowall'],
-    description: 'Run every command this session without asking. File writes are still confirmed.',
+    description: 'Run every command and file write this session without asking.',
     argumentHint: '[on|off|list|clear]',
     category: 'Configuration',
     handler: async (args, ctx) => {
@@ -698,9 +698,11 @@ export const COMMANDS: CommandDef[] = [
 
       if (next) {
         console.log(
-          `  ${chalk.hex(theme.warning).bold('⚡ Allow-all ON')} — commands run without confirmation for this session.`
+          `  ${chalk.hex(theme.warning).bold('⚡ Allow-all ON')} — commands and file writes run without confirmation for this session.`
         );
-        console.log(`  ${dim('File writes are still confirmed. Blocked commands are still refused. /allow-all off to undo.')}`);
+        console.log(
+          `${dim('Blocked commands are still refused. /allow-all off to undo.')}`
+        );
       } else {
         ok('Allow-all off — commands will be confirmed again.');
       }

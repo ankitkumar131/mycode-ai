@@ -68,20 +68,23 @@ describe('session command approvals', () => {
     expect(cap.text()).not.toContain('Execute command?');
   });
 
-  it('still prompts for a file write when allow-all is on', async () => {
+  it('auto-approves a file write when allow-all is on', async () => {
+    // Was: "still prompts for a file write when allow-all is on". That was
+    // the bug - an agentic task is mostly writes, so the mode never did
+    // anything useful. Now the write is approved without drawing a prompt.
     setAllowAllCommands(true);
     const cap = captureStdout();
-    // safety === null marks a write. Non-TTY picker returns the first choice
-    // ("Yes") before drawing its title, so assert on the prompt header instead.
+    // safety === null marks a write.
     const ok = await confirmCommand('src/app.ts', '/tmp', null, null);
     cap.restore();
     expect(ok).toBe(true);
-    // The write prompt rendered — allow-all did not swallow it.
-    expect(cap.text()).toContain('File write requested');
-    expect(cap.text()).toContain('✍ src/app.ts');
+    expect(cap.text()).toBe('');
   });
 
-  it('short-circuits commands but not writes: commands render nothing at all', async () => {
+  it('short-circuits commands AND writes: neither renders anything', async () => {
+    // This used to cover commands only, so an agentic task - which is mostly
+    // file writes - still stopped to ask on every write and the mode looked
+    // like it had been switched off.
     setAllowAllCommands(true);
 
     const cmd = captureStdout();
@@ -92,9 +95,8 @@ describe('session command approvals', () => {
     await confirmCommand('src/app.ts', '/tmp', null, null);
     write.restore();
 
-    // Command: returned before any output. Write: full prompt header drawn.
     expect(cmd.text()).toBe('');
-    expect(write.text()).toContain('File write requested');
+    expect(write.text()).toBe('');
   });
 
   it('does not leak the allow-all flag into the per-command list', () => {

@@ -387,7 +387,16 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     if (textArea?.stashCount) parts.push(chalk.hex(theme.amber)(`${textArea.stashCount} stashed`));
     if (ui.personality) parts.push(chalk.hex(theme.dim)(ui.personality));
     let line = ' ' + parts.join(sep);
-    if (stripAnsi(line).length > w - 1) line = ' ' + parts.slice(0, 3).join(sep);
+    if (stripAnsi(line).length > w - 1) {
+      // Drop the least important segment first. This used to fall back to the
+      // first three parts, which silently hid the YOLO / ALLOW-ALL chip on
+      // narrow terminals - so the mode looked like it had been switched off.
+      // The mode chip is the one thing that must survive truncation.
+      const modeIdx = parts.length - 1;
+      const trimmed = [...parts.slice(0, 3), parts[modeIdx]];
+      line = ' ' + trimmed.join(sep);
+      if (stripAnsi(line).length > w - 1) line = ' ' + parts.slice(0, 3).join(sep);
+    }
     return line;
   };
 
