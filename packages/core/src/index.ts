@@ -20,6 +20,8 @@ export type {
   OrchestrationTaskKind,
   OrchestrationTaskStatus,
   OrchestrationTaskSpec,
+  WorkspaceBoundary,
+  ServerReadiness,
   TaskPlan,
   TaskPlanner,
   TaskExecutionContext,

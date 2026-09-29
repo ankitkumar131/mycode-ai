@@ -19,6 +19,7 @@ import type {
   TaskPlanner,
 } from '../orchestration/types.js';
 import { TaskSupervisor } from '../orchestration/task-supervisor.js';
+import { skillManager } from '../skills/skill-manager.js';
 import type { BrowserVerifier } from '../integrations/browser-verifier.js';
 import type { DecisionGate } from '../integrations/decision-gate.js';
 import type { SandboxBackend } from '../integrations/sandbox-backend.js';
@@ -77,6 +78,8 @@ export interface SessionConfig extends AgentOptions {
   sandboxBackend?: SandboxBackend;
   /** Maximum concurrent delegated workers (default 2). */
   maxParallelTasks?: number;
+  /** Optional installed-skill discovery configuration. */
+  skills?: { externalDirs?: string[]; noBundled?: boolean };
 }
 
 export class AgentSession {
@@ -102,6 +105,7 @@ export class AgentSession {
   private _lastPlan: TaskPlan | null = null;
   private _automaticEvidence: AutomaticEvidence[] = [];
   private _specializedToolsUsed = new Set<string>();
+  private _automaticReservedTools = new Set<string>();
   public id: string;
   public title: string | null = null;
 
@@ -127,13 +131,31 @@ export class AgentSession {
     const maxIter = this.config.maxIterations ?? MAX_ITERATIONS;
     const cwd = this.config.cwd ?? process.cwd();
     const router = this.config.providerRouter;
+    if (this.config.skills) {
+      skillManager.configure({ externalDirs: this.config.skills.externalDirs ?? [], noBundled: this.config.skills.noBundled });
+      if (!this.config.skills.noBundled) skillManager.seedBundledSkills();
+    }
 
     this._automaticEvidence = [];
     this._specializedToolsUsed.clear();
+    this._automaticReservedTools.clear();
     if (this.config.autoOrchestration !== false) {
       this._lastPlan = (this.config.taskPlanner ?? taskRouter).plan({ query: input, cwd });
       const guidance = formatTaskPlanGuidance(this._lastPlan);
       if (guidance) this.addSystemSection(guidance);
+      if (this.config.decisionGate && this._lastPlan.mode === 'decision') this._automaticReservedTools.add('decision_gate');
+      if (this.config.sandboxBackend && (this._lastPlan.mode === 'sandbox' || this._lastPlan.mode === 'parallel')) this._automaticReservedTools.add('sandbox_task');
+      if (this.config.browserVerifier && (this._lastPlan.mode === 'browser' || this._lastPlan.mode === 'fix-and-verify')) this._automaticReservedTools.add('browser_verify');
+      if (this._lastPlan.mode === 'skill') {
+        const skillName = this._lastPlan.tasks[0]?.metadata?.skillName;
+        if (typeof skillName === 'string') {
+          try {
+            this.addSystemSection(`Automatically loaded installed skill procedure:\n${skillManager.view(skillName, undefined, cwd)}`);
+          } catch (error) {
+            this.addSystemSection(`Installed skill routing failed for ${skillName}: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+      }
       try {
         const evidence = await runAutomaticPreflight(this._lastPlan, { query: input, cwd }, {
           browserVerifier: this.config.browserVerifier,
@@ -244,9 +266,6 @@ export class AgentSession {
             continue;
           }
           const toolName = call.function.name;
-          if (toolName === 'browser_verify' || toolName === 'decision_gate' || toolName === 'sandbox_task') {
-            this._specializedToolsUsed.add(toolName);
-          }
           let args: Record<string, unknown>;
           try {
             args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
@@ -255,6 +274,21 @@ export class AgentSession {
             continue;
           }
 
+          if (this._automaticReservedTools.has(toolName)) {
+            const phase = toolName === 'browser_verify' ? 'postflight' : 'preflight';
+            const result = JSON.stringify({
+              success: false,
+              status: 'blocked',
+              summary: `Automatic ${phase} orchestration owns ${toolName} for this plan; a duplicate specialized call was not started.`,
+            });
+            this.context.addToolResult(call.id, result, toolName);
+            this.emit({ type: 'tool_result', name: toolName, result });
+            continue;
+          }
+
+          if (toolName === 'browser_verify' || toolName === 'decision_gate' || toolName === 'sandbox_task') {
+            this._specializedToolsUsed.add(toolName);
+          }
           const callKey = `${toolName}:${call.function.arguments}`;
           if (this._executedToolCalls.has(callKey) && !this.toolRegistry.isWriteTool(toolName)) {
             this.context.addToolResult(call.id, 'Skipped: identical call already executed this turn — use the earlier result.', toolName);
@@ -385,6 +419,7 @@ export class AgentSession {
       decisionGate: this.config.decisionGate,
       sandboxBackend: this.config.sandboxBackend,
       maxParallelTasks: this.config.maxParallelTasks,
+      skills: this.config.skills,
       extraSystemSections: [
         ...(this.config.extraSystemSections ?? []),
         `Delegated worker role: ${normalizedAgent}. Stay within the supplied subtask and return a concise, evidence-based result to the parent agent.`,
@@ -500,6 +535,7 @@ ${result}`;
     this._lastPlan = null;
     this._automaticEvidence = [];
     this._specializedToolsUsed.clear();
+    this._automaticReservedTools.clear();
     this._startedAt = Date.now();
     this.id = `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}-${Math.random().toString(36).slice(2, 6)}`;
     this.title = null;

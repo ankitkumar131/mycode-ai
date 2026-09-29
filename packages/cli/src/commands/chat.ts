@@ -274,6 +274,8 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     browserVerifier,
     decisionGate,
     sandboxBackend,
+    maxParallelTasks: cfg.orchestration?.maxParallelTasks,
+    skills: cfg.skills,
     runLedger,
     contextWindow: contextWindowFor(cfg, router.getCurrentProvider()),
     toolRegistry: undefined,

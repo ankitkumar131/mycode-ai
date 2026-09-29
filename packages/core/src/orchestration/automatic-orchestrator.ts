@@ -1,7 +1,7 @@
 import type { BrowserVerifier, BrowserVerificationResult } from '../integrations/browser-verifier.js';
 import type { DecisionGate, DecisionResult } from '../integrations/decision-gate.js';
 import type { SandboxBackend, SandboxTaskResult } from '../integrations/sandbox-backend.js';
-import type { OrchestrationRequest, TaskPlan } from './types.js';
+import type { OrchestrationRequest, ServerReadiness, TaskPlan } from './types.js';
 
 export interface AutomaticOrchestrationRuntime {
   browserVerifier?: BrowserVerifier;
@@ -76,6 +76,81 @@ function browserUrl(plan: TaskPlan): string | undefined {
   return typeof url === 'string' ? url : undefined;
 }
 
+function browserReadiness(plan: TaskPlan): ServerReadiness | undefined {
+  return plan.tasks.find(task => task.kind === 'browser-verifier')?.serverReadiness;
+}
+
+function sleep(ms: number, signal: AbortSignal): Promise<boolean> {
+  return new Promise(resolve => {
+    if (signal.aborted) {
+      resolve(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abort);
+      resolve(true);
+    }, ms);
+    const abort = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', abort);
+      resolve(false);
+    };
+    signal.addEventListener('abort', abort, { once: true });
+  });
+}
+
+async function waitForServer(readiness: ServerReadiness, signal: AbortSignal): Promise<AutomaticEvidence | undefined> {
+  if (!readiness.required) return undefined;
+  if (!readiness.url) {
+    return {
+      kind: 'browser',
+      phase: 'postflight',
+      success: false,
+      status: 'unavailable',
+      summary: 'Browser verification requires a server URL, but none was provided.',
+    };
+  }
+  const timeoutMs = Math.max(1_000, Math.min(readiness.timeoutMs ?? 30_000, 300_000));
+  const pollMs = Math.max(100, Math.min(readiness.pollMs ?? 500, 5_000));
+  const deadline = Date.now() + timeoutMs;
+  let lastError = 'No response from the application server.';
+  while (Date.now() < deadline) {
+    if (signal.aborted) {
+      return {
+        kind: 'browser',
+        phase: 'postflight',
+        success: false,
+        status: 'timeout',
+        summary: 'Server readiness was cancelled before browser verification started.',
+        details: { url: readiness.url },
+      };
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.min(2_000, Math.max(250, deadline - Date.now())));
+    const onAbort = () => controller.abort();
+    signal.addEventListener('abort', onAbort, { once: true });
+    try {
+      const response = await fetch(readiness.url, { method: 'GET', signal: controller.signal });
+      if (response.status < 500) return undefined;
+      lastError = `Server returned HTTP ${response.status}.`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+    }
+    if (!(await sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())), signal))) break;
+  }
+  return {
+    kind: 'browser',
+    phase: 'postflight',
+    success: false,
+    status: 'timeout',
+    summary: `Application server was not ready within ${timeoutMs}ms; browser verification was not started.`,
+    details: { url: readiness.url, error: lastError },
+  };
+}
+
 export async function runAutomaticPreflight(
   plan: TaskPlan,
   request: OrchestrationRequest,
@@ -123,6 +198,8 @@ export async function runAutomaticPostflight(
       details: { hint: 'Provide an http:// or https:// URL, or call browser_verify with one.' },
     };
   }
+  const readiness = await waitForServer(browserReadiness(plan) ?? { required: false }, signal);
+  if (readiness) return readiness;
   const result = await runtime.browserVerifier.verify({
     url,
     goal: request.query,

@@ -45,6 +45,8 @@ export async function agentCommand(task?: string): Promise<void> {
     browserVerifier,
     decisionGate,
     sandboxBackend,
+    maxParallelTasks: cfg.orchestration?.maxParallelTasks,
+    skills: cfg.skills,
     confirmFn: async (target, _context, safety) => {
       return confirmCommand(target, process.cwd(), (safety as any) ?? null);
     },

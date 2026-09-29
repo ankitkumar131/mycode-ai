@@ -9,6 +9,7 @@
 export type OrchestrationMode =
   | 'native'
   | 'decision'
+  | 'skill'
   | 'browser'
   | 'sandbox'
   | 'fix-and-verify'
@@ -17,6 +18,7 @@ export type OrchestrationMode =
 export type OrchestrationTaskKind =
   | 'native'
   | 'decision'
+  | 'skill'
   | 'fixer'
   | 'browser-verifier'
   | 'sandbox-worker'
@@ -37,6 +39,23 @@ export interface OrchestrationRequest {
   context?: Record<string, unknown>;
 }
 
+export interface WorkspaceBoundary {
+  /** Workspace root shared or mounted for this task. */
+  root: string;
+  /** Human-readable artifact/version boundary, such as before-fixer or after-fixer. */
+  version?: string;
+  /** Whether this task may mutate the shared workspace or needs an isolated copy. */
+  isolation?: 'shared' | 'isolated';
+}
+
+export interface ServerReadiness {
+  required: boolean;
+  /** URL polled before a browser verifier starts. */
+  url?: string;
+  timeoutMs?: number;
+  pollMs?: number;
+}
+
 export interface OrchestrationTaskSpec {
   id: string;
   kind: OrchestrationTaskKind;
@@ -48,6 +67,10 @@ export interface OrchestrationTaskSpec {
   readOnly?: boolean;
   /** Capabilities the selected backend must provide. */
   capabilities?: string[];
+  /** Explicit workspace and artifact version boundary for this task. */
+  workspaceBoundary?: WorkspaceBoundary;
+  /** Server must be reachable before this task starts. */
+  serverReadiness?: ServerReadiness;
   metadata?: Record<string, unknown>;
 }
 

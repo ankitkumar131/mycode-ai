@@ -52,6 +52,8 @@ export async function editCommand(filePath?: string, instruction?: string): Prom
     browserVerifier,
     decisionGate,
     sandboxBackend,
+    maxParallelTasks: cfg.orchestration?.maxParallelTasks,
+    skills: cfg.skills,
     maxIterations: 5,
   });
 

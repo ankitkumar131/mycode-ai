@@ -4,6 +4,8 @@ import type {
   TaskPlan,
   TaskPlanner,
 } from './types.js';
+import { skillManager } from '../skills/skill-manager.js';
+import type { SkillIndexEntry } from '../skills/types.js';
 
 const BROWSER_TERMS = [
   'browser',
@@ -74,6 +76,30 @@ function firstUrl(query: string): string | undefined {
   return query.match(/https?:\/\/[^\s)>'"]+/i)?.[0]?.replace(/[.,!?]+$/, '');
 }
 
+function matchingSkill(query: string, cwd: string): SkillIndexEntry | undefined {
+  try {
+    const skills = skillManager.index(cwd);
+    const explicit = query.startsWith('/') ? query.match(/^\/([^\s]+)/)?.[1]?.toLowerCase() : undefined;
+    if (explicit) {
+      const exact = skills.find(skill => skill.name.toLowerCase() === explicit);
+      if (exact) return exact;
+    }
+    const tokens = query.toLowerCase().split(/[^a-z0-9]+/).filter(token => token.length >= 3);
+    let best: { skill: SkillIndexEntry; score: number } | undefined;
+    for (const skill of skills) {
+      const searchable = [skill.name, skill.description, skill.category ?? '', ...(skill.tags ?? [])].join(' ').toLowerCase();
+      let score = 0;
+      if (tokens.some(token => skill.name.toLowerCase().includes(token))) score += 5;
+      if (tokens.some(token => (skill.tags ?? []).some(tag => tag.toLowerCase() === token))) score += 4;
+      score += tokens.filter(token => searchable.includes(token)).length;
+      if (score >= 5 && (!best || score > best.score)) best = { skill, score };
+    }
+    return best?.skill;
+  } catch {
+    return undefined;
+  }
+}
+
 function hasTerm(query: string, terms: string[]): boolean {
   return terms.some(term => query.includes(term));
 }
@@ -106,6 +132,7 @@ export class TaskRouter implements TaskPlanner {
     const wantsParallel = hasTerm(normalized, PARALLEL_TERMS);
     const wantsSandbox = hasTerm(normalized, SANDBOX_TERMS);
     const url = firstUrl(query);
+    const matchedSkill = matchingSkill(query, request.cwd);
 
     let mode: TaskPlan['mode'] = 'native';
     let reason = 'Use the normal MyCode agent and tool loop.';
@@ -116,18 +143,33 @@ export class TaskRouter implements TaskPlanner {
       }),
     ];
 
-    if (wantsBrowser && wantsFix) {
+    if (matchedSkill) {
+      mode = 'skill';
+      reason = `The request matches installed skill ${matchedSkill.name}; load its procedure before using native tools.`;
+      recommendedTools = ['skill_view', 'native_tools'];
+      tasks = [
+        task('skill', 'skill', `Load installed skill: ${matchedSkill.name}`, query, {
+          capabilities: ['skills'],
+          readOnly: true,
+          workspaceBoundary: { root: request.cwd, version: 'skill-procedure', isolation: 'shared' },
+          metadata: { skillName: matchedSkill.name, origin: matchedSkill.origin },
+        }),
+      ];
+    } else if (wantsBrowser && wantsFix) {
       mode = 'fix-and-verify';
       reason = 'The request combines a code change with a browser-visible behavior; fix first, then verify the resulting application state.';
       recommendedTools = ['native_tools', 'sandbox_task', 'browser_verify'];
       tasks = [
         task('fixer', 'fixer', 'Fix the application', query, {
           capabilities: ['files', 'terminal', 'git'],
+          workspaceBoundary: { root: request.cwd, version: 'before-fixer', isolation: 'shared' },
         }),
         task('browser-verifier', 'browser-verifier', 'Verify the browser behavior', `Verify the browser-visible acceptance criteria from this request after the fixer completes:\n\n${query}`, {
           dependsOn: ['fixer'],
           readOnly: true,
           capabilities: ['browser'],
+          workspaceBoundary: { root: request.cwd, version: 'after-fixer', isolation: 'shared' },
+          serverReadiness: { required: true, url },
           metadata: url ? { url } : undefined,
         }),
       ];
@@ -139,6 +181,8 @@ export class TaskRouter implements TaskPlanner {
         task('browser-verifier', 'browser-verifier', 'Verify browser behavior', query, {
           readOnly: true,
           capabilities: ['browser'],
+          workspaceBoundary: { root: request.cwd, version: 'current', isolation: 'shared' },
+          serverReadiness: { required: Boolean(url), url },
           metadata: url ? { url } : undefined,
         }),
       ];
@@ -159,6 +203,7 @@ export class TaskRouter implements TaskPlanner {
       tasks = [
         task('sandbox-worker', 'sandbox-worker', 'Run an isolated worker', query, {
           capabilities: ['sandbox', 'files', 'terminal'],
+          workspaceBoundary: { root: request.cwd, version: 'sandbox-input', isolation: 'isolated' },
           metadata: { requestedByUser: true },
         }),
       ];

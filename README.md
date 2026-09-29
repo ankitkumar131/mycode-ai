@@ -275,7 +275,9 @@ MyCode has no application-level usage ceiling. Use continues while the configure
 
 ### Automatic orchestration and browser verification
 
-MyCode performs a conservative intent pass before each request. Ordinary questions stay on the native tool loop; requests that combine a code fix with browser-visible behavior are planned as a fixer followed by a read-only browser verification task. The plan never claims that a specialized runtime ran unless its tool returns evidence.
+MyCode performs a conservative intent pass before each request. Ordinary questions stay on the native tool loop; installed skills are matched from the workspace/user skill index and loaded automatically; requests that combine a code fix with browser-visible behavior are planned as a fixer followed by a read-only browser verification task. Fixer and verifier tasks carry explicit dependency, shared-workspace/version, and server-readiness metadata. The plan never claims that a specialized runtime ran unless its tool returns evidence.
+
+Requests for independent work can use the bounded `parallel_delegate` tool. It runs independent delegated workers concurrently (default maximum two, configurable with `orchestration.maxParallelTasks`) and keeps delegated workers from recursively spawning more workers. A configured AX backend may run an isolated sandbox preflight for sandbox/parallel intents; without AX, MyCode continues with native/local workers. Automatic orchestration reserves configured Jev/Laya/AX calls for the planned preflight/postflight so the same specialized task is not silently run twice. Cancellation propagates to every child process and structured results report unavailable, blocked, failed, timeout, or aborted states explicitly.
 
 The Jev adapter uses a small JSON-over-stdin bridge so the Python browser runtime remains optional:
 

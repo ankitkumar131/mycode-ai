@@ -21,6 +21,9 @@ describe('TaskRouter', () => {
     expect(plan.tasks.map(task => task.id)).toEqual(['fixer', 'browser-verifier']);
     expect(plan.tasks[1].dependsOn).toEqual(['fixer']);
     expect(plan.tasks[1].readOnly).toBe(true);
+    expect(plan.tasks[0].workspaceBoundary?.version).toBe('before-fixer');
+    expect(plan.tasks[1].workspaceBoundary?.version).toBe('after-fixer');
+    expect(plan.tasks[1].serverReadiness?.required).toBe(true);
     expect(plan.recommendedTools).toContain('browser_verify');
     expect(formatTaskPlanGuidance(plan)).toContain('Automatic execution plan');
   });

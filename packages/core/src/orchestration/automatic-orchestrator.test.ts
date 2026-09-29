@@ -29,6 +29,7 @@ describe('automatic orchestration adapters', () => {
     const browserVerifier = { verify: vi.fn().mockResolvedValue({ success: true, status: 'passed', summary: 'UI passed' }) };
     const query = 'Verify the login page at http://127.0.0.1:3000/login in the browser.';
     const plan = router.plan({ query, cwd: '/tmp/project' });
+    plan.tasks[0].serverReadiness = { required: false };
     const evidence = await runAutomaticPostflight(plan, { query, cwd: '/tmp/project' }, { browserVerifier }, signal);
     expect(browserVerifier.verify).toHaveBeenCalledWith(expect.objectContaining({ url: 'http://127.0.0.1:3000/login' }), expect.anything());
     expect(evidence?.kind).toBe('browser');

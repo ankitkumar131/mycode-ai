@@ -49,6 +49,8 @@ export async function explainCommand(filePath?: string): Promise<void> {
     browserVerifier,
     decisionGate,
     sandboxBackend,
+    maxParallelTasks: cfg.orchestration?.maxParallelTasks,
+    skills: cfg.skills,
     onError(msg) { spinner.fail(chalk.red(msg)); },
     onFinish() { spinner.stop(); },
   });
