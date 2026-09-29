@@ -8,6 +8,12 @@ export { EventTranslator } from './agent/event-translator.js';
 // Automatic intent routing and bounded multi-worker orchestration
 export { TaskRouter, taskRouter, formatTaskPlanGuidance } from './orchestration/task-router.js';
 export { TaskSupervisor } from './orchestration/task-supervisor.js';
+export {
+  runAutomaticPreflight,
+  runAutomaticPostflight,
+  formatAutomaticEvidence,
+} from './orchestration/automatic-orchestrator.js';
+export type { AutomaticOrchestrationRuntime, AutomaticEvidence } from './orchestration/automatic-orchestrator.js';
 export type {
   OrchestrationMode,
   OrchestrationRequest,

@@ -21,6 +21,12 @@ import type {
 import type { BrowserVerifier } from '../integrations/browser-verifier.js';
 import type { DecisionGate } from '../integrations/decision-gate.js';
 import type { SandboxBackend } from '../integrations/sandbox-backend.js';
+import {
+  runAutomaticPreflight,
+  runAutomaticPostflight,
+  formatAutomaticEvidence,
+} from '../orchestration/automatic-orchestrator.js';
+import type { AutomaticEvidence } from '../orchestration/automatic-orchestrator.js';
 
 const MAX_ITERATIONS = 40;
 const MAX_CONSECUTIVE_FAILURES_PER_TOOL = 3;
@@ -91,6 +97,8 @@ export class AgentSession {
   private _toolCounts: Map<string, number> = new Map();
   private _pendingSystemSections: string[] = [];
   private _lastPlan: TaskPlan | null = null;
+  private _automaticEvidence: AutomaticEvidence[] = [];
+  private _specializedToolsUsed = new Set<string>();
   public id: string;
   public title: string | null = null;
 
@@ -117,10 +125,34 @@ export class AgentSession {
     const cwd = this.config.cwd ?? process.cwd();
     const router = this.config.providerRouter;
 
+    this._automaticEvidence = [];
+    this._specializedToolsUsed.clear();
     if (this.config.autoOrchestration !== false) {
       this._lastPlan = (this.config.taskPlanner ?? taskRouter).plan({ query: input, cwd });
       const guidance = formatTaskPlanGuidance(this._lastPlan);
       if (guidance) this.addSystemSection(guidance);
+      try {
+        const evidence = await runAutomaticPreflight(this._lastPlan, { query: input, cwd }, {
+          browserVerifier: this.config.browserVerifier,
+          decisionGate: this.config.decisionGate,
+          sandboxBackend: this.config.sandboxBackend,
+        }, this._abortController.signal);
+        if (evidence) {
+          this._automaticEvidence.push(evidence);
+          this.addSystemSection(formatAutomaticEvidence(evidence));
+        }
+      } catch (error) {
+        const evidence: AutomaticEvidence = {
+          kind: this._lastPlan.mode === 'decision' ? 'decision' : this._lastPlan.mode === 'sandbox' || this._lastPlan.mode === 'parallel' ? 'sandbox' : 'browser',
+          phase: 'preflight',
+          success: false,
+          status: 'failed',
+          summary: 'Automatic specialized preflight failed; continuing with the native MyCode loop.',
+          details: { error: error instanceof Error ? error.message : String(error) },
+        };
+        this._automaticEvidence.push(evidence);
+        this.addSystemSection(formatAutomaticEvidence(evidence));
+      }
     } else {
       this._lastPlan = null;
     }
@@ -193,8 +225,8 @@ export class AgentSession {
         if (response) this.emit({ type: 'text', content: response });
 
         if (!toolCalls || toolCalls.length === 0) {
-          this.context.addAssistant(response);
-          finalText = response;
+          finalText = await this.completeAutomaticPostflight(input, cwd, response);
+          this.context.addAssistant(finalText);
           this.emit({ type: 'finish', usage });
           this.config.onFinish?.(usage);
           return finalText;
@@ -209,6 +241,9 @@ export class AgentSession {
             continue;
           }
           const toolName = call.function.name;
+          if (toolName === 'browser_verify' || toolName === 'decision_gate' || toolName === 'sandbox_task') {
+            this._specializedToolsUsed.add(toolName);
+          }
           let args: Record<string, unknown>;
           try {
             args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
@@ -266,9 +301,10 @@ export class AgentSession {
 
       if (this._iterations >= maxIter) {
         const msg = `Reached the maximum of ${maxIter} tool iterations for this turn. Say "continue" to keep going.`;
-        this.context.addAssistant(msg);
+        const completed = await this.completeAutomaticPostflight(input, cwd, msg);
+        this.context.addAssistant(completed);
         this.config.onFinish?.({ promptTokens: 0, completionTokens: 0 });
-        return msg;
+        return completed;
       }
       this.config.onFinish?.({ promptTokens: 0, completionTokens: 0 });
       return finalText;
@@ -289,6 +325,34 @@ export class AgentSession {
           // Keep the provider result even if audit storage becomes unavailable.
         }
       }
+    }
+  }
+
+  private async completeAutomaticPostflight(input: string, cwd: string, response: string): Promise<string> {
+    const plan = this._lastPlan;
+    if (!plan || this._specializedToolsUsed.has('browser_verify')) return response;
+    if (plan.mode !== 'browser' && plan.mode !== 'fix-and-verify') return response;
+
+    try {
+      const evidence = await runAutomaticPostflight(plan, { query: input, cwd }, {
+        browserVerifier: this.config.browserVerifier,
+        decisionGate: this.config.decisionGate,
+        sandboxBackend: this.config.sandboxBackend,
+      }, this._abortController.signal);
+      if (!evidence) return response;
+      this._automaticEvidence.push(evidence);
+      return `${response}\n\n${formatAutomaticEvidence(evidence)}`;
+    } catch (error) {
+      const evidence: AutomaticEvidence = {
+        kind: 'browser',
+        phase: 'postflight',
+        success: false,
+        status: 'failed',
+        summary: 'Automatic browser verification failed; the response is not a verified pass.',
+        details: { error: error instanceof Error ? error.message : String(error) },
+      };
+      this._automaticEvidence.push(evidence);
+      return `${response}\n\n${formatAutomaticEvidence(evidence)}`;
     }
   }
 
@@ -393,6 +457,8 @@ ${result}`;
     this._filesTouched.clear();
     this._toolCounts.clear();
     this._lastPlan = null;
+    this._automaticEvidence = [];
+    this._specializedToolsUsed.clear();
     this._startedAt = Date.now();
     this.id = `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}-${Math.random().toString(36).slice(2, 6)}`;
     this.title = null;
@@ -415,6 +481,10 @@ ${result}`;
 
   getLastPlan(): TaskPlan | null {
     return this._lastPlan;
+  }
+
+  getAutomaticEvidence(): AutomaticEvidence[] {
+    return this._automaticEvidence.map(item => ({ ...item }));
   }
 
   private flushPendingSystemSections(): void {

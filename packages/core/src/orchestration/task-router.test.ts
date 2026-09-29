@@ -32,6 +32,19 @@ describe('TaskRouter', () => {
     expect(plan.recommendedTools).toContain('decision_gate');
   });
 
+  it('captures an application URL for automatic browser postflight', () => {
+    const plan = router.plan({ query: 'Check the UI at http://127.0.0.1:3000/login in the browser.', cwd: '/tmp/project' });
+    expect(plan.mode).toBe('browser');
+    expect(plan.tasks[0].metadata?.url).toBe('http://127.0.0.1:3000/login');
+  });
+
+  it('routes explicit isolation requests to a sandbox worker', () => {
+    const plan = router.plan({ query: 'Run this untrusted script in an isolated sandbox.', cwd: '/tmp/project' });
+    expect(plan.mode).toBe('sandbox');
+    expect(plan.tasks[0].kind).toBe('sandbox-worker');
+    expect(plan.recommendedTools).toContain('sandbox_task');
+  });
+
   it('recognizes explicit parallel work without pretending to have run it', () => {
     const plan = router.plan({ query: 'Run several agents independently in parallel.', cwd: '/tmp/project' });
     expect(plan.mode).toBe('parallel');

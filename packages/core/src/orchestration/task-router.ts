@@ -61,6 +61,19 @@ const PARALLEL_TERMS = [
   'independently',
 ];
 
+const SANDBOX_TERMS = [
+  'sandbox',
+  'isolated worker',
+  'isolated task',
+  'container worker',
+  'untrusted code',
+  'ax task',
+];
+
+function firstUrl(query: string): string | undefined {
+  return query.match(/https?:\/\/[^\s)>'"]+/i)?.[0]?.replace(/[.,!?]+$/, '');
+}
+
 function hasTerm(query: string, terms: string[]): boolean {
   return terms.some(term => query.includes(term));
 }
@@ -91,6 +104,8 @@ export class TaskRouter implements TaskPlanner {
     const wantsFix = hasTerm(normalized, FIX_TERMS);
     const wantsDecision = hasTerm(normalized, DECISION_TERMS);
     const wantsParallel = hasTerm(normalized, PARALLEL_TERMS);
+    const wantsSandbox = hasTerm(normalized, SANDBOX_TERMS);
+    const url = firstUrl(query);
 
     let mode: TaskPlan['mode'] = 'native';
     let reason = 'Use the normal MyCode agent and tool loop.';
@@ -113,6 +128,7 @@ export class TaskRouter implements TaskPlanner {
           dependsOn: ['fixer'],
           readOnly: true,
           capabilities: ['browser'],
+          metadata: url ? { url } : undefined,
         }),
       ];
     } else if (wantsBrowser) {
@@ -123,6 +139,7 @@ export class TaskRouter implements TaskPlanner {
         task('browser-verifier', 'browser-verifier', 'Verify browser behavior', query, {
           readOnly: true,
           capabilities: ['browser'],
+          metadata: url ? { url } : undefined,
         }),
       ];
     } else if (wantsDecision) {
@@ -135,10 +152,20 @@ export class TaskRouter implements TaskPlanner {
           capabilities: ['typed-decision'],
         }),
       ];
+    } else if (wantsSandbox) {
+      mode = 'sandbox';
+      reason = 'The request asks for isolated, untrusted, containerized, or AX-backed execution.';
+      recommendedTools = ['sandbox_task', 'native_tools'];
+      tasks = [
+        task('sandbox-worker', 'sandbox-worker', 'Run an isolated worker', query, {
+          capabilities: ['sandbox', 'files', 'terminal'],
+          metadata: { requestedByUser: true },
+        }),
+      ];
     } else if (wantsParallel) {
       mode = 'parallel';
       reason = 'The request explicitly asks for independent work to happen concurrently.';
-      recommendedTools = ['parallel_supervisor', 'native_tools'];
+      recommendedTools = ['parallel_supervisor', 'sandbox_task', 'native_tools'];
       tasks = [
         task('parallel-primary', 'native', 'Primary parallel work', query, {
           capabilities: ['files', 'terminal', 'git', 'web'],
