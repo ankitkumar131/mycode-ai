@@ -32,6 +32,8 @@ import { todoWriteTool } from './definitions/todowrite.js';
 import { readInstructionsTool } from './definitions/read-instructions.js';
 import { skillsListTool, skillViewTool, skillManageTool } from './definitions/skills.js';
 import { memoryTool } from './definitions/memory.js';
+import { delegateTool } from './definitions/delegate.js';
+import { permissionManager } from '../policy/permission-manager.js';
 
 export const TOOLSETS: Record<string, string[]> = {
   files: ['read_file', 'write_file', 'patch', 'list_dir', 'glob', 'search_files', 'read_document', 'read_pdf'],
@@ -39,7 +41,7 @@ export const TOOLSETS: Record<string, string[]> = {
   git: ['git_status'],
   web: ['web_search', 'web_fetch'],
   skills: ['skills_list', 'skill_view', 'skill_manage'],
-  agent: ['todo_write', 'read_instructions', 'memory'],
+  agent: ['todo_write', 'read_instructions', 'memory', 'delegate'],
 };
 
 const ALL_TOOLS: ToolModule[] = [
@@ -63,6 +65,7 @@ const ALL_TOOLS: ToolModule[] = [
   todoWriteTool,
   readInstructionsTool,
   memoryTool,
+  delegateTool,
 ];
 
 export const ALIASES: Record<string, string> = {
@@ -122,7 +125,7 @@ export const ALIASES: Record<string, string> = {
   view_skill: 'skill_view',
 };
 
-const WRITE_TOOLS = new Set(['write_file', 'patch', 'execute_code', 'terminal', 'skill_manage']);
+const WRITE_TOOLS = new Set(['write_file', 'patch', 'execute_code', 'terminal', 'skill_manage', 'delegate']);
 
 export interface ExecuteToolOptions {
   confirmFn?: (target: string, context?: string | null, safety?: SafetyResult) => Promise<boolean>;
@@ -246,6 +249,13 @@ export class ToolRegistry {
     const canonicalName = this.canonical(name);
     if (this.disabled.has(canonicalName)) {
       throw new Error(`Tool "${canonicalName}" is disabled for this session.`);
+    }
+    // CLI sessions provide their richer persistent approval callback. SDK and
+    // direct registry users still get a centralized default authorization path
+    // instead of silently executing write-capable tools.
+    if (this.isWriteTool(canonicalName) && !execOptions?.confirmFn) {
+      const allowed = await permissionManager.check(canonicalName, args);
+      if (!allowed) throw new Error(`Permission denied for tool "${canonicalName}".`);
     }
     const mod = this.modules.get(canonicalName) || this.modules.get(name);
     if (mod) {

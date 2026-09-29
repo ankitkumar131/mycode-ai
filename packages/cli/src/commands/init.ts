@@ -3,6 +3,10 @@ import { ConfigManager, adjustProviderPriorities, type ProviderConfig } from '@m
 import chalk from 'chalk';
 import { select, input } from '../ui/prompt.js';
 
+function splitArgs(input: string): string[] {
+  return [...input.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|([^\\s]+)/g)].map(m => m[1] ?? m[2] ?? m[3]);
+}
+
 export async function initCommand(): Promise<void> {
   const config = new ConfigManager();
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -67,32 +71,45 @@ export async function initCommand(): Promise<void> {
 
     // 3. apiProvider
     const apiProviderStr = await rl.question(
-      chalk.dim('API provider') + ' (openai/openrouter/ollama/custom): '
+      chalk.dim('API provider') + ' (openai/openrouter/ollama/custom/cli): '
     );
     const provider = apiProviderStr.trim().toLowerCase() || 'openai';
+    const isCliProvider = ['cli', 'munder', 'external'].includes(provider);
 
     if (!name) {
       name = `${provider}-${priority}`;
     }
 
     // 4. model
-    const defaultModel = provider === 'ollama' ? 'llama3.1:8b' : 'gpt-4o';
+    const defaultModel = isCliProvider ? 'external-agent' : provider === 'ollama' ? 'llama3.1:8b' : 'gpt-4o';
     const modelStr = await rl.question(chalk.dim('Model') + ` (${defaultModel}): `);
     const model = modelStr.trim() || defaultModel;
 
-    // 5. apiKey
+    // 5. apiKey (external agent CLIs use their own login/authentication)
     let apiKey: string | undefined = undefined;
-    if (provider !== 'ollama') {
+    if (provider !== 'ollama' && !isCliProvider) {
       const keyStr = await rl.question(chalk.dim('API key') + ': ');
       apiKey = keyStr.trim() || undefined;
     }
 
     // 6. baseUrl
-    const defaultUrl = provider === 'ollama' ? 'http://localhost:11434' : provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : '';
-    const baseUrlStr = await rl.question(
-      chalk.dim('Base URL') + (defaultUrl ? ` (${defaultUrl}): ` : ': ')
-    );
-    const baseUrl = baseUrlStr.trim() || defaultUrl || undefined;
+    let baseUrl: string | undefined;
+    if (!isCliProvider) {
+      const defaultUrl = provider === 'ollama' ? 'http://localhost:11434' : provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : '';
+      const baseUrlStr = await rl.question(
+        chalk.dim('Base URL') + (defaultUrl ? ` (${defaultUrl}): ` : ': ')
+      );
+      baseUrl = baseUrlStr.trim() || defaultUrl || undefined;
+    }
+
+    let command: string | undefined;
+    let cliArgs: string[] | undefined;
+    if (isCliProvider) {
+      const commandStr = await rl.question(chalk.dim('CLI command') + ' (for example: claude, codex, gemini): ');
+      command = commandStr.trim() || undefined;
+      const argsStr = await rl.question(chalk.dim('CLI arguments') + ' (optional; use {model} or {prompt} when supported): ');
+      cliArgs = argsStr.trim() ? splitArgs(argsStr.trim()) : undefined;
+    }
 
     // 7. read
     const readStr = await rl.question(chalk.dim('Read permission') + ' (true/false) [true]: ');
@@ -119,6 +136,7 @@ export async function initCommand(): Promise<void> {
       read,
       write,
       maxRetries,
+      ...(isCliProvider ? { command, args: cliArgs } : {}),
     };
 
     defaultConfig.providers.push(newProvider);

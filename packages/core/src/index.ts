@@ -64,6 +64,8 @@ export { ZipReader } from './documents/zip.js';
 // Sessions
 export { SessionStore, sessionStore } from './sessions/session-store.js';
 export type { SavedSession, SessionSummary } from './sessions/session-store.js';
+export { RunLedger, runLedger } from './sessions/run-ledger.js';
+export type { RunRecord, RunStatus } from './sessions/run-ledger.js';
 
 // Skills
 export { SkillLoader, parseFrontmatter, stripFrontmatter, isPlatformCompatible } from './skills/skill-loader.js';
@@ -75,6 +77,7 @@ export type { SkillManagerOptions, SkillSearchResult } from './skills/skill-mana
 // Providers
 export { BaseProvider } from './routing/base-provider.js';
 export { ProviderRouter } from './routing/provider-router.js';
+export { CliAgentProvider } from './routing/cli-agent-provider.js';
 export type { ProviderConfig, ProviderStats } from './routing/types.js';
 
 // Hooks
@@ -104,8 +107,23 @@ export type { OutputFormat } from './output/types.js';
 // Prompts
 export { SystemPromptBuilder, findContextFiles, readMemory, CONTEXT_FILE_NAMES } from './prompts/system-prompt.js';
 
+// Native Ponytail policy
+export {
+  PONYTAIL_MOTTO,
+  PONYTAIL_MODES,
+  DEFAULT_PONYTAIL_MODE,
+  DEFAULT_PONYTAIL_SETTINGS,
+  getPonytailPolicy,
+  buildPonytailCommandPrompt,
+  normalizePonytailMode,
+  ponytailModeDescription,
+} from './policy/ponytail.js';
+export type { PonytailMode, PonytailSettings, PonytailReviewKind } from './policy/ponytail.js';
+
 // Safety & Policy
 export { SafetyChecker } from './safety/safety-checker.js';
 export { PolicyEngine } from './policy/policy-engine.js';
 export { PermissionManager, permissionManager } from './policy/permission-manager.js';
 export type { PermissionRule, RulesetArray, Effect, PermissionPromptRequest } from './policy/permission-manager.js';
+export { ApprovalStore, approvalStore } from './policy/approval-store.js';
+export type { ApprovalScope, ApprovalAction, ApprovalRecord } from './policy/approval-store.js';

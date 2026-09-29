@@ -1,4 +1,5 @@
 import type { ProviderConfig } from '../routing/types.js';
+import type { PonytailMode } from '../policy/ponytail.js';
 
 export interface MyCodeConfig {
   version: string;
@@ -9,6 +10,15 @@ export interface MyCodeConfig {
     confirmCommands: boolean;
     maxContextFiles?: number;
     logConversations?: boolean;
+  };
+  /** Native Ponytail policy. It is enabled for every task by default. */
+  ponytail?: {
+    mode: PonytailMode;
+    applyToAllTasks: boolean;
+  };
+  /** Application-level execution policy. Provider quotas remain outside MyCode's control. */
+  usage?: {
+    unlimited: boolean;
   };
   mcp?: {
     servers: Array<{

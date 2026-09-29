@@ -232,6 +232,47 @@ $ mycode chat
 
 ---
 
+## 🐎 Native Ponytail Policy
+
+MyCode enables Ponytail's minimal-solution policy in **full mode from the first request**, including ordinary questions, research, documentation, and coding tasks:
+
+> **The best code is the code never written.**
+
+Before adding work, MyCode prefers existing project code, the standard library, native platform features, and already-installed dependencies. It keeps security, validation, error handling, accessibility, explicit requirements, approvals, and runnable verification intact.
+
+Inside chat:
+
+```text
+/ponytail             show the active mode and motto
+/ponytail lite        use a lighter minimal-change bias
+/ponytail full        use the complete ladder (default)
+/ponytail ultra       require strict justification for additions
+/ponytail off         disable only the Ponytail overlay
+/ponytail-review      review a scope for unnecessary complexity
+/ponytail-audit       audit complexity and safety boundaries
+/ponytail-debt        find safe removals
+/ponytail-gain        find small, high-value improvements
+/ponytail-help        explain the policy
+```
+
+The policy is injected into the first system prompt and propagated to delegated workers. `off` does not disable MyCode safety checks or project instructions.
+
+### External agent CLIs
+
+Munder-style external agents can be configured with a `cli`, `munder`, or `external` provider. The provider must have its executable installed and authenticated locally; MyCode does not bypass the provider's quota, billing, network, or login requirements.
+
+```json
+{
+  "name": "codex-cli",
+  "apiProvider": "cli",
+  "model": "default",
+  "command": "codex",
+  "args": ["exec", "{prompt}"]
+}
+```
+
+MyCode has no application-level usage ceiling. Use continues while the configured API or CLI path is available, subject to that provider's own limits and availability.
+
 ## 🔄 Multi-Provider Failover
 
 MyCode's killer feature: **chain multiple AI providers with priority-based automatic failover.**

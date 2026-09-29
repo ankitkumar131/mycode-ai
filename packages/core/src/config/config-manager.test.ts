@@ -29,6 +29,8 @@ describe('ConfigManager', () => {
     expect(config.version).toBe('1');
     expect(config.providers).toEqual([]);
     expect(config.preferences.confirmWrites).toBe(true);
+    expect(config.ponytail).toEqual({ mode: 'full', applyToAllTasks: true });
+    expect(config.usage?.unlimited).toBe(true);
   });
 
   it('configExists returns false when no file', () => {

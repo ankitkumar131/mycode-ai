@@ -3,6 +3,10 @@ import { homedir } from 'os';
 import { join } from 'path';
 import type { MyCodeConfig } from './types.js';
 import type { ProviderConfig } from '../routing/types.js';
+import {
+  DEFAULT_PONYTAIL_SETTINGS,
+  normalizePonytailMode,
+} from '../policy/ponytail.js';
 
 const SNAKE_TO_CAMEL = new Map<string, string>([
   ['api_key', 'apiKey'],
@@ -83,6 +87,8 @@ export class ConfigManager {
         maxContextFiles: 20,
         logConversations: true,
       },
+      ponytail: { ...DEFAULT_PONYTAIL_SETTINGS },
+      usage: { unlimited: true },
     };
   }
 
@@ -118,13 +124,28 @@ export class ConfigManager {
         });
       }
 
+      const defaults = this.getDefault();
+      const rawPonytail = parsed.ponytail && typeof parsed.ponytail === 'object' ? parsed.ponytail : {};
+      const rawUsage = parsed.usage && typeof parsed.usage === 'object' ? parsed.usage : {};
       this.config = {
-        ...this.getDefault(),
+        ...defaults,
         ...parsed,
         providers,
         preferences: {
-          ...this.getDefault().preferences,
+          ...defaults.preferences,
           ...(parsed.preferences || {}),
+        },
+        ponytail: {
+          ...defaults.ponytail,
+          ...rawPonytail,
+          mode: normalizePonytailMode(rawPonytail.mode),
+          applyToAllTasks: rawPonytail.applyToAllTasks !== false,
+        },
+        usage: {
+          ...defaults.usage,
+          ...rawUsage,
+          // Older settings files get the no-artificial-cap behavior on upgrade.
+          unlimited: rawUsage.unlimited !== false,
         },
       };
       return this.config as MyCodeConfig;

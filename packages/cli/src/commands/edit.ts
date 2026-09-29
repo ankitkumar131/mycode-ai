@@ -37,6 +37,8 @@ export async function editCommand(filePath?: string, instruction?: string): Prom
   const session = new AgentSession({
     providerRouter: router,
     cwd: process.cwd(),
+    ponytailMode: cfg.ponytail?.mode,
+    ponytailForAllTasks: cfg.ponytail?.applyToAllTasks !== false,
     maxIterations: 5,
   });
 

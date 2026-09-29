@@ -34,6 +34,8 @@ export async function explainCommand(filePath?: string): Promise<void> {
   const session = new AgentSession({
     providerRouter: router,
     cwd: process.cwd(),
+    ponytailMode: cfg.ponytail?.mode,
+    ponytailForAllTasks: cfg.ponytail?.applyToAllTasks !== false,
     onError(msg) { spinner.fail(chalk.red(msg)); },
     onFinish() { spinner.stop(); },
   });

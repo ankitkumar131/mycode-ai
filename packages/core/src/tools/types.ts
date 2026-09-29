@@ -1,3 +1,5 @@
+import type { PonytailMode } from '../policy/ponytail.js';
+
 export interface ToolFunctionDefinition {
   type: 'function';
   function: {
@@ -13,6 +15,10 @@ export interface ToolExecuteOptions {
     add(record: CommandRecord): void;
   };
   abortSignal?: AbortSignal;
+  /** Propagated to delegated workers so Ponytail is never lost at a boundary. */
+  ponytailMode?: PonytailMode;
+  /** Agent-session-owned delegation runtime. */
+  delegate?: (task: string, agent: string) => Promise<string>;
 }
 
 export interface ToolModule {

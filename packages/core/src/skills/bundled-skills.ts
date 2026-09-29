@@ -107,8 +107,122 @@ const graphifySkill: BundledSkill = {
   },
 };
 
+const PONYTAIL_SKILLS: BundledSkill[] = [
+  skill(
+    'ponytail',
+    `---
+name: ponytail
+description: Prefer the smallest correct solution and avoid unnecessary code
+version: 1.0.0
+category: engineering
+tags: [minimalism, yagni, simplicity, ponytail]
+argument-hint: "[request]"
+---
+
+# Ponytail Minimal-Code Policy
+
+## Motto
+The best code is the code never written.
+
+## Procedure
+1. Decide whether the requested work is necessary.
+2. Reuse existing project code and behavior before adding anything.
+3. Prefer the standard library, native platform features, and installed dependencies in that order.
+4. Choose the smallest local change that remains correct and maintainable.
+5. Trace root causes instead of wrapping symptoms with abstractions.
+6. Verify non-trivial behavior with a runnable check.
+
+## Safety Boundaries
+Minimal does not mean careless. Keep explicit requirements, security, validation, error handling, accessibility, data integrity, and required tests. Never bypass MyCode approvals or project instructions.
+
+## Verification
+Report what was deliberately not added as well as what changed when that explains the minimal solution.
+`
+  ),
+  skill(
+    'ponytail-review',
+    `---
+name: ponytail-review
+description: Review changes for correctness and unnecessary complexity
+version: 1.0.0
+category: engineering
+tags: [review, minimalism, ponytail]
+argument-hint: "[scope]"
+---
+
+# Ponytail Review
+
+Review the requested scope without changing files unless explicitly asked. Check correctness, security, error handling, tests, duplication, unnecessary abstractions, dependencies, and files. Report findings by priority with file paths and the smallest safe fix. If no change is justified, say so.
+`
+  ),
+  skill(
+    'ponytail-audit',
+    `---
+name: ponytail-audit
+description: Audit a project for needless code and risky complexity
+version: 1.0.0
+category: engineering
+tags: [audit, complexity, ponytail]
+argument-hint: "[scope]"
+---
+
+# Ponytail Audit
+
+Inspect the relevant implementation and tests. Identify duplicate code, dead code, speculative configuration, avoidable dependencies, missing validation, weak error handling, and complex workarounds. Preserve behavior that is required for safety, accessibility, or explicit user requirements. Separate evidence from guesses.
+`
+  ),
+  skill(
+    'ponytail-debt',
+    `---
+name: ponytail-debt
+description: Find safe opportunities to remove code and dependencies
+version: 1.0.0
+category: engineering
+tags: [debt, deletion, cleanup, ponytail]
+argument-hint: "[scope]"
+---
+
+# Ponytail Debt
+
+Find code, configuration, dependencies, abstractions, files, and processes that can be removed safely. Prefer deletion and reuse over replacement. For every candidate, state why it is safe, what behavior might change, and the smallest verification needed. Do not remove security or required validation.
+`
+  ),
+  skill(
+    'ponytail-gain',
+    `---
+name: ponytail-gain
+description: Suggest small high-value improvements without scope creep
+version: 1.0.0
+category: engineering
+tags: [improvement, simplicity, ponytail]
+argument-hint: "[scope]"
+---
+
+# Ponytail Gain
+
+Suggest only small improvements with a clear user or maintenance benefit. Prefer existing utilities, standard library features, native platform behavior, and removal of complexity. Do not propose speculative features or a new abstraction without evidence.
+`
+  ),
+  skill(
+    'ponytail-help',
+    `---
+name: ponytail-help
+description: Explain the native Ponytail minimal-code policy and boundaries
+version: 1.0.0
+category: engineering
+tags: [help, policy, ponytail]
+---
+
+# Ponytail Help
+
+Explain the motto "The best code is the code never written", the minimal-solution ladder, the lite/full/ultra/off modes, and the boundary that minimalism never overrides security, validation, error handling, accessibility, tests, project instructions, approvals, or explicit user requirements.
+`
+  ),
+];
+
 export const BUNDLED_SKILLS: BundledSkill[] = [
   graphifySkill,
+  ...PONYTAIL_SKILLS,
   skill(
     'plan',
     `---

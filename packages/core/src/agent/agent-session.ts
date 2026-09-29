@@ -5,6 +5,11 @@ import { ProviderRouter } from '../routing/provider-router.js';
 import { SystemPromptBuilder } from '../prompts/system-prompt.js';
 import type { AgentOptions, AgentEvent } from './types.js';
 import type { ToolExecuteOptions, SafetyResult } from '../tools/types.js';
+import {
+  DEFAULT_PONYTAIL_MODE,
+  type PonytailMode,
+} from '../policy/ponytail.js';
+import type { RunLedger } from '../sessions/run-ledger.js';
 
 const MAX_ITERATIONS = 40;
 const MAX_CONSECUTIVE_FAILURES_PER_TOOL = 3;
@@ -36,6 +41,12 @@ export interface SessionConfig extends AgentOptions {
   confirmFn?: (target: string, context?: string | null, safety?: SafetyResult) => Promise<boolean>;
   /** Extra system-prompt sections (personality, preloaded skills…) */
   extraSystemSections?: string[];
+  /** Native Ponytail policy mode. Defaults to full for every request. */
+  ponytailMode?: PonytailMode;
+  /** Keep Ponytail active for non-coding tasks as well (default true). */
+  ponytailForAllTasks?: boolean;
+  /** Optional durable audit/recovery ledger. */
+  runLedger?: RunLedger;
 }
 
 export class AgentSession {
@@ -83,6 +94,20 @@ export class AgentSession {
     const maxIter = this.config.maxIterations ?? MAX_ITERATIONS;
     const cwd = this.config.cwd ?? process.cwd();
     const router = this.config.providerRouter;
+    let runId: string | undefined;
+    try {
+      runId = this.config.runLedger?.start({
+        sessionId: this.id,
+        cwd,
+        provider: router.getCurrentProvider()?.name,
+        agent: 'build',
+      });
+    } catch {
+      // Audit persistence is best effort; an unavailable ledger must not stop
+      // the user's provider request.
+      runId = undefined;
+    }
+    let ledgerStatus: 'completed' | 'failed' | 'aborted' = 'completed';
 
     try {
       await this.ensureSystemPrompt(cwd);
@@ -106,6 +131,8 @@ export class AgentSession {
 
         try {
           const result = await router.chat(messages, toolDefs.length > 0 ? toolDefs : undefined, {
+            cwd,
+            ponytailMode: this.config.ponytailMode ?? DEFAULT_PONYTAIL_MODE,
             abortSignal: this._abortController.signal,
             onStream: (chunk: string) => this.config.onText?.(chunk),
             onReasoning: (chunk: string) => this.config.onReasoning?.(chunk),
@@ -120,6 +147,7 @@ export class AgentSession {
           }
         } catch (err) {
           if (this._aborted) return 'Interrupted.';
+          ledgerStatus = 'failed';
           const errMsg = err instanceof Error ? err.message : String(err);
           this.config.onError?.(errMsg);
           this.emit({ type: 'error', message: errMsg });
@@ -178,7 +206,12 @@ export class AgentSession {
 
           const t0 = Date.now();
           try {
-            const execOptions: ToolExecuteOptions = { abortSignal: this._abortController.signal, confirmFn: this.config.confirmFn };
+            const execOptions: ToolExecuteOptions = {
+              abortSignal: this._abortController.signal,
+              confirmFn: this.config.confirmFn,
+              ponytailMode: this.config.ponytailMode ?? DEFAULT_PONYTAIL_MODE,
+              delegate: (task, agentName) => this.runDelegatedTask(task, agentName, cwd),
+            };
             let result = await this.toolRegistry.executeTool(toolName, args, cwd, execOptions);
             // Steering: append any queued notes to this tool result
             const steer = this.takeSteer();
@@ -205,9 +238,54 @@ export class AgentSession {
       }
       this.config.onFinish?.({ promptTokens: 0, completionTokens: 0 });
       return finalText;
+    } catch (err) {
+      ledgerStatus = 'failed';
+      throw err;
     } finally {
       this._running = false;
+      if (runId && this.config.runLedger) {
+        try {
+          this.config.runLedger.finish(runId, {
+            status: this._aborted ? 'aborted' : ledgerStatus,
+            turns: this._usage.turns,
+            toolCalls: this._usage.toolCalls,
+            filesTouched: Array.from(this._filesTouched),
+          });
+        } catch {
+          // Keep the provider result even if audit storage becomes unavailable.
+        }
+      }
     }
+  }
+
+  private async runDelegatedTask(task: string, agentName: string, cwd: string): Promise<string> {
+    const normalizedAgent = agentName === 'general' ? 'general' : 'explore';
+    const childRegistry = normalizedAgent === 'explore'
+      ? new ToolRegistry({
+          toolsets: ['files', 'git', 'web', 'agent'],
+          disabled: ['write_file', 'patch', 'execute_code', 'terminal', 'skill_manage', 'delegate'],
+        })
+      : new ToolRegistry({ disabled: ['delegate'] });
+
+    const child = new AgentSession({
+      providerRouter: this.config.providerRouter,
+      cwd,
+      toolRegistry: childRegistry,
+      contextWindow: this.config.contextWindow,
+      maxIterations: normalizedAgent === 'explore' ? 12 : 24,
+      confirmFn: this.config.confirmFn,
+      ponytailMode: this.config.ponytailMode ?? DEFAULT_PONYTAIL_MODE,
+      ponytailForAllTasks: this.config.ponytailForAllTasks !== false,
+      runLedger: this.config.runLedger,
+      extraSystemSections: [
+        ...(this.config.extraSystemSections ?? []),
+        `Delegated worker role: ${normalizedAgent}. Stay within the supplied subtask and return a concise, evidence-based result to the parent agent.`,
+      ],
+    });
+
+    const result = await child.run(task);
+    return `[${normalizedAgent} delegated worker]
+${result}`;
   }
 
   abort(): void {
@@ -286,6 +364,15 @@ export class AgentSession {
     if (this._initialized) this.flushPendingSystemSections();
   }
 
+  /** Change the native Ponytail mode for this live session. */
+  setPonytailMode(mode: PonytailMode): void {
+    this.config.ponytailMode = mode;
+  }
+
+  getPonytailMode(): PonytailMode {
+    return this.config.ponytailMode ?? DEFAULT_PONYTAIL_MODE;
+  }
+
   private flushPendingSystemSections(): void {
     for (const s of this._pendingSystemSections) this.context.addSystem(s);
     this._pendingSystemSections = [];
@@ -299,6 +386,8 @@ export class AgentSession {
       tools,
       model: this.config.model ?? this.config.providerRouter.getCurrentProvider()?.model,
       provider: this.config.provider,
+      ponytailMode: this.config.ponytailMode ?? DEFAULT_PONYTAIL_MODE,
+      ponytailForAllTasks: this.config.ponytailForAllTasks !== false,
       extraSections: this.config.extraSystemSections,
     });
     this.context.setSystem(prompt);
@@ -312,6 +401,8 @@ export class AgentSession {
       tools,
       model: this.config.model ?? this.config.providerRouter.getCurrentProvider()?.model,
       provider: this.config.provider,
+      ponytailMode: this.config.ponytailMode ?? DEFAULT_PONYTAIL_MODE,
+      ponytailForAllTasks: this.config.ponytailForAllTasks !== false,
       extraSections: this.config.extraSystemSections,
     });
     this.context.addSystem(systemPrompt);

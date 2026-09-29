@@ -1,6 +1,15 @@
 import chalk from 'chalk';
 import readline from 'readline';
 import * as readlinePromises from 'readline/promises';
+import * as MyCodeCore from '@mycode/core';
+
+function getApprovalStore(): any {
+  try {
+    return (MyCodeCore as any).approvalStore;
+  } catch {
+    return null;
+  }
+}
 
 const SAFETY_LEVELS = {
   blocked: { fg: '#FCA5A5', icon: '\uD83D\uDEAB', label: 'BLOCKED' },
@@ -15,25 +24,6 @@ interface SafetyResult {
   level: SafetyLevel;
   reason?: string;
   warnings?: string[];
-}
-
-/** Commands the user approved with "Always allow this command for current session". */
-const ALWAYS_ALLOW = new Set<string>();
-
-function normalizeCommand(command: string): string {
-  return command.trim().toLowerCase();
-}
-
-function isAlwaysAllowed(command: string): boolean {
-  const norm = normalizeCommand(command);
-  for (const entry of ALWAYS_ALLOW) {
-    if (norm === entry || norm.startsWith(entry + ' ')) return true;
-  }
-  return false;
-}
-
-function addAlwaysAllow(command: string): void {
-  ALWAYS_ALLOW.add(normalizeCommand(command));
 }
 
 async function askYesNo(rl: readlinePromises.Interface, question: string, defaultYes = true): Promise<boolean> {
@@ -152,9 +142,10 @@ export async function confirmCommand(
   safety: SafetyResult | null = null,
   description?: string | null,
 ): Promise<boolean> {
-  if (isAlwaysAllowed(command)) return true;
-
   const level = safety?.level ?? 'normal';
+  const action = safety ? 'run_command' : 'write_file';
+  const approvalStore = getApprovalStore();
+  if (approvalStore?.isAllowed(action, command, cwd, level === 'dangerous')) return true;
   const colors = SAFETY_LEVELS[level] || SAFETY_LEVELS.normal;
 
   console.log();
@@ -186,14 +177,18 @@ export async function confirmCommand(
 
   const choices = [
     { name: 'Yes — execute once', value: 'yes' },
-    { name: 'Always allow this command for current session', value: 'always' },
+    { name: 'Always allow for current session', value: 'session' },
+    ...(level === 'dangerous' ? [] : [
+      { name: 'Always allow in this project', value: 'project' },
+      { name: 'Always allow globally', value: 'global' },
+    ]),
     { name: 'No — skip', value: 'no' },
   ];
 
   const selectedValue = await pickChoiceArrowKeys('Execute command?', choices);
 
-  if (selectedValue === 'always') {
-    addAlwaysAllow(command);
+  if (selectedValue === 'session' || selectedValue === 'project' || selectedValue === 'global') {
+    approvalStore?.grant(action, command, selectedValue, cwd);
     return true;
   }
 

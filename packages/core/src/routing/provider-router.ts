@@ -1,6 +1,7 @@
 import { BaseProvider } from './base-provider.js';
 import { OpenAICompatibleProvider } from './openai-compatible.js';
 import { OllamaProvider } from './ollama-provider.js';
+import { CliAgentProvider } from './cli-agent-provider.js';
 import {
   RateLimitError,
   AuthError,
@@ -30,6 +31,16 @@ export class ProviderRouter {
     switch (config.apiProvider) {
       case 'ollama':
         return new OllamaProvider(config);
+      case 'cli':
+      case 'munder':
+      case 'external':
+      case 'claude-cli':
+      case 'codex-cli':
+      case 'gemini-cli':
+      case 'grok-cli':
+      case 'qwen-cli':
+      case 'kimi-cli':
+        return new CliAgentProvider(config);
       case 'openrouter':
       case 'nvidia_nim':
       case 'openai':
@@ -57,6 +68,10 @@ export class ProviderRouter {
   }
 
   private handleProviderError(provider: BaseProvider, err: Error, remaining: BaseProvider[]): void {
+    // Circuit-break a provider for the remainder of this attempt. A later
+    // request can recover it when the router has no eligible providers, while
+    // the status surface still tells the user why failover happened.
+    provider.markUnavailable(err.message || 'provider request failed');
     const idx = remaining.indexOf(provider);
     const nextLabel = idx >= 0 && idx + 1 < remaining.length ? remaining[idx + 1].name : 'none available';
 
@@ -78,13 +93,16 @@ export class ProviderRouter {
   }
 
   getStats(): ProviderStats[] {
-    return this.providers.map((p) => {
+    return this.providers.map((p, index) => {
       const h = p.getHealth();
       return {
         name: p.name,
         model: p.model,
-        priority: 0,
-        status: h.isAvailable ? 'active' : 'error',
+        priority: index + 1,
+        status: h.isAvailable ? (index === this._currentIndex ? 'active' : 'fallback') : 'error',
+        successCount: h.successCount,
+        failureCount: h.failureCount,
+        lastError: h.lastError,
       };
     });
   }
@@ -92,7 +110,7 @@ export class ProviderRouter {
   async chat(messages: unknown[], tools?: unknown[], options?: any): Promise<any> {
     let eligible = this.getEligibleProviders(options);
     if (eligible.length === 0) {
-      this.providers.forEach((p) => ((p as any)._health.isAvailable = true));
+      this.providers.forEach((p) => p.markAvailable());
       eligible = this.getEligibleProviders(options);
       if (eligible.length === 0) {
         throw new NoProvidersConfiguredError();
@@ -104,7 +122,7 @@ export class ProviderRouter {
   async *stream(messages: unknown[], tools?: unknown[], options?: any): AsyncGenerator<any> {
     let eligible = this.getEligibleProviders(options);
     if (eligible.length === 0) {
-      this.providers.forEach((p) => ((p as any)._health.isAvailable = true));
+      this.providers.forEach((p) => p.markAvailable());
       eligible = this.getEligibleProviders(options);
       if (eligible.length === 0) {
         throw new NoProvidersConfiguredError();
@@ -179,7 +197,7 @@ export class ProviderRouter {
 
     if (idx !== -1) {
       this._currentIndex = idx;
-      (this.providers[idx] as any)._health.isAvailable = true;
+      this.providers[idx].markAvailable();
       return true;
     }
     return false;

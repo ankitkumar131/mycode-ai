@@ -3,11 +3,20 @@ import { resolve, join } from 'node:path';
 import { platform, arch, release, hostname, homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { skillManager } from '../skills/skill-manager.js';
+import {
+  DEFAULT_PONYTAIL_MODE,
+  getPonytailPolicy,
+  type PonytailMode,
+} from '../policy/ponytail.js';
 
 export interface SystemPromptOptions {
   tools?: string[];
   model?: string;
   provider?: string;
+  /** Native Ponytail mode. Defaults to full and is active on every task. */
+  ponytailMode?: PonytailMode;
+  /** Whether Ponytail should apply to non-coding requests too (default true). */
+  ponytailForAllTasks?: boolean;
   /** Include a compact index of installed skills (default true) */
   includeSkills?: boolean;
   /** Extra sections (e.g. personality overlay, loaded skills) */
@@ -92,6 +101,15 @@ export class SystemPromptBuilder {
     b.addSection(
       `You are MyCode${modelInfo}, an expert software-engineering agent running in the user's terminal. You work directly in their repository: you read and edit files, run commands, search the web and documents, and iterate until the task is verifiably done. Be direct, precise and honest about uncertainty.`
     );
+
+    // ── Native Ponytail policy ─────────────────────────────────────────────
+    // Keep this in the base prompt rather than an optional MCP call: every
+    // provider, first request, normal turn, and delegated task receives it.
+    const ponytail = getPonytailPolicy(
+      options.ponytailMode ?? DEFAULT_PONYTAIL_MODE,
+      options.ponytailForAllTasks !== false,
+    );
+    if (ponytail) b.addSection(ponytail);
 
     // ── Environment ───────────────────────────────────────────────────────
     const shell = platform() === 'win32' ? process.env.COMSPEC || 'cmd.exe' : process.env.SHELL || '/bin/bash';
