@@ -42,6 +42,7 @@ export async function fixCommand(target?: string): Promise<void> {
     cwd: process.cwd(),
     ponytailMode: cfg.ponytail?.mode,
     ponytailForAllTasks: cfg.ponytail?.applyToAllTasks !== false,
+    autoOrchestration: cfg.orchestration?.enabled !== false,
     onError(msg) { spinner.fail(chalk.red(msg)); },
     onFinish() { spinner.stop(); },
   });

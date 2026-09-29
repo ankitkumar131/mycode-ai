@@ -4,6 +4,24 @@
 export { AgentSession } from './agent/agent-session.js';
 export type { SessionConfig, SessionUsage } from './agent/agent-session.js';
 export { EventTranslator } from './agent/event-translator.js';
+
+// Automatic intent routing and bounded multi-worker orchestration
+export { TaskRouter, taskRouter, formatTaskPlanGuidance } from './orchestration/task-router.js';
+export { TaskSupervisor } from './orchestration/task-supervisor.js';
+export type {
+  OrchestrationMode,
+  OrchestrationRequest,
+  OrchestrationTaskKind,
+  OrchestrationTaskStatus,
+  OrchestrationTaskSpec,
+  TaskPlan,
+  TaskPlanner,
+  TaskExecutionContext,
+  TaskResult,
+  TaskExecutor,
+  OrchestrationRunResult,
+  TaskSupervisorOptions,
+} from './orchestration/types.js';
 export { ConversationContext } from './agent/context.js';
 export type { AgentOptions, AgentEvent, Message as AgentMessage } from './agent/types.js';
 

@@ -20,6 +20,11 @@ export interface MyCodeConfig {
   usage?: {
     unlimited: boolean;
   };
+  /** Automatic intent routing and bounded local/remote task orchestration. */
+  orchestration?: {
+    enabled?: boolean;
+    maxParallelTasks?: number;
+  };
   mcp?: {
     servers: Array<{
       name: string;

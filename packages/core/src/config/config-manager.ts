@@ -89,6 +89,7 @@ export class ConfigManager {
       },
       ponytail: { ...DEFAULT_PONYTAIL_SETTINGS },
       usage: { unlimited: true },
+      orchestration: { enabled: true, maxParallelTasks: 2 },
     };
   }
 
@@ -127,6 +128,7 @@ export class ConfigManager {
       const defaults = this.getDefault();
       const rawPonytail = parsed.ponytail && typeof parsed.ponytail === 'object' ? parsed.ponytail : {};
       const rawUsage = parsed.usage && typeof parsed.usage === 'object' ? parsed.usage : {};
+      const rawOrchestration = parsed.orchestration && typeof parsed.orchestration === 'object' ? parsed.orchestration : {};
       this.config = {
         ...defaults,
         ...parsed,
@@ -146,6 +148,14 @@ export class ConfigManager {
           ...rawUsage,
           // Older settings files get the no-artificial-cap behavior on upgrade.
           unlimited: rawUsage.unlimited !== false,
+        },
+        orchestration: {
+          ...defaults.orchestration,
+          ...rawOrchestration,
+          enabled: rawOrchestration.enabled !== false,
+          maxParallelTasks: typeof rawOrchestration.maxParallelTasks === 'number'
+            ? Math.max(1, Math.min(16, Math.floor(rawOrchestration.maxParallelTasks)))
+            : defaults.orchestration?.maxParallelTasks,
         },
       };
       return this.config as MyCodeConfig;

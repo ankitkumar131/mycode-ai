@@ -258,6 +258,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     cwd,
     ponytailMode,
     ponytailForAllTasks: cfg.ponytail?.applyToAllTasks !== false,
+    autoOrchestration: cfg.orchestration?.enabled !== false,
     runLedger,
     contextWindow: contextWindowFor(cfg, router.getCurrentProvider()),
     toolRegistry: undefined,

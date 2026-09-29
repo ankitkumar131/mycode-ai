@@ -32,6 +32,7 @@ export async function agentCommand(task?: string): Promise<void> {
     maxIterations: 50,
     ponytailMode: cfg.ponytail?.mode,
     ponytailForAllTasks: cfg.ponytail?.applyToAllTasks !== false,
+    autoOrchestration: cfg.orchestration?.enabled !== false,
     confirmFn: async (target, _context, safety) => {
       return confirmCommand(target, process.cwd(), (safety as any) ?? null);
     },

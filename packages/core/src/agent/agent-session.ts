@@ -10,6 +10,14 @@ import {
   type PonytailMode,
 } from '../policy/ponytail.js';
 import type { RunLedger } from '../sessions/run-ledger.js';
+import {
+  taskRouter,
+  formatTaskPlanGuidance,
+} from '../orchestration/task-router.js';
+import type {
+  TaskPlan,
+  TaskPlanner,
+} from '../orchestration/types.js';
 
 const MAX_ITERATIONS = 40;
 const MAX_CONSECUTIVE_FAILURES_PER_TOOL = 3;
@@ -47,6 +55,10 @@ export interface SessionConfig extends AgentOptions {
   ponytailForAllTasks?: boolean;
   /** Optional durable audit/recovery ledger. */
   runLedger?: RunLedger;
+  /** Enable automatic intent planning before each user turn (default true). */
+  autoOrchestration?: boolean;
+  /** Replace the conservative native planner with an application-specific planner. */
+  taskPlanner?: TaskPlanner;
 }
 
 export class AgentSession {
@@ -69,6 +81,7 @@ export class AgentSession {
   private _filesTouched: Set<string> = new Set();
   private _toolCounts: Map<string, number> = new Map();
   private _pendingSystemSections: string[] = [];
+  private _lastPlan: TaskPlan | null = null;
   public id: string;
   public title: string | null = null;
 
@@ -94,6 +107,15 @@ export class AgentSession {
     const maxIter = this.config.maxIterations ?? MAX_ITERATIONS;
     const cwd = this.config.cwd ?? process.cwd();
     const router = this.config.providerRouter;
+
+    if (this.config.autoOrchestration !== false) {
+      this._lastPlan = (this.config.taskPlanner ?? taskRouter).plan({ query: input, cwd });
+      const guidance = formatTaskPlanGuidance(this._lastPlan);
+      if (guidance) this.addSystemSection(guidance);
+    } else {
+      this._lastPlan = null;
+    }
+
     let runId: string | undefined;
     try {
       runId = this.config.runLedger?.start({
@@ -277,6 +299,8 @@ export class AgentSession {
       ponytailMode: this.config.ponytailMode ?? DEFAULT_PONYTAIL_MODE,
       ponytailForAllTasks: this.config.ponytailForAllTasks !== false,
       runLedger: this.config.runLedger,
+      autoOrchestration: this.config.autoOrchestration,
+      taskPlanner: this.config.taskPlanner,
       extraSystemSections: [
         ...(this.config.extraSystemSections ?? []),
         `Delegated worker role: ${normalizedAgent}. Stay within the supplied subtask and return a concise, evidence-based result to the parent agent.`,
@@ -353,6 +377,7 @@ ${result}`;
     this._usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, turns: 0, toolCalls: 0, compressions: 0 };
     this._filesTouched.clear();
     this._toolCounts.clear();
+    this._lastPlan = null;
     this._startedAt = Date.now();
     this.id = `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}-${Math.random().toString(36).slice(2, 6)}`;
     this.title = null;
@@ -371,6 +396,10 @@ ${result}`;
 
   getPonytailMode(): PonytailMode {
     return this.config.ponytailMode ?? DEFAULT_PONYTAIL_MODE;
+  }
+
+  getLastPlan(): TaskPlan | null {
+    return this._lastPlan;
   }
 
   private flushPendingSystemSections(): void {

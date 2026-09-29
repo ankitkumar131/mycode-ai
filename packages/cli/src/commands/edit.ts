@@ -39,6 +39,7 @@ export async function editCommand(filePath?: string, instruction?: string): Prom
     cwd: process.cwd(),
     ponytailMode: cfg.ponytail?.mode,
     ponytailForAllTasks: cfg.ponytail?.applyToAllTasks !== false,
+    autoOrchestration: cfg.orchestration?.enabled !== false,
     maxIterations: 5,
   });
 
