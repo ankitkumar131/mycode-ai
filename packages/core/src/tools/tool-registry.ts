@@ -34,6 +34,7 @@ import { skillsListTool, skillViewTool, skillManageTool } from './definitions/sk
 import { memoryTool } from './definitions/memory.js';
 import { delegateTool } from './definitions/delegate.js';
 import { browserVerifyTool } from './definitions/browser-verify.js';
+import { decisionGateTool } from './definitions/decision-gate.js';
 import { permissionManager } from '../policy/permission-manager.js';
 
 export const TOOLSETS: Record<string, string[]> = {
@@ -43,7 +44,8 @@ export const TOOLSETS: Record<string, string[]> = {
   web: ['web_search', 'web_fetch'],
   skills: ['skills_list', 'skill_view', 'skill_manage'],
   browser: ['browser_verify'],
-  agent: ['todo_write', 'read_instructions', 'memory', 'delegate', 'browser_verify'],
+  decision: ['decision_gate'],
+  agent: ['todo_write', 'read_instructions', 'memory', 'delegate', 'browser_verify', 'decision_gate'],
 };
 
 const ALL_TOOLS: ToolModule[] = [
@@ -69,6 +71,7 @@ const ALL_TOOLS: ToolModule[] = [
   memoryTool,
   delegateTool,
   browserVerifyTool,
+  decisionGateTool,
 ];
 
 export const ALIASES: Record<string, string> = {

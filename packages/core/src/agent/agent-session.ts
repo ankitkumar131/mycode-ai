@@ -19,6 +19,7 @@ import type {
   TaskPlanner,
 } from '../orchestration/types.js';
 import type { BrowserVerifier } from '../integrations/browser-verifier.js';
+import type { DecisionGate } from '../integrations/decision-gate.js';
 
 const MAX_ITERATIONS = 40;
 const MAX_CONSECUTIVE_FAILURES_PER_TOOL = 3;
@@ -62,6 +63,8 @@ export interface SessionConfig extends AgentOptions {
   taskPlanner?: TaskPlanner;
   /** Optional configured Jev-compatible browser verifier. */
   browserVerifier?: BrowserVerifier;
+  /** Optional configured Laya-compatible typed decision gate. */
+  decisionGate?: DecisionGate;
 }
 
 export class AgentSession {
@@ -237,6 +240,7 @@ export class AgentSession {
               ponytailMode: this.config.ponytailMode ?? DEFAULT_PONYTAIL_MODE,
               delegate: (task, agentName) => this.runDelegatedTask(task, agentName, cwd),
               browserVerifier: this.config.browserVerifier,
+              decisionGate: this.config.decisionGate,
             };
             let result = await this.toolRegistry.executeTool(toolName, args, cwd, execOptions);
             // Steering: append any queued notes to this tool result
@@ -306,6 +310,7 @@ export class AgentSession {
       autoOrchestration: this.config.autoOrchestration,
       taskPlanner: this.config.taskPlanner,
       browserVerifier: this.config.browserVerifier,
+      decisionGate: this.config.decisionGate,
       extraSystemSections: [
         ...(this.config.extraSystemSections ?? []),
         `Delegated worker role: ${normalizedAgent}. Stay within the supplied subtask and return a concise, evidence-based result to the parent agent.`,

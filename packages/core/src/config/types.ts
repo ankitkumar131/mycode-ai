@@ -1,6 +1,7 @@
 import type { ProviderConfig } from '../routing/types.js';
 import type { PonytailMode } from '../policy/ponytail.js';
 import type { BrowserVerifierConfig } from '../integrations/browser-verifier.js';
+import type { DecisionGateConfig } from '../integrations/decision-gate.js';
 
 export interface MyCodeConfig {
   version: string;
@@ -29,6 +30,7 @@ export interface MyCodeConfig {
   /** Optional external adapters used by automatic orchestration. */
   integrations?: {
     browser?: BrowserVerifierConfig;
+    decision?: DecisionGateConfig;
   };
   mcp?: {
     servers: Array<{

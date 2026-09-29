@@ -11,6 +11,7 @@ export async function configCommand(sub?: string, ...args: string[]): Promise<vo
     console.log(chalk.bold('Providers:'), cfg.providers.length);
     console.log(chalk.bold('Orchestration:'), cfg.orchestration?.enabled === false ? 'disabled' : `automatic (max ${cfg.orchestration?.maxParallelTasks ?? 2} tasks)`);
     console.log(chalk.bold('Browser verifier:'), cfg.integrations?.browser?.enabled ? `enabled (${cfg.integrations.browser.command})` : 'not configured');
+    console.log(chalk.bold('Decision gate:'), cfg.integrations?.decision?.enabled ? `enabled (${cfg.integrations.decision.command})` : 'not configured');
 
     if (cfg.providers.length > 0) {
       console.log('');

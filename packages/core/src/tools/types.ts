@@ -1,5 +1,6 @@
 import type { PonytailMode } from '../policy/ponytail.js';
 import type { BrowserVerifier } from '../integrations/browser-verifier.js';
+import type { DecisionGate } from '../integrations/decision-gate.js';
 
 export interface ToolFunctionDefinition {
   type: 'function';
@@ -22,6 +23,8 @@ export interface ToolExecuteOptions {
   delegate?: (task: string, agent: string) => Promise<string>;
   /** Optional Jev-compatible browser verifier runtime. */
   browserVerifier?: BrowserVerifier;
+  /** Optional Laya-compatible typed decision runtime. */
+  decisionGate?: DecisionGate;
 }
 
 export interface ToolModule {

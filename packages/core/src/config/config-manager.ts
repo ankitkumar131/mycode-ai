@@ -90,7 +90,7 @@ export class ConfigManager {
       ponytail: { ...DEFAULT_PONYTAIL_SETTINGS },
       usage: { unlimited: true },
       orchestration: { enabled: true, maxParallelTasks: 2 },
-      integrations: { browser: { enabled: false } },
+      integrations: { browser: { enabled: false }, decision: { enabled: false } },
     };
   }
 
@@ -132,6 +132,7 @@ export class ConfigManager {
       const rawOrchestration = parsed.orchestration && typeof parsed.orchestration === 'object' ? parsed.orchestration : {};
       const rawIntegrations = parsed.integrations && typeof parsed.integrations === 'object' ? parsed.integrations : {};
       const rawBrowser = rawIntegrations.browser && typeof rawIntegrations.browser === 'object' ? rawIntegrations.browser : {};
+      const rawDecision = rawIntegrations.decision && typeof rawIntegrations.decision === 'object' ? rawIntegrations.decision : {};
       this.config = {
         ...defaults,
         ...parsed,
@@ -167,6 +168,11 @@ export class ConfigManager {
             ...defaults.integrations?.browser,
             ...rawBrowser,
             enabled: rawBrowser.enabled !== false && typeof rawBrowser.command === 'string' && rawBrowser.command.length > 0,
+          },
+          decision: {
+            ...defaults.integrations?.decision,
+            ...rawDecision,
+            enabled: rawDecision.enabled !== false && typeof rawDecision.command === 'string' && rawDecision.command.length > 0,
           },
         },
       };

@@ -298,12 +298,24 @@ Add this to `~/.mycode/settings.json` to enable the included bridge:
       "command": "python",
       "args": ["scripts/integrations/jev_bridge.py"],
       "timeoutMs": 180000
+    },
+    "decision": {
+      "enabled": true,
+      "command": "python",
+      "args": ["scripts/integrations/laya_bridge.py"],
+      "timeoutMs": 30000
     }
   }
 }
 ```
 
-The user can then ask MyCode to fix a UI and verify it in a browser. Chrome, Browser Harness, the Jev model credentials, and a reachable application URL are still required. Browser verification is read-only by default; mutation-capable browser actions require approval.
+Install Laya separately when typed routing or confidence decisions are useful:
+
+```bash
+python -m pip install laya
+```
+
+The user can then ask MyCode to fix a UI and verify it in a browser. Chrome, Browser Harness, the Jev model credentials, and a reachable application URL are still required. Browser verification is read-only by default; mutation-capable browser actions require approval. Laya is a decision gate, not a replacement for code tests or browser evidence.
 
 ## 🔄 Multi-Provider Failover
 

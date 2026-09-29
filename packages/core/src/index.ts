@@ -67,6 +67,7 @@ export { webSearchTool } from './tools/definitions/web-search.js';
 export { globSearchTool } from './tools/definitions/glob-search.js';
 export { delegateTool } from './tools/definitions/delegate.js';
 export { browserVerifyTool } from './tools/definitions/browser-verify.js';
+export { decisionGateTool } from './tools/definitions/decision-gate.js';
 export { codeExecTool } from './tools/definitions/code-exec.js';
 export { questionTool } from './tools/definitions/question.js';
 export { todoWriteTool } from './tools/definitions/todowrite.js';
@@ -107,6 +108,15 @@ export type {
   BrowserVerificationRequest,
   BrowserVerificationResult,
 } from './integrations/browser-verifier.js';
+export { ExternalDecisionGate } from './integrations/decision-gate.js';
+export type {
+  DecisionGate,
+  DecisionGateConfig,
+  DecisionQuestion,
+  DecisionQuestionType,
+  DecisionRequest,
+  DecisionResult,
+} from './integrations/decision-gate.js';
 
 // Hooks
 export { HookAggregator, HookRunner } from './hooks/hooks.js';

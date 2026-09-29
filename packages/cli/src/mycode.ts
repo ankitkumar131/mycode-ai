@@ -95,6 +95,7 @@ async function main() {
       console.log(`  Usage cap: ${cfg.usage?.unlimited !== false ? 'none imposed by MyCode' : 'configured'}`);
       console.log(`  Routing:   ${cfg.orchestration?.enabled === false ? 'manual' : `automatic (max ${cfg.orchestration?.maxParallelTasks ?? 2})`}`);
       console.log(`  Browser:   ${cfg.integrations?.browser?.enabled ? cfg.integrations.browser.command : 'not configured'}`);
+      console.log(`  Decisions: ${cfg.integrations?.decision?.enabled ? cfg.integrations.decision.command : 'not configured'}`);
       console.log(`  Skills:    ${skillManager.list(process.cwd()).length} in ${skillManager.getSkillsDir()}`);
       console.log(`  Editor:    ${process.env.VISUAL || process.env.EDITOR || '(unset — Ctrl+G uses vi/notepad)'}`);
       console.log(`  TTY:       ${process.stdout.isTTY ? 'yes' : 'no'}  TERM=${process.env.TERM ?? ''}  ${process.env.TERM_PROGRAM ?? ''}\n`);
