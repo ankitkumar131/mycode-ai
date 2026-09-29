@@ -20,6 +20,7 @@ import type {
 } from '../orchestration/types.js';
 import type { BrowserVerifier } from '../integrations/browser-verifier.js';
 import type { DecisionGate } from '../integrations/decision-gate.js';
+import type { SandboxBackend } from '../integrations/sandbox-backend.js';
 
 const MAX_ITERATIONS = 40;
 const MAX_CONSECUTIVE_FAILURES_PER_TOOL = 3;
@@ -65,6 +66,8 @@ export interface SessionConfig extends AgentOptions {
   browserVerifier?: BrowserVerifier;
   /** Optional configured Laya-compatible typed decision gate. */
   decisionGate?: DecisionGate;
+  /** Optional local or AX sandbox backend. */
+  sandboxBackend?: SandboxBackend;
 }
 
 export class AgentSession {
@@ -241,6 +244,7 @@ export class AgentSession {
               delegate: (task, agentName) => this.runDelegatedTask(task, agentName, cwd),
               browserVerifier: this.config.browserVerifier,
               decisionGate: this.config.decisionGate,
+              sandboxBackend: this.config.sandboxBackend,
             };
             let result = await this.toolRegistry.executeTool(toolName, args, cwd, execOptions);
             // Steering: append any queued notes to this tool result
@@ -311,6 +315,7 @@ export class AgentSession {
       taskPlanner: this.config.taskPlanner,
       browserVerifier: this.config.browserVerifier,
       decisionGate: this.config.decisionGate,
+      sandboxBackend: this.config.sandboxBackend,
       extraSystemSections: [
         ...(this.config.extraSystemSections ?? []),
         `Delegated worker role: ${normalizedAgent}. Stay within the supplied subtask and return a concise, evidence-based result to the parent agent.`,

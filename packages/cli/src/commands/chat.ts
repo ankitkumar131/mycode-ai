@@ -23,6 +23,7 @@ import {
   ProviderRouter,
   ExternalBrowserVerifier,
   ExternalDecisionGate,
+  AxCliSandboxBackend,
   executeCommand,
   classifyCommand,
   skillManager,
@@ -207,6 +208,9 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
   const decisionGate = cfg.integrations?.decision?.enabled && cfg.integrations.decision.command
     ? new ExternalDecisionGate(cfg.integrations.decision, cwd)
     : undefined;
+  const sandboxBackend = cfg.integrations?.sandbox?.enabled && cfg.integrations.sandbox.command
+    ? new AxCliSandboxBackend(cfg.integrations.sandbox, cwd)
+    : undefined;
   const normalPrompt = `${S.brand(ICONS.sparkle)} ${S.brand('❯')} `;
   const oneShot = !!options.query;
 
@@ -269,6 +273,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     autoOrchestration: cfg.orchestration?.enabled !== false,
     browserVerifier,
     decisionGate,
+    sandboxBackend,
     runLedger,
     contextWindow: contextWindowFor(cfg, router.getCurrentProvider()),
     toolRegistry: undefined,

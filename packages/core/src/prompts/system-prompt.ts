@@ -207,6 +207,7 @@ export class SystemPromptBuilder {
     if (has('web_search')) guide.push('- web_search / web_fetch: look up current docs, errors, APIs when unsure.');
     if (has('browser_verify')) guide.push('- browser_verify: verify browser-visible behavior with the configured Jev-compatible worker. Use it after a server is running; read-only verification is the default and an unavailable worker is never a pass.');
     if (has('decision_gate')) guide.push('- decision_gate: use the configured Laya-compatible engine for typed classification, scoring, routing, or confidence decisions; it does not replace code tests or browser evidence.');
+    if (has('sandbox_task')) guide.push('- sandbox_task: run an isolated worker through the configured AX/local backend. Use it for parallel or untrusted work; do not claim isolation if the backend is unavailable.');
     if (has('todo_write')) guide.push('- todo_write: keep a visible checklist for multi-step tasks; update it as you go.');
     if (has('skill_manage')) guide.push('- skill_manage: after finishing a non-trivial workflow that is likely to recur, save it as a skill; patch skills that were wrong.');
     if (guide.length) b.addSection(`Tools:\n${guide.join('\n')}`);

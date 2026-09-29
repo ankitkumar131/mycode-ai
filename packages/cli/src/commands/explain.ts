@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { ConfigManager, AgentSession, ProviderRouter, ExternalBrowserVerifier, ExternalDecisionGate } from '@mycode/core';
+import { ConfigManager, AgentSession, ProviderRouter, ExternalBrowserVerifier, ExternalDecisionGate, AxCliSandboxBackend } from '@mycode/core';
 import chalk from 'chalk';
 import { renderMarkdown } from '../ui/renderer.js';
 import { createSpinner } from '../ui/spinner.js';
@@ -25,6 +25,9 @@ export async function explainCommand(filePath?: string): Promise<void> {
   const decisionGate = cfg.integrations?.decision?.enabled && cfg.integrations.decision.command
     ? new ExternalDecisionGate(cfg.integrations.decision, process.cwd())
     : undefined;
+  const sandboxBackend = cfg.integrations?.sandbox?.enabled && cfg.integrations.sandbox.command
+    ? new AxCliSandboxBackend(cfg.integrations.sandbox, process.cwd())
+    : undefined;
 
   let content: string;
   try {
@@ -45,6 +48,7 @@ export async function explainCommand(filePath?: string): Promise<void> {
     autoOrchestration: cfg.orchestration?.enabled !== false,
     browserVerifier,
     decisionGate,
+    sandboxBackend,
     onError(msg) { spinner.fail(chalk.red(msg)); },
     onFinish() { spinner.stop(); },
   });

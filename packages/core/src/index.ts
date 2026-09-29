@@ -68,6 +68,7 @@ export { globSearchTool } from './tools/definitions/glob-search.js';
 export { delegateTool } from './tools/definitions/delegate.js';
 export { browserVerifyTool } from './tools/definitions/browser-verify.js';
 export { decisionGateTool } from './tools/definitions/decision-gate.js';
+export { sandboxTaskTool } from './tools/definitions/sandbox-task.js';
 export { codeExecTool } from './tools/definitions/code-exec.js';
 export { questionTool } from './tools/definitions/question.js';
 export { todoWriteTool } from './tools/definitions/todowrite.js';
@@ -117,6 +118,13 @@ export type {
   DecisionRequest,
   DecisionResult,
 } from './integrations/decision-gate.js';
+export { AxCliSandboxBackend } from './integrations/sandbox-backend.js';
+export type {
+  SandboxBackend,
+  SandboxBackendConfig,
+  SandboxTaskRequest,
+  SandboxTaskResult,
+} from './integrations/sandbox-backend.js';
 
 // Hooks
 export { HookAggregator, HookRunner } from './hooks/hooks.js';

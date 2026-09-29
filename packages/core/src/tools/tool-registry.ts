@@ -35,6 +35,7 @@ import { memoryTool } from './definitions/memory.js';
 import { delegateTool } from './definitions/delegate.js';
 import { browserVerifyTool } from './definitions/browser-verify.js';
 import { decisionGateTool } from './definitions/decision-gate.js';
+import { sandboxTaskTool } from './definitions/sandbox-task.js';
 import { permissionManager } from '../policy/permission-manager.js';
 
 export const TOOLSETS: Record<string, string[]> = {
@@ -45,7 +46,8 @@ export const TOOLSETS: Record<string, string[]> = {
   skills: ['skills_list', 'skill_view', 'skill_manage'],
   browser: ['browser_verify'],
   decision: ['decision_gate'],
-  agent: ['todo_write', 'read_instructions', 'memory', 'delegate', 'browser_verify', 'decision_gate'],
+  sandbox: ['sandbox_task'],
+  agent: ['todo_write', 'read_instructions', 'memory', 'delegate', 'browser_verify', 'decision_gate', 'sandbox_task'],
 };
 
 const ALL_TOOLS: ToolModule[] = [
@@ -72,6 +74,7 @@ const ALL_TOOLS: ToolModule[] = [
   delegateTool,
   browserVerifyTool,
   decisionGateTool,
+  sandboxTaskTool,
 ];
 
 export const ALIASES: Record<string, string> = {
@@ -131,7 +134,7 @@ export const ALIASES: Record<string, string> = {
   view_skill: 'skill_view',
 };
 
-const WRITE_TOOLS = new Set(['write_file', 'patch', 'execute_code', 'terminal', 'skill_manage', 'delegate']);
+const WRITE_TOOLS = new Set(['write_file', 'patch', 'execute_code', 'terminal', 'skill_manage', 'delegate', 'sandbox_task']);
 
 export interface ExecuteToolOptions {
   confirmFn?: (target: string, context?: string | null, safety?: SafetyResult) => Promise<boolean>;

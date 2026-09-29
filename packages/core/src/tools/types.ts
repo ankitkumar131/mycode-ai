@@ -1,6 +1,7 @@
 import type { PonytailMode } from '../policy/ponytail.js';
 import type { BrowserVerifier } from '../integrations/browser-verifier.js';
 import type { DecisionGate } from '../integrations/decision-gate.js';
+import type { SandboxBackend } from '../integrations/sandbox-backend.js';
 
 export interface ToolFunctionDefinition {
   type: 'function';
@@ -25,6 +26,8 @@ export interface ToolExecuteOptions {
   browserVerifier?: BrowserVerifier;
   /** Optional Laya-compatible typed decision runtime. */
   decisionGate?: DecisionGate;
+  /** Optional AX/local sandbox runtime. */
+  sandboxBackend?: SandboxBackend;
 }
 
 export interface ToolModule {

@@ -34,6 +34,7 @@ describe('ConfigManager', () => {
     expect(config.orchestration).toEqual({ enabled: true, maxParallelTasks: 2 });
     expect(config.integrations?.browser?.enabled).toBe(false);
     expect(config.integrations?.decision?.enabled).toBe(false);
+    expect(config.integrations?.sandbox?.enabled).toBe(false);
   });
 
   it('configExists returns false when no file', () => {

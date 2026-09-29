@@ -2,6 +2,7 @@ import type { ProviderConfig } from '../routing/types.js';
 import type { PonytailMode } from '../policy/ponytail.js';
 import type { BrowserVerifierConfig } from '../integrations/browser-verifier.js';
 import type { DecisionGateConfig } from '../integrations/decision-gate.js';
+import type { SandboxBackendConfig } from '../integrations/sandbox-backend.js';
 
 export interface MyCodeConfig {
   version: string;
@@ -31,6 +32,7 @@ export interface MyCodeConfig {
   integrations?: {
     browser?: BrowserVerifierConfig;
     decision?: DecisionGateConfig;
+    sandbox?: SandboxBackendConfig;
   };
   mcp?: {
     servers: Array<{

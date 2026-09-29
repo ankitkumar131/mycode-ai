@@ -304,6 +304,14 @@ Add this to `~/.mycode/settings.json` to enable the included bridge:
       "command": "python",
       "args": ["scripts/integrations/laya_bridge.py"],
       "timeoutMs": 30000
+    },
+    "sandbox": {
+      "enabled": true,
+      "command": "ax",
+      "image": "your-registry/mycode-task-runner:latest",
+      "workspaceName": "default-workspace",
+      "resume": true,
+      "timeoutMs": 900000
     }
   }
 }
@@ -316,6 +324,8 @@ python -m pip install laya
 ```
 
 The user can then ask MyCode to fix a UI and verify it in a browser. Chrome, Browser Harness, the Jev model credentials, and a reachable application URL are still required. Browser verification is read-only by default; mutation-capable browser actions require approval. Laya is a decision gate, not a replacement for code tests or browser evidence.
+
+AX is an optional sandbox backend for isolated or parallel workers. It requires a working AX CLI, Agent Substrate/cluster, task-runner image, workspace, and network access. MyCode does not treat a missing AX backend as success and falls back to native tools when it is not configured.
 
 ## 🔄 Multi-Provider Failover
 
