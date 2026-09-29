@@ -1,4 +1,5 @@
 import type { PonytailMode } from '../policy/ponytail.js';
+import type { BrowserVerifier } from '../integrations/browser-verifier.js';
 
 export interface ToolFunctionDefinition {
   type: 'function';
@@ -19,6 +20,8 @@ export interface ToolExecuteOptions {
   ponytailMode?: PonytailMode;
   /** Agent-session-owned delegation runtime. */
   delegate?: (task: string, agent: string) => Promise<string>;
+  /** Optional Jev-compatible browser verifier runtime. */
+  browserVerifier?: BrowserVerifier;
 }
 
 export interface ToolModule {

@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { ConfigManager, AgentSession, ProviderRouter } from '@mycode/core';
+import { ConfigManager, AgentSession, ProviderRouter, ExternalBrowserVerifier } from '@mycode/core';
 import chalk from 'chalk';
 import { renderMarkdown } from '../ui/renderer.js';
 import { createSpinner } from '../ui/spinner.js';
@@ -22,6 +22,9 @@ export async function editCommand(filePath?: string, instruction?: string): Prom
   }
 
   const router = new ProviderRouter(cfg.providers);
+  const browserVerifier = cfg.integrations?.browser?.enabled && cfg.integrations.browser.command
+    ? new ExternalBrowserVerifier(cfg.integrations.browser, process.cwd())
+    : undefined;
 
   let content: string;
   try {
@@ -40,6 +43,7 @@ export async function editCommand(filePath?: string, instruction?: string): Prom
     ponytailMode: cfg.ponytail?.mode,
     ponytailForAllTasks: cfg.ponytail?.applyToAllTasks !== false,
     autoOrchestration: cfg.orchestration?.enabled !== false,
+    browserVerifier,
     maxIterations: 5,
   });
 

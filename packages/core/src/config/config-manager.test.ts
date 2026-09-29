@@ -31,6 +31,8 @@ describe('ConfigManager', () => {
     expect(config.preferences.confirmWrites).toBe(true);
     expect(config.ponytail).toEqual({ mode: 'full', applyToAllTasks: true });
     expect(config.usage?.unlimited).toBe(true);
+    expect(config.orchestration).toEqual({ enabled: true, maxParallelTasks: 2 });
+    expect(config.integrations?.browser?.enabled).toBe(false);
   });
 
   it('configExists returns false when no file', () => {
@@ -56,6 +58,18 @@ describe('ConfigManager', () => {
     const cm = new ConfigManager();
     await cm.save({ version: '1', providers: [], preferences: { confirmWrites: true, confirmCommands: true } });
     expect(cm.configExists()).toBe(true);
+  });
+
+  it('enables the browser integration when a bridge command is configured', async () => {
+    const cm = new ConfigManager();
+    await cm.save({
+      version: '1',
+      providers: [],
+      preferences: { confirmWrites: true, confirmCommands: true },
+      integrations: { browser: { command: 'python', args: ['bridge.py'] } },
+    });
+    const loaded = await cm.load();
+    expect(loaded.integrations?.browser).toEqual({ command: 'python', args: ['bridge.py'], enabled: true });
   });
 
   it('addProvider appends to provider list', async () => {

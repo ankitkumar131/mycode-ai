@@ -33,6 +33,7 @@ import { readInstructionsTool } from './definitions/read-instructions.js';
 import { skillsListTool, skillViewTool, skillManageTool } from './definitions/skills.js';
 import { memoryTool } from './definitions/memory.js';
 import { delegateTool } from './definitions/delegate.js';
+import { browserVerifyTool } from './definitions/browser-verify.js';
 import { permissionManager } from '../policy/permission-manager.js';
 
 export const TOOLSETS: Record<string, string[]> = {
@@ -41,7 +42,8 @@ export const TOOLSETS: Record<string, string[]> = {
   git: ['git_status'],
   web: ['web_search', 'web_fetch'],
   skills: ['skills_list', 'skill_view', 'skill_manage'],
-  agent: ['todo_write', 'read_instructions', 'memory', 'delegate'],
+  browser: ['browser_verify'],
+  agent: ['todo_write', 'read_instructions', 'memory', 'delegate', 'browser_verify'],
 };
 
 const ALL_TOOLS: ToolModule[] = [
@@ -66,6 +68,7 @@ const ALL_TOOLS: ToolModule[] = [
   readInstructionsTool,
   memoryTool,
   delegateTool,
+  browserVerifyTool,
 ];
 
 export const ALIASES: Record<string, string> = {

@@ -66,6 +66,7 @@ export { fetchWebPageTool } from './tools/definitions/web-fetch.js';
 export { webSearchTool } from './tools/definitions/web-search.js';
 export { globSearchTool } from './tools/definitions/glob-search.js';
 export { delegateTool } from './tools/definitions/delegate.js';
+export { browserVerifyTool } from './tools/definitions/browser-verify.js';
 export { codeExecTool } from './tools/definitions/code-exec.js';
 export { questionTool } from './tools/definitions/question.js';
 export { todoWriteTool } from './tools/definitions/todowrite.js';
@@ -97,6 +98,15 @@ export { BaseProvider } from './routing/base-provider.js';
 export { ProviderRouter } from './routing/provider-router.js';
 export { CliAgentProvider } from './routing/cli-agent-provider.js';
 export type { ProviderConfig, ProviderStats } from './routing/types.js';
+
+// Optional browser verification integration (Jev-compatible JSON bridge)
+export { ExternalBrowserVerifier } from './integrations/browser-verifier.js';
+export type {
+  BrowserVerifier,
+  BrowserVerifierConfig,
+  BrowserVerificationRequest,
+  BrowserVerificationResult,
+} from './integrations/browser-verifier.js';
 
 // Hooks
 export { HookAggregator, HookRunner } from './hooks/hooks.js';

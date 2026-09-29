@@ -1,5 +1,6 @@
 import type { ProviderConfig } from '../routing/types.js';
 import type { PonytailMode } from '../policy/ponytail.js';
+import type { BrowserVerifierConfig } from '../integrations/browser-verifier.js';
 
 export interface MyCodeConfig {
   version: string;
@@ -24,6 +25,10 @@ export interface MyCodeConfig {
   orchestration?: {
     enabled?: boolean;
     maxParallelTasks?: number;
+  };
+  /** Optional external adapters used by automatic orchestration. */
+  integrations?: {
+    browser?: BrowserVerifierConfig;
   };
   mcp?: {
     servers: Array<{

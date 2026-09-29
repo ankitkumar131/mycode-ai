@@ -18,6 +18,7 @@ import type {
   TaskPlan,
   TaskPlanner,
 } from '../orchestration/types.js';
+import type { BrowserVerifier } from '../integrations/browser-verifier.js';
 
 const MAX_ITERATIONS = 40;
 const MAX_CONSECUTIVE_FAILURES_PER_TOOL = 3;
@@ -59,6 +60,8 @@ export interface SessionConfig extends AgentOptions {
   autoOrchestration?: boolean;
   /** Replace the conservative native planner with an application-specific planner. */
   taskPlanner?: TaskPlanner;
+  /** Optional configured Jev-compatible browser verifier. */
+  browserVerifier?: BrowserVerifier;
 }
 
 export class AgentSession {
@@ -233,6 +236,7 @@ export class AgentSession {
               confirmFn: this.config.confirmFn,
               ponytailMode: this.config.ponytailMode ?? DEFAULT_PONYTAIL_MODE,
               delegate: (task, agentName) => this.runDelegatedTask(task, agentName, cwd),
+              browserVerifier: this.config.browserVerifier,
             };
             let result = await this.toolRegistry.executeTool(toolName, args, cwd, execOptions);
             // Steering: append any queued notes to this tool result
@@ -301,6 +305,7 @@ export class AgentSession {
       runLedger: this.config.runLedger,
       autoOrchestration: this.config.autoOrchestration,
       taskPlanner: this.config.taskPlanner,
+      browserVerifier: this.config.browserVerifier,
       extraSystemSections: [
         ...(this.config.extraSystemSections ?? []),
         `Delegated worker role: ${normalizedAgent}. Stay within the supplied subtask and return a concise, evidence-based result to the parent agent.`,

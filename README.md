@@ -273,6 +273,38 @@ Munder-style external agents can be configured with a `cli`, `munder`, or `exter
 
 MyCode has no application-level usage ceiling. Use continues while the configured API or CLI path is available, subject to that provider's own limits and availability.
 
+### Automatic orchestration and browser verification
+
+MyCode performs a conservative intent pass before each request. Ordinary questions stay on the native tool loop; requests that combine a code fix with browser-visible behavior are planned as a fixer followed by a read-only browser verification task. The plan never claims that a specialized runtime ran unless its tool returns evidence.
+
+The Jev adapter uses a small JSON-over-stdin bridge so the Python browser runtime remains optional:
+
+```bash
+# In a separate Python 3.12 environment
+python -m pip install "git+https://github.com/browser-use/jev-ultrafast.git"
+```
+
+Add this to `~/.mycode/settings.json` to enable the included bridge:
+
+```json
+{
+  "orchestration": {
+    "enabled": true,
+    "maxParallelTasks": 2
+  },
+  "integrations": {
+    "browser": {
+      "enabled": true,
+      "command": "python",
+      "args": ["scripts/integrations/jev_bridge.py"],
+      "timeoutMs": 180000
+    }
+  }
+}
+```
+
+The user can then ask MyCode to fix a UI and verify it in a browser. Chrome, Browser Harness, the Jev model credentials, and a reachable application URL are still required. Browser verification is read-only by default; mutation-capable browser actions require approval.
+
 ## 🔄 Multi-Provider Failover
 
 MyCode's killer feature: **chain multiple AI providers with priority-based automatic failover.**

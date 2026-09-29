@@ -21,6 +21,7 @@ import {
   ConfigManager,
   AgentSession,
   ProviderRouter,
+  ExternalBrowserVerifier,
   executeCommand,
   classifyCommand,
   skillManager,
@@ -199,6 +200,9 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
   if (options.model || options.provider) router.setActiveProvider(options.model ?? options.provider!);
   const version = getVersion();
   const cwd = process.cwd();
+  const browserVerifier = cfg.integrations?.browser?.enabled && cfg.integrations.browser.command
+    ? new ExternalBrowserVerifier(cfg.integrations.browser, cwd)
+    : undefined;
   const normalPrompt = `${S.brand(ICONS.sparkle)} ${S.brand('❯')} `;
   const oneShot = !!options.query;
 
@@ -259,6 +263,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     ponytailMode,
     ponytailForAllTasks: cfg.ponytail?.applyToAllTasks !== false,
     autoOrchestration: cfg.orchestration?.enabled !== false,
+    browserVerifier,
     runLedger,
     contextWindow: contextWindowFor(cfg, router.getCurrentProvider()),
     toolRegistry: undefined,

@@ -1,5 +1,5 @@
 import { createInterface } from 'readline/promises';
-import { ConfigManager, AgentSession, ProviderRouter } from '@mycode/core';
+import { ConfigManager, AgentSession, ProviderRouter, ExternalBrowserVerifier } from '@mycode/core';
 import chalk from 'chalk';
 import { renderMarkdown } from '../ui/renderer.js';
 import { createSpinner, createToolSpinner } from '../ui/spinner.js';
@@ -24,6 +24,9 @@ export async function agentCommand(task?: string): Promise<void> {
   }
 
   const router = new ProviderRouter(cfg.providers);
+  const browserVerifier = cfg.integrations?.browser?.enabled && cfg.integrations.browser.command
+    ? new ExternalBrowserVerifier(cfg.integrations.browser, process.cwd())
+    : undefined;
   let currentSpinner: Ora | null = null;
 
   const session = new AgentSession({
@@ -33,6 +36,7 @@ export async function agentCommand(task?: string): Promise<void> {
     ponytailMode: cfg.ponytail?.mode,
     ponytailForAllTasks: cfg.ponytail?.applyToAllTasks !== false,
     autoOrchestration: cfg.orchestration?.enabled !== false,
+    browserVerifier,
     confirmFn: async (target, _context, safety) => {
       return confirmCommand(target, process.cwd(), (safety as any) ?? null);
     },
