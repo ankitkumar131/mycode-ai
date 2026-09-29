@@ -165,7 +165,7 @@ export class TaskRouter implements TaskPlanner {
     } else if (wantsParallel) {
       mode = 'parallel';
       reason = 'The request explicitly asks for independent work to happen concurrently.';
-      recommendedTools = ['parallel_supervisor', 'sandbox_task', 'native_tools'];
+      recommendedTools = ['parallel_delegate', 'sandbox_task', 'native_tools'];
       tasks = [
         task('parallel-primary', 'native', 'Primary parallel work', query, {
           capabilities: ['files', 'terminal', 'git', 'web'],

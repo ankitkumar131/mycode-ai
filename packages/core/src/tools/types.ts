@@ -12,6 +12,11 @@ export interface ToolFunctionDefinition {
   };
 }
 
+export interface DelegatedTaskInput {
+  task: string;
+  agent?: string;
+}
+
 export interface ToolExecuteOptions {
   confirmFn?: (target: string, context?: string | null, safety?: SafetyResult) => Promise<boolean>;
   commandHistory?: {
@@ -22,6 +27,8 @@ export interface ToolExecuteOptions {
   ponytailMode?: PonytailMode;
   /** Agent-session-owned delegation runtime. */
   delegate?: (task: string, agent: string) => Promise<string>;
+  /** Agent-session-owned bounded parallel delegation runtime. */
+  delegateParallel?: (tasks: DelegatedTaskInput[]) => Promise<unknown>;
   /** Optional Jev-compatible browser verifier runtime. */
   browserVerifier?: BrowserVerifier;
   /** Optional Laya-compatible typed decision runtime. */

@@ -52,6 +52,7 @@ export type {
   ToolResult,
   ToolFunctionDefinition,
   ToolExecuteOptions,
+  DelegatedTaskInput,
   SafetyLevel,
   SafetyResult,
   CommandRecord,
@@ -75,6 +76,7 @@ export { delegateTool } from './tools/definitions/delegate.js';
 export { browserVerifyTool } from './tools/definitions/browser-verify.js';
 export { decisionGateTool } from './tools/definitions/decision-gate.js';
 export { sandboxTaskTool } from './tools/definitions/sandbox-task.js';
+export { parallelDelegateTool } from './tools/definitions/parallel-delegate.js';
 export { codeExecTool } from './tools/definitions/code-exec.js';
 export { questionTool } from './tools/definitions/question.js';
 export { todoWriteTool } from './tools/definitions/todowrite.js';

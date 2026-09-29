@@ -4,7 +4,7 @@ import { ToolRegistry } from '../tools/tool-registry.js';
 import { ProviderRouter } from '../routing/provider-router.js';
 import { SystemPromptBuilder } from '../prompts/system-prompt.js';
 import type { AgentOptions, AgentEvent } from './types.js';
-import type { ToolExecuteOptions, SafetyResult } from '../tools/types.js';
+import type { ToolExecuteOptions, SafetyResult, DelegatedTaskInput } from '../tools/types.js';
 import {
   DEFAULT_PONYTAIL_MODE,
   type PonytailMode,
@@ -18,6 +18,7 @@ import type {
   TaskPlan,
   TaskPlanner,
 } from '../orchestration/types.js';
+import { TaskSupervisor } from '../orchestration/task-supervisor.js';
 import type { BrowserVerifier } from '../integrations/browser-verifier.js';
 import type { DecisionGate } from '../integrations/decision-gate.js';
 import type { SandboxBackend } from '../integrations/sandbox-backend.js';
@@ -74,6 +75,8 @@ export interface SessionConfig extends AgentOptions {
   decisionGate?: DecisionGate;
   /** Optional local or AX sandbox backend. */
   sandboxBackend?: SandboxBackend;
+  /** Maximum concurrent delegated workers (default 2). */
+  maxParallelTasks?: number;
 }
 
 export class AgentSession {
@@ -277,6 +280,7 @@ export class AgentSession {
               confirmFn: this.config.confirmFn,
               ponytailMode: this.config.ponytailMode ?? DEFAULT_PONYTAIL_MODE,
               delegate: (task, agentName) => this.runDelegatedTask(task, agentName, cwd),
+              delegateParallel: (tasks) => this.runParallelDelegatedTasks(tasks, cwd),
               browserVerifier: this.config.browserVerifier,
               decisionGate: this.config.decisionGate,
               sandboxBackend: this.config.sandboxBackend,
@@ -361,9 +365,9 @@ export class AgentSession {
     const childRegistry = normalizedAgent === 'explore'
       ? new ToolRegistry({
           toolsets: ['files', 'git', 'web', 'agent'],
-          disabled: ['write_file', 'patch', 'execute_code', 'terminal', 'skill_manage', 'delegate'],
+          disabled: ['write_file', 'patch', 'execute_code', 'terminal', 'skill_manage', 'delegate', 'parallel_delegate'],
         })
-      : new ToolRegistry({ disabled: ['delegate'] });
+      : new ToolRegistry({ disabled: ['delegate', 'parallel_delegate'] });
 
     const child = new AgentSession({
       providerRouter: this.config.providerRouter,
@@ -380,6 +384,7 @@ export class AgentSession {
       browserVerifier: this.config.browserVerifier,
       decisionGate: this.config.decisionGate,
       sandboxBackend: this.config.sandboxBackend,
+      maxParallelTasks: this.config.maxParallelTasks,
       extraSystemSections: [
         ...(this.config.extraSystemSections ?? []),
         `Delegated worker role: ${normalizedAgent}. Stay within the supplied subtask and return a concise, evidence-based result to the parent agent.`,
@@ -389,6 +394,42 @@ export class AgentSession {
     const result = await child.run(task);
     return `[${normalizedAgent} delegated worker]
 ${result}`;
+  }
+
+  private async runParallelDelegatedTasks(tasks: DelegatedTaskInput[], cwd: string): Promise<unknown> {
+    const bounded = tasks.slice(0, 16);
+    const plan: TaskPlan = {
+      id: `parallel-${Date.now().toString(36)}`,
+      mode: 'parallel',
+      reason: 'Independent delegated subtasks requested by the primary agent.',
+      confidence: 1,
+      recommendedTools: ['parallel_delegate'],
+      createdAt: new Date().toISOString(),
+      tasks: bounded.map((item, index) => ({
+        id: `delegate-${index + 1}`,
+        kind: 'custom' as const,
+        title: `${item.agent ?? 'explore'} delegated task ${index + 1}`,
+        prompt: item.task,
+        capabilities: ['files', 'git', 'web'],
+        metadata: { agent: item.agent ?? 'explore' },
+      })),
+    };
+    const supervisor = new TaskSupervisor({ maxConcurrency: this.config.maxParallelTasks ?? 2 });
+    const result = await supervisor.run(plan, cwd, async task => {
+      const agent = typeof task.metadata?.agent === 'string' ? task.metadata.agent : 'explore';
+      const summary = await this.runDelegatedTask(task.prompt, agent, cwd);
+      return { status: 'completed', summary, output: summary };
+    }, this._abortController.signal);
+    return {
+      success: result.status === 'completed',
+      status: result.status,
+      results: result.results.map(item => ({
+        taskId: item.taskId,
+        status: item.status,
+        summary: item.summary,
+        error: item.error,
+      })),
+    };
   }
 
   abort(): void {
