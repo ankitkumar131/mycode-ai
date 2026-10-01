@@ -123,6 +123,9 @@ export class TextArea {
   private lastCtrlC = 0;
   private pasteMode = false;
   private pasteBuffer = '';
+  /** readline also parses the same raw paste bytes into keypress events. */
+  private suppressPasteKeypress = false;
+  private pasteKeypressRelease: ReturnType<typeof setImmediate> | null = null;
   private rawEnabled = false;
   private kittyEnabled = false;
   private ctrlXPending = false;
@@ -204,6 +207,9 @@ export class TextArea {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    if (this.pasteKeypressRelease) clearImmediate(this.pasteKeypressRelease);
+    this.pasteKeypressRelease = null;
+    this.suppressPasteKeypress = false;
     this.disableKitty();
     if (this.rawEnabled) {
       try {
@@ -334,7 +340,10 @@ export class TextArea {
 
     if (s.includes('\x1b[200~')) {
       this.pasteMode = true;
+      this.suppressPasteKeypress = true;
       this.pasteBuffer = '';
+      if (this.pasteKeypressRelease) clearImmediate(this.pasteKeypressRelease);
+      this.pasteKeypressRelease = null;
     }
     if (this.pasteMode) {
       const body = s.replace(/\x1b\[200~|\x1b\[201~/g, '');
@@ -346,6 +355,13 @@ export class TextArea {
           void this.render();
         }
         this.pasteBuffer = '';
+        // Release after readline has finished turning this data chunk into
+        // synthetic keypress events. Releasing synchronously reintroduces the
+        // duplicate-submit bug on multiline pastes.
+        this.pasteKeypressRelease = setImmediate(() => {
+          this.suppressPasteKeypress = false;
+          this.pasteKeypressRelease = null;
+        });
       }
       return;
     }
@@ -371,7 +387,10 @@ export class TextArea {
   // ─── Key handling ────────────────────────────────────────────────────────
 
   private onKeypress(str: string, key: readline.Key): void {
-    if (this.closed || this.pasteMode) return;
+    // readline.emitKeypressEvents parses the same bytes handled by onData.
+    // Ignore those synthetic keypresses for the whole bracketed paste; otherwise
+    // every newline in a large paste can submit the prompt repeatedly.
+    if (this.closed || this.pasteMode || this.suppressPasteKeypress) return;
     if (!key) return;
 
     const name = key.name;

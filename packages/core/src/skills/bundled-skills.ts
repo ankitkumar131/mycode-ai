@@ -107,6 +107,40 @@ const graphifySkill: BundledSkill = {
   },
 };
 
+const NEXTJS_SAAS_SKILL = skill(
+  'nextjs-saas',
+  `---
+name: nextjs-saas
+description: Build polished Next.js SaaS products with accessible motion and typed APIs
+version: 1.0.0
+category: frontend
+tags: [nextjs, react, frontend, saas, reactbits, motion, accessibility, api]
+argument-hint: "[product brief]"
+---
+
+# Next.js SaaS Product
+
+## When to Use
+Use for a new Next.js App Router SaaS product, especially when the request includes a marketing site, dashboard, typed backend routes, polished motion, or ReactBits-style components.
+
+## Procedure
+1. Create the requested application in the requested new folder. Do not modify unrelated source trees.
+2. Inspect current ReactBits, Motion, smooth-scroll, styling, database, and testing documentation before selecting packages. Never invent imports or package names.
+3. Establish a small design system first: color tokens, typography, spacing, radii, shadows, focus styles, responsive breakpoints, and reduced-motion behavior.
+4. Build shared accessible components before duplicating page markup. Prefer server components by default and isolate client components around interaction and animation.
+5. Use Motion and smooth scrolling carefully. Animations must enhance hierarchy, remain performant, and respect prefers-reduced-motion.
+6. Add typed Route Handlers or Server Actions with validation, explicit errors, loading states, and a local/mock data path that works without secrets.
+7. Add tests for important UI behavior and API validation. Run lint, typecheck, tests, and a production build.
+8. Start the app and verify the important routes in a browser. Record failures instead of hiding them.
+
+## Pitfalls
+- Do not copy a visually impressive component that breaks keyboard navigation, mobile layouts, or reduced-motion behavior.
+- Do not use fake package names or silently replace a requested dependency with an unrelated one.
+- Do not put secrets in source control or claim that a real provider was contacted when using mock data.
+- Do not replace the existing application when the user requested a new folder.
+`
+);
+
 const PONYTAIL_SKILLS: BundledSkill[] = [
   skill(
     'ponytail',
@@ -222,6 +256,7 @@ Explain the motto "The best code is the code never written", the minimal-solutio
 
 export const BUNDLED_SKILLS: BundledSkill[] = [
   graphifySkill,
+  NEXTJS_SAAS_SKILL,
   ...PONYTAIL_SKILLS,
   skill(
     'plan',
