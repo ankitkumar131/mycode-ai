@@ -5,7 +5,7 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
 
@@ -84,6 +84,12 @@ export function getLocalPackageInfo(): { name: string; version: string } {
  */
 export async function checkForUpdate(): Promise<void> {
   try {
+    // A development checkout is not something you "update" by installing from
+    // npm, so the notice is just noise — and actively misleading when the local
+    // version has moved ahead of, or diverged from, the published one.
+    if (isSourceCheckout()) return;
+    if (process.env.MYCODE_NO_UPDATE_CHECK === '1') return;
+
     const { name: pkgName, version: localVersion } = getLocalPackageInfo();
 
     const response = await fetch(`https://registry.npmjs.org/${pkgName}/latest`, {
@@ -101,6 +107,29 @@ export async function checkForUpdate(): Promise<void> {
     }
   } catch {
     // Silently ignore network failures or offline mode
+  }
+}
+
+/**
+ * True when running from a git working copy rather than an installed package.
+ *
+ * Detected by the presence of `.git` beside the package root: an installed
+ * package under `node_modules` never has one.
+ */
+function isSourceCheckout(): boolean {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    // Walk up a few levels looking for a repository root.
+    let dir = here;
+    for (let i = 0; i < 6; i++) {
+      if (existsSync(join(dir, '.git'))) return true;
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return false;
+  } catch {
+    return false;
   }
 }
 

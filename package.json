@@ -1,6 +1,6 @@
 {
   "name": "@ankitkumar131/mycode-ai",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "private": false,
   "description": "Multi-provider AI coding agent for the terminal. Like Claude Code, but provider-agnostic with automatic failover.",
   "type": "module",
@@ -26,24 +26,24 @@
     "packages/test-utils"
   ],
   "scripts": {
+    "smoke:failover": "node scripts/smoke-failover.mjs",
+    "smoke:mock": "node scripts/mock-provider.mjs 4141",
+    "smoke:mock-failover": "node scripts/mock-failover-provider.mjs 4242 4243",
     "build": "node scripts/build.mjs",
     "build:cli": "node scripts/build.mjs --package cli",
     "build:core": "node scripts/build.mjs --package core",
     "build:sdk": "node scripts/build.mjs --package sdk",
     "clean": "node scripts/clean.mjs",
-    "lint": "eslint 'packages/*/src/**/*.{ts,tsx}'",
-    "lint:fix": "eslint --fix 'packages/*/src/**/*.{ts,tsx}'",
+    "dev": "node --watch bin/mycode.js chat",
     "format": "prettier --write 'packages/*/src/**/*.{ts,tsx}'",
     "format:check": "prettier --check 'packages/*/src/**/*.{ts,tsx}'",
+    "lint": "eslint 'packages/*/src/**/*.{ts,tsx}'",
+    "lint:fix": "eslint --fix 'packages/*/src/**/*.{ts,tsx}'",
+    "prepublishOnly": "npm run build && npm test",
+    "start": "node bin/mycode.js chat",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "start": "node bin/mycode.js chat",
-    "dev": "node --watch bin/mycode.js chat",
-    "prepublishOnly": "npm run build && npm test",
-    "smoke:failover": "node scripts/smoke-failover.mjs",
-    "smoke:mock": "node scripts/mock-provider.mjs 4141",
-    "smoke:mock-failover": "node scripts/mock-failover-provider.mjs 4242 4243"
+    "typecheck": "tsc --noEmit"
   },
   "repository": {
     "type": "git",
