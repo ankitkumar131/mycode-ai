@@ -143,14 +143,26 @@ export function pickChoiceArrowKeys(
 /**
  * Confirmation dialog shown when the agent auto-runs a command (or writes a
  * file). Mirrors gemini-cli / agy: the user picks with arrow keys between
- * "Yes — execute once", "Always allow this command for current session" and
- * "No — skip".
+ * "Yes — execute once", "Always allow this command for current session",
+ * "Always allow everything for this session" and "No — skip". The
+ * everything option appears only when the caller passes `onAllowAll`.
  */
+export interface ConfirmCommandOptions {
+  /**
+   * Called when the user picks "always allow everything for this session".
+   * The caller owns that state (it is session-scoped, never persisted).
+   */
+  onAllowAll?: () => void;
+  /** Label for the everything option, so a scoped bypass reads correctly. */
+  allowAllLabel?: string;
+}
+
 export async function confirmCommand(
   command: string,
   cwd: string,
   safety: SafetyResult | null = null,
   description?: string | null,
+  options?: ConfirmCommandOptions,
 ): Promise<boolean> {
   if (isAlwaysAllowed(command)) return true;
 
@@ -184,9 +196,16 @@ export async function confirmCommand(
   }
   console.log();
 
+  // Offered here because this is the exact moment the user is being
+  // interrupted: the answer to "I don't want to be asked this fifty more
+  // times" belongs in the prompt that asks, not only in a slash command they
+  // would have to know about.
   const choices = [
     { name: 'Yes — execute once', value: 'yes' },
     { name: 'Always allow this command for current session', value: 'always' },
+    ...(options?.onAllowAll
+      ? [{ name: options.allowAllLabel ?? 'Always allow everything for this session', value: 'allow-all' }]
+      : []),
     { name: 'No — skip', value: 'no' },
   ];
 
@@ -194,6 +213,10 @@ export async function confirmCommand(
 
   if (selectedValue === 'always') {
     addAlwaysAllow(command);
+    return true;
+  }
+  if (selectedValue === 'allow-all') {
+    options?.onAllowAll?.();
     return true;
   }
 

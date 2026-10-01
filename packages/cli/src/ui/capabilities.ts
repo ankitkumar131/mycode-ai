@@ -13,6 +13,10 @@
  * composer: far less pretty, but it never corrupts the screen.
  */
 
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 let cached: boolean | null = null;
 
 /** Explicit opt-out, for terminals we misdetect or users who prefer plain output. */
@@ -111,4 +115,70 @@ export function describeTerminal(): string {
 /** Test seam: forget the cached detection. */
 export function resetCapabilityCache(): void {
   cached = null;
+}
+
+/**
+ * Short identity for the running build: `<commit>` or `<commit> · built <time>`.
+ *
+ * Only meaningful for a source checkout, where the commit is recoverable.
+ * Returns null for an installed package, because there the version number is
+ * the identity.
+ *
+ * The point is diagnosability: "am I running the build that has that fix?" is
+ * otherwise unanswerable, and a stale global install looks exactly like a bug
+ * that was never fixed.
+ */
+/** Read the build timestamp scripts/build.mjs leaves beside the CLI bundle. */
+function readBuildStamp(here: string): number {
+  for (const candidate of [join(here, 'BUILD_STAMP'), join(here, '..', 'BUILD_STAMP')]) {
+    try {
+      if (existsSync(candidate)) {
+        const n = Number(readFileSync(candidate, 'utf-8').trim());
+        if (Number.isFinite(n) && n > 0) return n;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return 0;
+}
+
+export function describeBuild(): string | null {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    let dir = here;
+    for (let i = 0; i < 8; i++) {
+      if (existsSync(join(dir, '.git'))) {
+        const head = readFileSync(join(dir, '.git', 'HEAD'), 'utf-8').trim();
+        let commit = head;
+        if (head.startsWith('ref:')) {
+          const ref = head.slice(5).trim();
+          const refFile = join(dir, '.git', ref);
+          if (existsSync(refFile)) {
+            commit = readFileSync(refFile, 'utf-8').trim();
+          } else {
+            const packed = join(dir, '.git', 'packed-refs');
+            if (existsSync(packed)) {
+              const line = readFileSync(packed, 'utf-8')
+                .split('\n')
+                .find((l) => l.endsWith(` ${ref}`));
+              if (line) commit = line.split(' ')[0];
+            }
+          }
+        }
+        const short = commit.slice(0, 7);
+        const builtAt = Number(process.env.MYCODE_BUILD_TIME ?? 0) || readBuildStamp(here);
+        if (builtAt) {
+          return `${short} · built ${new Date(builtAt).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+        }
+        return short;
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }

@@ -53,7 +53,7 @@ import { renderTodoPanel } from '../ui/todo-view.js';
 import { renderStatusLine, estimateCost } from '../ui/status-line.js';
 import { renderDiff, openDiffViewer, diffStats } from '../ui/diff-viewer.js';
 import { setTheme, prefersLightTheme } from '../ui/themes/registry.js';
-import { supportsCursorControl, describeTerminal } from '../ui/capabilities.js';
+import { supportsCursorControl, describeTerminal, describeBuild } from '../ui/capabilities.js';
 import { SessionApprovals, shouldPrompt } from '../permissions/session-approvals.js';
 import { effectiveWindowFor, safeContextWindow, type ProviderConfig } from '@mycode/core';
 
@@ -242,6 +242,11 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       model: formatProviderLabel(router.getCurrentProvider()),
       providerChain: cfg.providers.map((p: any) => p.name || p.model),
       cwd,
+      build: describeBuild(),
+      approvals: {
+        writes: !!cfg.preferences.confirmWrites,
+        commands: !!cfg.preferences.confirmCommands,
+      },
     });
   }
 
@@ -383,7 +388,18 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         confirmWrites: cfg.preferences.confirmWrites,
       });
       if (!needed) return true;
-      return confirmCommand(target, cwd, (safety as any) ?? null, context ?? null);
+      const scope = safety ? 'commands' : 'writes';
+      return confirmCommand(target, cwd, (safety as any) ?? null, context ?? null, {
+        allowAllLabel: `Always allow all ${scope === 'commands' ? 'commands' : 'file writes'} for this session`,
+        onAllowAll: () => {
+          approvals.allow(scope);
+          console.log(
+            `  ${chalk.hex(theme.error).bold('⚡ ALLOW-ALL')} ${chalk.hex(theme.dim)(
+              `— ${scope === 'commands' ? 'commands' : 'file writes'} run without confirmation for the rest of this session`,
+            )}`,
+          );
+        },
+      });
     },
     onText(chunk: string) {
       stopSpinner();
@@ -605,7 +621,10 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       confirmWrites: cfg.preferences.confirmWrites,
     });
     if (needsPrompt) {
-      const ok = await confirmCommand(command, cwd, safety, null);
+      const ok = await confirmCommand(command, cwd, safety, null, {
+        allowAllLabel: 'Always allow all commands for this session',
+        onAllowAll: () => approvals.allow('commands'),
+      });
       if (!ok) {
         console.log(`  ${chalk.hex(theme.dim)('cancelled')}`);
         return 130;

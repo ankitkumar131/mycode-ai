@@ -441,18 +441,42 @@ npm run eval:report
   tests cover the truth table; end-to-end, the confirmation box appears without
   `/allow-all` and disappears with it, and reappears after `/allow-all off`.
 
+  **Discoverability, from a real report of "I don't want to be asked".** The
+  bypass was only reachable if you already knew the command, so it is now
+  offerable from the prompt itself — the confirmation picker gains
+  *"Always allow all <scope> for this session"*, placed exactly where the
+  annoyance happens. Two more changes come from the same report:
+
+  - The banner names the way out when approvals are on:
+    `Approvals on for file writes and commands — run /allow-all …`, printed once
+    at startup instead of never.
+  - The banner reports a **build identity** (`build: 0933787 · built <time>`).
+    "Am I running the build that has that fix?" is otherwise unanswerable, and a
+    stale global install looks identical to a bug that was never fixed. This was
+    prompted by exactly that confusion.
+
+  **The provider announcement was logged per request, not per switch.** Because
+  the agent loop issues one request per iteration, a long turn printed
+  `✦ Using <provider>` dozens of times — visible as a wall of identical lines in
+  the reported session. It now announces only when the serving provider changes,
+  so a switch (including a failover) still announces and a stable session stays
+  quiet.
+
 ## 5.6 What is still behind, in order
 
 1. **Markdown-defined agents.** Commands are done; agents are not. This is the
    next real extensibility item.
-2. **LSP diagnostics.** Verification currently means running a command; a language
+2. **A per-turn interrupt/limit story.** The reported session ended with
+   *"Step limit reached"*; the limit is announced after the fact rather than
+   approached visibly, and the user cannot extend it mid-turn.
+3. **LSP diagnostics.** Verification currently means running a command; a language
    server would make it free.
-3. **Persistent, resumable sessions.** File storage means a crash loses the turn.
-4. **PTY shell** and a background process manager.
-5. **Plugin host** — letting third parties contribute agents, commands and
+4. **Persistent, resumable sessions.** File storage means a crash loses the turn.
+5. **PTY shell** and a background process manager.
+6. **Plugin host** — letting third parties contribute agents, commands and
    providers rather than only consume them.
-6. **Session forking.**
-7. **A wider theme set.** 8 against 37 is a polish gap, not a capability gap.
+7. **Session forking.**
+8. **A wider theme set.** 8 against 37 is a polish gap, not a capability gap.
 
 Each of these is now measurable rather than arguable: the harness reports what a
 change did to solve rate, tokens, and fixed overhead, on the same tasks, with the

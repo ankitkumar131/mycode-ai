@@ -138,12 +138,34 @@ export class ProviderRouter {
     yield* this.attemptStreamWithFailover(eligible, messages, tools, options);
   }
 
+  /** Last provider we told the user about, so a stable session stays quiet. */
+  private _announcedProvider: string | null = null;
+
+  /**
+   * Log which provider is serving us, but only when that changes.
+   *
+   * The agent loop issues one request per iteration, so announcing on every
+   * request buried the transcript under identical lines. A switch (including a
+   * failover) still announces, because that is information the user needs.
+   */
+  private announceOnce(provider: BaseProvider): void {
+    const key = `${provider.name}\u0000${provider.model}`;
+    if (this._announcedProvider === key) return;
+    this._announcedProvider = key;
+    logger.provider(`Using ${provider.name} (${provider.model})`);
+  }
+
+  /** Forget the announcement, e.g. after the user switches provider by hand. */
+  resetAnnouncement(): void {
+    this._announcedProvider = null;
+  }
+
   private async attemptWithFailover(providers: BaseProvider[], messages: unknown[], tools?: unknown[], options?: any): Promise<any> {
     const errors: Error[] = [];
     for (let i = 0; i < providers.length; i++) {
       const provider = providers[i];
       try {
-        logger.provider(`Using ${provider.name} (${provider.model})`);
+        this.announceOnce(provider);
         const result = await provider.chat(messages, tools, options);
         const switchedFrom = providers[this._attemptedProviderIndex];
         if (this._attemptedProviderIndex >= 0 && switchedFrom && switchedFrom.name !== provider.name) {
@@ -172,7 +194,7 @@ export class ProviderRouter {
     for (let i = 0; i < providers.length; i++) {
       const provider = providers[i];
       try {
-        logger.provider(`Using ${provider.name} (${provider.model})`);
+        this.announceOnce(provider);
         const gen = provider.stream(messages, tools, options);
         for await (const chunk of gen) {
           yield chunk;
