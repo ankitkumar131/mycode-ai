@@ -346,12 +346,28 @@ export class TextArea {
       const body = s.replace(/\x1b\[200~|\x1b\[201~/g, '');
       if (body) this.pasteBuffer += body;
       if (s.includes('\x1b[201~')) {
-        this.pasteMode = false;
-        if (!this.busy && !this.closed && this.pasteBuffer) {
-          this.insertPaste(this.pasteBuffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n'));
-          void this.render();
-        }
+        const finished = this.pasteBuffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         this.pasteBuffer = '';
+        if (!this.busy && !this.closed && finished) {
+          this.insertPaste(finished);
+          this.scheduleRender();
+        }
+        // `pasteMode` is deliberately NOT cleared here.
+        //
+        // This handler is prepended, so it runs first — but readline's own
+        // 'data' listener still runs afterwards on the same chunk and emits a
+        // `keypress` for every character in it. Those keypresses are what the
+        // `pasteMode` guard in onKeypress exists to suppress. Clearing the flag
+        // synchronously meant the guard was already false by the time they
+        // fired, so the entire paste was inserted a second time (and a paste
+        // split across chunks duplicated its later chunks).
+        //
+        // Deferring the clear to the next tick keeps the guard true for exactly
+        // the events produced by this chunk, and clears it before any further
+        // input is read.
+        process.nextTick(() => {
+          this.pasteMode = false;
+        });
       }
       return;
     }
@@ -600,15 +616,37 @@ export class TextArea {
     // Printable characters (control sequences carry \x1b and are rejected)
     if (str && !key.ctrl && !key.meta && /^\P{C}+$/u.test(str)) {
       this.insertAt(str);
-      void this.render();
+      // Burst-aware: a paste delivered as individual characters must not repaint
+      // once per character.
+      this.afterEdit();
     }
+  }
+
+  /**
+   * Paint at most once per tick.
+   *
+   * A paste typed as individual characters — a terminal without bracketed
+   * paste, a held key, a very fast typist — otherwise triggers one full
+   * erase-and-repaint per character, which both flickers and makes a large
+   * paste crawl. Coalescing within the tick collapses a burst into a single
+   * repaint while keeping the first edit responsive.
+   */
+  private renderScheduled = false;
+
+  private scheduleRender(): void {
+    if (this.renderScheduled || this.closed) return;
+    this.renderScheduled = true;
+    queueMicrotask(() => {
+      this.renderScheduled = false;
+      void this.render();
+    });
   }
 
   private afterEdit(): void {
     this.historyIndex = -1;
     this.pendingText = null;
     this.updateMenu();
-    void this.render();
+    this.scheduleRender();
   }
 
   private deleteWordBefore(): void {

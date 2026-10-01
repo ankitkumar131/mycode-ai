@@ -455,6 +455,30 @@ npm run eval:report
     stale global install looks identical to a bug that was never fixed. This was
     prompted by exactly that confusion.
 
+  **A pasted block was inserted twice, and each character cost a repaint.**
+  Reported as *"if something I paste it pastes 2 times and becomes messy."*
+  Two separate defects, both reproduced in tests before being fixed:
+
+  - The composer has two listeners on stdin. Its own `data` handler is
+    *prepended* so it consumes a bracketed paste first — but readline's own
+    `data` listener still runs afterwards on the same chunk and emits a
+    `keypress` for every character in it. The guard that suppresses those is
+    `pasteMode`, which the data handler cleared *synchronously*, so by the time
+    the keypresses fired the guard was already false and the whole paste was
+    inserted a second time. A paste split across chunks duplicated its later
+    chunks, which is why longer pastes looked mangled rather than merely
+    doubled. The clear is now deferred to the next tick, which keeps the guard
+    true for exactly the events produced by that chunk.
+  - Every keystroke triggered a full erase-and-repaint. On a terminal without
+    bracketed paste the block arrives as individual characters, so a 200-char
+    paste meant 200 full repaints — slow, flickering, and messy. Edits are now
+    coalesced within a tick: the same 200 characters cost at most three
+    repaints, with the first edit still immediate.
+
+  Eight tests cover it, including a multi-line paste, a paste split across
+  chunks, a burst with no bracketed-paste support, and a large paste that
+  collapses to a placeholder while still submitting every line.
+
   **The provider announcement was logged per request, not per switch.** Because
   the agent loop issues one request per iteration, a long turn printed
   `✦ Using <provider>` dozens of times — visible as a wall of identical lines in
