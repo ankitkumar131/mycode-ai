@@ -21,7 +21,7 @@ function parseChatFlags(args: string[]): { opts: ChatOptions; rest: string[] } {
     if (a === '--continue' || a === '-c') opts.continue = true;
     else if (a === '--resume' || a === '-r') opts.resume = next();
     else if (a.startsWith('--resume=')) opts.resume = a.slice(9);
-    else if (a === '--query' || a === '-q') opts.query = next();
+    else if (a === '--query' || a === '-q' || a === '-Q') opts.query = next();
     else if (a === '--model' || a === '-m') opts.model = next();
     else if (a.startsWith('--model=')) opts.model = a.slice(8);
     else if (a === '--yolo' || a === '--dangerously-skip-permissions') opts.yolo = true;
@@ -34,7 +34,7 @@ function parseChatFlags(args: string[]): { opts: ChatOptions; rest: string[] } {
   return { opts, rest };
 }
 
-const CHAT_FLAGS = new Set(['--continue', '-c', '--resume', '-r', '--query', '-q', '--model', '-m', '--yolo']);
+const CHAT_FLAGS = new Set(['--continue', '-c', '--resume', '-r', '--query', '-q', '-Q', '--model', '-m', '--yolo']);
 const first = argv[0];
 const cmd = first === undefined || CHAT_FLAGS.has(first) || first.startsWith('--resume=') || first.startsWith('--model=') ? 'chat' : first;
 const args = cmd === 'chat' && first !== 'chat' ? argv : argv.slice(1);
@@ -64,9 +64,15 @@ async function main() {
     case 'edit':
       await editCommand(args[0], args.slice(1).join(' '));
       break;
-    case 'agent':
-      await agentCommand(args.join(' '));
+    case 'agent': {
+      // Flags belong to the command, not to the prompt: passing `--yolo`
+      // through as task text makes the model try to act on it.
+      const agentFlags = new Set(['--yolo', '-y', '--dangerously-skip-permissions']);
+      const yolo = args.some((a) => agentFlags.has(a));
+      const task = args.filter((a) => !agentFlags.has(a)).join(' ');
+      await agentCommand(task || undefined, { yolo });
       break;
+    }
     case 'skills': {
       const { skillManager } = await import('@mycode/core');
       skillManager.seedBundledSkills();

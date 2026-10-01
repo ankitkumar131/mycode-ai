@@ -21,10 +21,16 @@ import {
   ConfigManager,
   AgentSession,
   ProviderRouter,
+  FailoverCoordinator,
+  SubAgentRunner,
+  mcpManager,
+  registerMCPTools,
+  renderSubAgentResult,
+  todoStore,
+  sessionStore,
   executeCommand,
   classifyCommand,
   skillManager,
-  sessionStore,
   processManager,
   isDocumentFile,
   extractDocument,
@@ -42,7 +48,12 @@ import { TextArea } from '../ui/text-area.js';
 import { handleSlashCommand, buildMenuItems, type SlashCommandContext } from './slash-commands.js';
 import { decodeEntities } from '../utils/html.js';
 import { getLocalPackageInfo } from '../utils/update-check.js';
-import { confirmCommand } from '../ui/prompt.js';
+import { confirmCommand, askQuestions } from '../ui/prompt.js';
+import { renderTodoPanel } from '../ui/todo-view.js';
+import { renderStatusLine, estimateCost } from '../ui/status-line.js';
+import { renderDiff, openDiffViewer, diffStats } from '../ui/diff-viewer.js';
+import { setTheme, prefersLightTheme } from '../ui/themes/registry.js';
+import { effectiveWindowFor, safeContextWindow, type ProviderConfig } from '@mycode/core';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -65,6 +76,12 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
+/** Truncate a string for one-line display. */
+function truncate(s: string, max: number): string {
+  const clean = s.replace(/\s+/g, ' ').trim();
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+}
+
 function fmtDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
@@ -73,15 +90,22 @@ function fmtDuration(ms: number): string {
   return `${Math.floor(m / 60)}h${(m % 60).toString().padStart(2, '0')}m`;
 }
 
+/**
+ * Context window for a provider. Delegates to the routing layer so an explicit
+ * `contextWindow` in the provider config wins, and so chat mode agrees with the
+ * compaction and failover code instead of keeping a second copy of the table.
+ */
 function contextWindowFor(cfg: MyCodeConfig, provider: any): number {
-  const model: string = provider?.model ?? '';
-  const table = cfg.contextWindows ?? {};
-  for (const [k, v] of Object.entries(table)) if (model.includes(k)) return v;
-  const m = model.toLowerCase();
-  if (/gemini/.test(m)) return 1_000_000;
-  if (/claude|gpt-4\.1|gpt-5|o3|o4|deepseek|qwen3|kimi|grok/.test(m)) return 200_000;
-  if (/gpt-4o|llama-?3|mistral|gemma/.test(m)) return 128_000;
-  return 128_000;
+  return effectiveWindowFor((provider ?? {}) as ProviderConfig, cfg.contextWindows ?? {});
+}
+
+/**
+ * The window compaction is measured against: the smallest window in the failover
+ * chain. Compacting against the current provider alone means that when a switch
+ * happens the conversation no longer fits the provider that just took over.
+ */
+function safeWindowFor(cfg: MyCodeConfig): number {
+  return safeContextWindow(cfg.providers as ProviderConfig[], cfg.contextWindows ?? {});
 }
 
 /** Resolve @path references, extracting PDFs/Office docs as text. */
@@ -190,6 +214,11 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     return;
   }
 
+  // Apply the saved theme (falling back to auto-detection on light terminals)
+  // before anything is rendered, so the banner is already correct.
+  if (cfg.preferences?.theme) setTheme(cfg.preferences.theme);
+  else if (prefersLightTheme()) setTheme('light');
+
   const router = new ProviderRouter(cfg.providers);
   if (options.model || options.provider) router.setActiveProvider(options.model ?? options.provider!);
   const version = getVersion();
@@ -241,8 +270,86 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       currentSpinner = null;
     }
   };
+  const strictSpinnerStop = stopSpinner;
   const out = (line: string) => (textArea && textArea.isBusy() === false ? textArea.log(line) : console.log(line));
   const stamp = () => (ui.timestamps ? chalk.hex(theme.dim)(`[${new Date().toTimeString().slice(0, 5)}] `) : '');
+
+  // ─── Failover coordination ──────────────────────────────────────────────
+  //
+  // A mid-task provider switch is not a UI event: the replacement provider has a
+  // different tokenizer, context window and tool dialect. The coordinator makes
+  // the switch survivable — it announces it, checkpoints the session to disk
+  // before continuing, and hands the new model a short re-orientation brief.
+
+  let sessionRef: AgentSession | null = null;
+
+  const failover = new FailoverCoordinator({
+    providers: cfg.providers,
+    onAnnounce: (event) => {
+      stopSpinner();
+      console.log();
+      console.log(
+        `  ${chalk.hex(theme.switch)('↻')} ${chalk.hex(theme.warning).bold('Provider failover')}  ` +
+          `${chalk.hex(theme.textSecondary)(event.from)} ${chalk.hex(theme.textDim)('→')} ` +
+          `${chalk.hex(theme.brand).bold(event.to)}`
+      );
+      console.log(`    ${chalk.hex(theme.textDim)(event.reason)}`);
+      console.log(
+        `    ${chalk.hex(theme.textDim)('Context preserved and checkpointed; the agent will continue where it left off.')}`
+      );
+      console.log();
+    },
+    onCheckpoint: (payload) => {
+      try {
+        const json = sessionRef?.toJSON();
+        if (!json) return;
+        sessionStore.save({
+          id: json.id,
+          title: json.title,
+          cwd: json.cwd,
+          createdAt: json.createdAt,
+          updatedAt: new Date().toISOString(),
+          model: router.getCurrentProvider()?.model,
+          usage: json.usage,
+          messages: json.messages,
+        });
+      } catch {
+        /* a failed checkpoint must never abort the task */
+      }
+      void payload;
+    },
+  });
+  failover.prime(router.getCurrentProvider()?.name ?? 'unknown');
+
+  // ─── Sub-agents & user questions ────────────────────────────────────────
+  //
+  // `delegate` hands a subtask to a child session whose transcript is discarded;
+  // only its report returns. This is what keeps forty file reads out of the
+  // parent's context.
+  let activeSubAgents = 0;
+
+  const delegateFn = async (req: { kind: 'explore' | 'general'; task: string }): Promise<string> => {
+    activeSubAgents++;
+    stopSpinner();
+    console.log(
+      `  ${chalk.hex(theme.tool)('◆')} ${chalk.hex(theme.tool).bold(`sub-agent ${req.kind}`)} ` +
+        chalk.hex(theme.textDim)(truncate(req.task, 60))
+    );
+    try {
+      const runner = new SubAgentRunner({
+        kind: req.kind,
+        task: req.task,
+        cwd,
+        router,
+        contextWindow: Math.min(failover.safeWindow, 128_000),
+        abortSignal: undefined,
+      });
+      const result = await runner.run();
+      return renderSubAgentResult(result);
+    } finally {
+      activeSubAgents--;
+    }
+  };
 
   // ─── Agent session ──────────────────────────────────────────────────────
 
@@ -250,7 +357,14 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     providerRouter: router,
     maxIterations: 40,
     cwd,
-    contextWindow: contextWindowFor(cfg, router.getCurrentProvider()),
+    contextWindow: safeWindowFor(cfg),
+    failover,
+    verify: { enabled: true, formatter: true, diagnostics: true },
+    delegateFn,
+    askUserFn: async (questions) => {
+      stopSpinner();
+      return askQuestions(questions);
+    },
     toolRegistry: undefined,
     confirmFn: async (target, context, safety) => {
       stopSpinner();
@@ -304,6 +418,21 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         else currentSpinner.succeed(line);
         currentSpinner = null;
       }
+      // The agent's plan is only useful if the user can see it. Re-render on
+      // every todo update (and hide the panel automatically once work is done).
+      if (name === 'todo_write') {
+        try {
+          const todos = todoStore.get(session.id);
+          const panel = renderTodoPanel(todos);
+          if (panel) {
+            console.log();
+            console.log(panel);
+            console.log();
+          }
+        } catch {
+          /* rendering must never break the loop */
+        }
+      }
       if ((ui.verbose === 'all' || ui.verbose === 'verbose') && !ui.focus && result) {
         const max = ui.verbose === 'verbose' ? 4000 : 600;
         const body = result.length > max ? result.slice(0, max) + `\n… (${result.length - max} more chars)` : result;
@@ -316,15 +445,51 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         currentSpinner = null;
       } else console.log(`  ${S.error(ICONS.cross)} ${message}`);
     },
-    onCompress({ before, after }) {
+    onCompress({ before, after, pruned }) {
       stopSpinner();
-      console.log(`  ${chalk.hex(theme.amber)('⟲')} ${chalk.hex(theme.dim)(`context compressed ${fmtTokens(before)} → ${fmtTokens(after)} tokens`)}`);
+      const saved = before - after;
+      const pctSaved = before > 0 ? Math.round((saved / before) * 100) : 0;
+      console.log(
+        `  ${chalk.hex(theme.accent)('⟲')} ${chalk.hex(theme.textDim)(
+          `context compacted ${fmtTokens(before)} → ${fmtTokens(after)} tokens (−${pctSaved}%)` +
+            (pruned ? ` · ${pruned} stale tool output pruned` : '')
+        )}`
+      );
     },
     onFinish() {
       stopSpinner();
     },
+
+
   });
+  sessionRef = session;
   if (cfg.disabledTools?.length) for (const t of cfg.disabledTools) session.getRegistry().disable(t);
+
+  // ─── MCP servers ────────────────────────────────────────────────────────
+  //
+  // Connects configured servers and exposes their tools to the agent. Without
+  // this the servers were listed by /mcp and unreachable in practice.
+  if (cfg.mcp?.servers?.length) {
+    try {
+      mcpManager.configure({ servers: cfg.mcp.servers });
+      registerMCPTools(mcpManager, session.getRegistry())
+        .then(({ servers, tools, failed }) => {
+          if (tools > 0) {
+            console.log(
+              `  ${chalk.hex(theme.tool)('⚙')} ${chalk.hex(theme.textDim)(`MCP: ${servers} server${servers === 1 ? '' : 's'}, ${tools} tool${tools === 1 ? '' : 's'} available`)}`
+            );
+          }
+          for (const f of failed) {
+            console.log(`  ${chalk.hex(theme.warning)(ICONS.warning)} ${chalk.hex(theme.textDim)(`MCP ${f}`)}`);
+          }
+        })
+        .catch(() => {
+          /* MCP is an enhancement; never block startup */
+        });
+    } catch {
+      /* ignore */
+    }
+  }
 
   // Resume?
   if (options.continue || options.resume) {
@@ -458,11 +623,24 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       }
       const u = session.getUsage();
       const st = session.getState();
+      const model = router.getCurrentProvider()?.model;
+      const cost = estimateCost(u.promptTokens, u.completionTokens, model);
+
       console.log(
-        chalk.hex(theme.dim)(
-          `  ${stamp()}${fmtDuration(Date.now() - turnStart)} · ${fmtTokens(u.promptTokens)} in / ${fmtTokens(u.completionTokens)} out · ctx ${((st.estimatedTokens / st.contextWindow) * 100).toFixed(0)}%${st.aborted ? ' · interrupted' : ''}`
-        )
+        renderStatusLine({
+          model,
+          provider: router.getCurrentProvider()?.name,
+          usedTokens: st.estimatedTokens,
+          contextWindow: st.contextWindow,
+          elapsedMs: Date.now() - turnStart,
+          toolCalls: u.toolCalls,
+          filesTouched: st.filesTouched.length,
+          queued: st.queued,
+          failover: st.failover?.summary ?? null,
+          costUsd: cost ?? undefined,
+        })
       );
+      if (st.aborted) console.log(`  ${chalk.hex(theme.warning)(ICONS.warning)} ${chalk.hex(theme.dim)('interrupted')}`);
       console.log();
     } catch (err: any) {
       if (currentSpinner) {
@@ -514,7 +692,14 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       try {
         const res = await handleSlashCommand(input, slashCtx);
         if (res?.type === 'exit') return 'exit';
-        if (res?.type === 'model_change') session.getContext().maxTokens = contextWindowFor(cfg, router.getCurrentProvider());
+        // A model change can pick up an explicit window, but never one larger
+        // than the chain's safe minimum.
+        if (res?.type === 'model_change') {
+          session.getContext().maxTokens = Math.min(
+            contextWindowFor(cfg, router.getCurrentProvider()),
+            safeWindowFor(cfg)
+          );
+        }
       } catch (err: any) {
         console.log(`  ${S.error(ICONS.cross)} ${err.message}`);
       } finally {

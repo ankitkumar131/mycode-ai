@@ -33,12 +33,18 @@ import {
   renderDocument,
   isDocumentFile,
   findContextFiles,
+  todoStore,
+  countTodos,
+  snapshotStore,
   type InstalledSkill,
   type AgentSession,
   type ProviderRouter,
   type MyCodeConfig,
 } from '@mycode/core';
 import { pickChoiceArrowKeys } from '../ui/prompt.js';
+import { renderTodoPanel } from '../ui/todo-view.js';
+import { renderDiff, openDiffViewer, diffStats } from '../ui/diff-viewer.js';
+import { listThemes, getThemeName, setTheme } from '../ui/themes/registry.js';
 import type { SlashMenuItem } from '../ui/text-area.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -233,12 +239,45 @@ export const COMMANDS: CommandDef[] = [
   },
   {
     name: '/undo',
-    description: 'Remove the last user/assistant exchange from history',
+    description: 'Undo the last exchange; with "files", restore the files it changed',
+    argumentHint: '[files | yes]',
     category: 'Session',
-    handler: async (_args, ctx) => {
+    handler: async (args, ctx) => {
+      const mode = args.trim().toLowerCase();
+      const snapshots = snapshotStore.list(ctx.session.id);
+
+      if (mode === 'files' || mode === 'yes' || mode === 'both') {
+        if (!snapshots.length) {
+          warn('No file changes recorded for this session.');
+          return { handled: true };
+        }
+        // Undo removes the exchange from history as well, so the model does not
+        // keep reasoning about work that no longer exists on disk.
+        if (mode === 'both') ctx.session.undo();
+        const { restored, failed } = snapshotStore.restoreAll(ctx.session.id);
+        if (restored.length) {
+          ok(`Restored ${restored.length} file${restored.length === 1 ? '' : 's'}:`);
+          for (const f of restored.slice(-10)) console.log(`    ${dim(relative(ctx.cwd, f))}`);
+          if (restored.length > 10) console.log(`    ${dim(`… and ${restored.length - 10} more`)}`);
+        }
+        for (const f of failed) console.log(`  ${chalk.hex(theme.red)(ICONS.cross)} could not restore ${f}`);
+        snapshotStore.clear(ctx.session.id);
+        return { handled: true };
+      }
+
       const removed = ctx.session.undo();
-      if (!removed) warn('Nothing to undo.');
-      else ok(`Removed last exchange: ${dim(removed.slice(0, 60).replace(/\n/g, ' '))}`);
+      if (!removed) {
+        warn('Nothing to undo.');
+        return { handled: true };
+      }
+      ok(`Removed last exchange: ${dim(removed.slice(0, 60).replace(/\n/g, ' '))}`);
+      if (snapshots.length) {
+        console.log(
+          `  ${chalk.hex(theme.amber)(ICONS.warning)} ${dim(
+            `${snapshots.length} file${snapshots.length === 1 ? '' : 's'} were changed — run ${chalk.bold('/undo files')} to restore them too`
+          )}`
+        );
+      }
       return { handled: true };
     },
   },
@@ -346,19 +385,23 @@ export const COMMANDS: CommandDef[] = [
   {
     name: '/compress',
     aliases: ['/compact'],
-    description: 'Summarise older context to free the window. "here N" keeps last N exchanges',
+    description: 'Compact older context to free the window. "here N" keeps ~N×4k tokens of recent work',
     argumentHint: '[here [N] | focus topic]',
     category: 'Session',
     handler: async (args, ctx) => {
       const a = args.trim();
-      let keepLast = 2;
+      // The argument is a token budget expressed in units of ~4k tokens, not a
+      // count of turns: one turn can hold a 60k-character file dump and another
+      // is a one-line question, so counting turns is unrelated to what is kept.
+      let units = 2;
       let focus: string | undefined;
       const m = a.match(/^here(?:\s+(\d+))?$/i);
-      if (m) keepLast = m[1] ? parseInt(m[1], 10) : 2;
+      if (m) units = m[1] ? parseInt(m[1], 10) : 2;
       else if (a) focus = a;
-      console.log(dim('  Compressing context…'));
-      const r = await ctx.session.compress({ keepLast, focus });
-      ok(`Context compressed: ${fmtTokens(r.before)} → ${fmtTokens(r.after)} tokens.`);
+      const keepTokens = Math.max(2_000, units * 4_000);
+      console.log(dim(`  Compacting context (keeping ~${fmtTokens(keepTokens)} tokens of recent work)…`));
+      const r = await ctx.session.compress({ keepTokens, focus });
+      ok(`Context compacted: ${fmtTokens(r.before)} → ${fmtTokens(r.after)} tokens.`);
       return { handled: true, type: 'compact' };
     },
   },
@@ -398,6 +441,82 @@ export const COMMANDS: CommandDef[] = [
     },
   },
   {
+    name: '/todo',
+    aliases: ['/todos', '/plan'],
+    description: "Show the agent's plan (its current todo list)",
+    argumentHint: '[expand]',
+    category: 'Info',
+    handler: async (args, ctx) => {
+      const todos = todoStore.get(ctx.session.id);
+      console.log();
+      if (!todos.length) {
+        console.log(dim('  No plan yet. The agent creates one for multi-step work.'));
+        console.log();
+        return { handled: true };
+      }
+      const counts = countTodos(todos);
+      console.log(
+        renderTodoPanel(todos, { expand: true, showWhenDone: true })
+      );
+      console.log();
+      const bits = [
+        `${counts.completed} completed`,
+        counts.inProgress ? chalk.hex(theme.warning)(`${counts.inProgress} in progress`) : null,
+        `${counts.pending} pending`,
+        counts.cancelled ? `${counts.cancelled} cancelled` : null,
+      ].filter(Boolean);
+      console.log(`  ${chalk.hex(theme.muted)(bits.join(' · '))}`);
+      console.log();
+      void args;
+      return { handled: true };
+    },
+  },
+  {
+    name: '/theme',
+    aliases: ['/themes'],
+    description: 'Switch colour theme, or list them with previews',
+    argumentHint: '[name]',
+    category: 'Configuration',
+    handler: async (args, ctx) => {
+      const requested = args.trim().toLowerCase();
+      console.log();
+
+      if (!requested) {
+        console.log(sectionHeader('Themes', { accent: 'green' }));
+        const active = getThemeName();
+        for (const t of listThemes()) {
+          const marker = t.name === active ? chalk.hex(theme.green)('●') : chalk.hex(theme.dim)('○');
+          const swatch =
+            chalk.hex(t.tokens.brand)('██') +
+            chalk.hex(t.tokens.accent)('██') +
+            chalk.hex(t.tokens.brandGlow)('██') +
+            chalk.hex(t.tokens.diffAdd)('██') +
+            chalk.hex(t.tokens.diffDel)('██');
+          console.log(
+            `  ${marker} ${chalk.hex(t.tokens.brand).bold(t.name.padEnd(14))} ${swatch}  ${chalk.hex(theme.muted)(t.description)}`
+          );
+        }
+        console.log();
+        console.log(dim('  Use /theme <name> to switch. Persisted to settings.json → preferences.theme'));
+        console.log();
+        return { handled: true };
+      }
+
+      if (!setTheme(requested)) {
+        console.log(`  ${chalk.hex(theme.red)(ICONS.cross)} Unknown theme "${requested}". Run ${chalk.hex(theme.green)('/theme')} to list them.`);
+        console.log();
+        return { handled: true };
+      }
+
+      ctx.config.preferences = ctx.config.preferences ?? ({} as MyCodeConfig['preferences']);
+      ctx.config.preferences.theme = requested;
+      await ctx.saveConfig(ctx.config);
+      console.log(`  ${chalk.hex(theme.green)(ICONS.check)} Theme switched to ${chalk.bold(requested)} — remembered for next time.`);
+      console.log();
+      return { handled: true };
+    },
+  },
+  {
     name: '/status',
     description: 'Session info + local recap (model, tokens, files touched, top tools)',
     category: 'Info',
@@ -416,6 +535,9 @@ export const COMMANDS: CommandDef[] = [
         ['Tokens', `${fmtTokens(st.usage.promptTokens)} in / ${fmtTokens(st.usage.completionTokens)} out`],
         ['Context', `${fmtTokens(st.estimatedTokens)} / ${fmtTokens(st.contextWindow)} ${bar((st.estimatedTokens / st.contextWindow) * 100, 12)}`],
         ['Compressions', String(st.usage.compressions)],
+        ...(st.failover?.summary
+          ? ([['Failover', chalk.hex(theme.switch)(st.failover.summary)]] as Array<[string, string]>)
+          : []),
         ['Mode', [ctx.ui.yolo ? chalk.hex(theme.error)('YOLO') : 'approvals on', ctx.ui.plan ? chalk.hex(theme.amber)('plan') : null, ctx.ui.personality ? `personality: ${ctx.ui.personality}` : null].filter(Boolean).join(' · ')],
       ];
       for (const [k, v] of rows) console.log(`  ${chalk.hex(theme.muted)(k.padEnd(14))} ${v}`);
@@ -496,8 +618,29 @@ export const COMMANDS: CommandDef[] = [
         if (untracked) out += `\n\nUntracked files:\n${untracked.split('\n').map(f => '  ' + f).join('\n')}`;
       }
       console.log();
-      if (!out.trim()) console.log(dim('  No changes.'));
-      else console.log(renderMarkdown('```diff\n' + out.slice(0, 40_000) + '\n```'));
+      if (!out.trim()) {
+        console.log(dim('  No changes.'));
+        console.log();
+        return { handled: true };
+      }
+
+      // `--view` opens the interactive pager; `--stat` stays terse; the default
+      // renders a bounded, colourised preview instead of dumping to scrollback.
+      if (parts.includes('--view')) {
+        await openDiffViewer(out);
+        return { handled: true };
+      }
+      if (stat) {
+        console.log(chalk.hex(theme.dim)('  ' + out.trim().split('\n').slice(-1)[0]));
+        console.log();
+        return { handled: true };
+      }
+      const stats = diffStats(out);
+      console.log(
+        `  ${chalk.hex(theme.diffAdd)(`+${stats.additions}`)} ${chalk.hex(theme.diffDel)(`-${stats.deletions}`)} ` +
+          `${chalk.hex(theme.dim)(`across ${stats.files} file${stats.files === 1 ? '' : 's'}  ( /diff --view for the pager )`)}`
+      );
+      console.log(renderDiff(out, { maxLines: 400 }));
       console.log();
       return { handled: true };
     },

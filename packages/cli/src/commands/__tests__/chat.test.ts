@@ -2,6 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@mycode/core', () => {
   const mockRun = vi.fn().mockResolvedValue('Mock response');
+  const noop = () => () => {};
+  const FailoverCoordinator = vi.fn().mockImplementation(() => ({
+    prime: vi.fn(),
+    observe: vi.fn(),
+    pinForTurn: vi.fn(),
+    buildHandoffBrief: vi.fn(() => null),
+    summary: vi.fn(() => null),
+    safeWindow: 128000,
+  }));
+  const SubAgentRunner = vi.fn().mockImplementation(() => ({
+    run: () => Promise.resolve({ report: '', tokens: 0, turns: 0 }),
+  }));
+  const todoStore = { get: () => [], set: vi.fn(), subscribe: noop, clear: vi.fn() };
+  const sessionStore = { save: vi.fn(), load: vi.fn(), list: () => [], delete: vi.fn() };
   const MockSession = vi.fn().mockImplementation(() => ({
     run: mockRun,
     id: 'test-session',
@@ -52,7 +66,14 @@ vi.mock('@mycode/core', () => {
     memoryPath: () => '/tmp/MEMORY.md',
     findContextFiles: () => [],
     TOOLSETS: {},
-  };
+      FailoverCoordinator,
+    SubAgentRunner,
+    effectiveWindowFor: vi.fn(() => 128000),
+    safeContextWindow: vi.fn(() => 128000),
+    renderSubAgentResult: (r: any) => r?.report ?? '',
+    todoStore,
+    sessionStore,
+};
 });
 
 vi.mock('../../ui/text-area.js', () => {

@@ -228,3 +228,61 @@ export async function input(rl: readlinePromises.Interface, message: string, def
   rl.pause();
   return answer || defaultValue;
 }
+
+/**
+ * askQuestions — render the `question` tool's prompts and collect answers.
+ *
+ * The agent asking is almost always cheaper than the agent guessing, so this is
+ * deliberately lightweight: numbered options where offered, free text otherwise.
+ * Answers are keyed by header (falling back to the question text) so the tool can
+ * return them verbatim to the model.
+ */
+export async function askQuestions(
+  questions: Array<{
+    question: string;
+    header?: string;
+    options?: Array<{ label: string; description?: string }>;
+    multiple?: boolean;
+  }>
+): Promise<Record<string, string>> {
+  const answers: Record<string, string> = {};
+  const rl = readlinePromises.createInterface({ input: process.stdin, output: process.stdout });
+
+  try {
+    for (const q of questions) {
+      const key = q.header ?? q.question;
+      console.log();
+      console.log(`  ${chalk.hex('#38BDF8')('?')} ${chalk.bold(q.question)}`);
+
+      if (q.options?.length) {
+        for (let i = 0; i < q.options.length; i++) {
+          const opt = q.options[i];
+          console.log(`    ${chalk.hex('#38BDF8')(`${i + 1}.`)} ${opt.label}${opt.description ? chalk.hex('#94A3B8')(` — ${opt.description}`) : ''}`);
+        }
+        const hint = q.multiple ? 'Enter numbers separated by commas (or free text)' : 'Enter a number (or free text)';
+        const raw = (await rl.question(`  ${chalk.hex('#94A3B8')(hint + ': ')}`)).trim();
+
+        if (q.multiple) {
+          const picks = raw
+            .split(',')
+            .map((s) => parseInt(s.trim(), 10) - 1)
+            .filter((i) => i >= 0 && i < q.options!.length);
+          answers[key] = picks.length
+            ? picks.map((i) => q.options![i].label).join(', ')
+            : raw || q.options[0].label;
+        } else {
+          const idx = parseInt(raw, 10) - 1;
+          answers[key] = idx >= 0 && idx < q.options.length ? q.options[idx].label : raw || q.options[0].label;
+        }
+      } else {
+        const raw = (await rl.question(`  ${chalk.hex('#94A3B8')('Answer: ')}`)).trim();
+        answers[key] = raw || '(no answer given)';
+      }
+      console.log();
+    }
+  } finally {
+    rl.close();
+  }
+
+  return answers;
+}

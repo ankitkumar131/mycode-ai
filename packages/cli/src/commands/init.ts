@@ -67,7 +67,8 @@ export async function initCommand(): Promise<void> {
 
     // 3. apiProvider
     const apiProviderStr = await rl.question(
-      chalk.dim('API provider') + ' (openai/openrouter/ollama/custom): '
+      chalk.dim('API provider') + ' (openai/anthropic/openrouter/ollama/custom): ' +
+        chalk.dim('\n  anthropic uses the native Messages API (thinking + prompt caching)')
     );
     const provider = apiProviderStr.trim().toLowerCase() || 'openai';
 
@@ -76,7 +77,10 @@ export async function initCommand(): Promise<void> {
     }
 
     // 4. model
-    const defaultModel = provider === 'ollama' ? 'llama3.1:8b' : 'gpt-4o';
+    const defaultModel =
+      provider === 'ollama' ? 'llama3.1:8b'
+      : provider === 'anthropic' ? 'claude-sonnet-4-5'
+      : 'gpt-4o';
     const modelStr = await rl.question(chalk.dim('Model') + ` (${defaultModel}): `);
     const model = modelStr.trim() || defaultModel;
 
@@ -88,7 +92,11 @@ export async function initCommand(): Promise<void> {
     }
 
     // 6. baseUrl
-    const defaultUrl = provider === 'ollama' ? 'http://localhost:11434' : provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : '';
+    const defaultUrl =
+      provider === 'ollama' ? 'http://localhost:11434'
+      : provider === 'openrouter' ? 'https://openrouter.ai/api/v1'
+      : provider === 'anthropic' ? 'https://api.anthropic.com'
+      : '';
     const baseUrlStr = await rl.question(
       chalk.dim('Base URL') + (defaultUrl ? ` (${defaultUrl}): ` : ': ')
     );
