@@ -137,6 +137,12 @@ export type { OutputFormat } from './output/types.js';
 
 // Prompts
 export { SystemPromptBuilder, findContextFiles, readMemory, CONTEXT_FILE_NAMES } from './prompts/system-prompt.js';
+export {
+  loadCustomCommands,
+  findCustomCommand,
+  expandCustomCommand,
+  type CustomCommand,
+} from './prompts/custom-commands.js';
 
 // Safety & Policy
 export { SafetyChecker } from './safety/safety-checker.js';

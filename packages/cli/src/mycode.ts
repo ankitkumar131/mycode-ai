@@ -50,7 +50,10 @@ async function main() {
     case 'config':
       await configCommand(args[0], ...args.slice(1));
       break;
-    case 'chat': {
+    case 'chat':
+    // `mycode run "..."` is the same one-shot path other agents expose, so a
+    // script written for `opencode run` or `claude -p` works with minimal edits.
+    case 'run': {
       const { opts } = parseChatFlags(args);
       await chatCommand(opts);
       break;
@@ -115,6 +118,7 @@ async function main() {
 
 Commands:
   chat [flags] [query]   Start interactive chat (default)
+  run  [flags] [query]   Alias for a one-shot chat, e.g. mycode run "fix the bug"
       -c, --continue         Resume the latest session for this directory
       -r, --resume <id>      Resume a saved session by id or title
       -q, --query <text>     Run a single query and exit
@@ -132,7 +136,8 @@ Commands:
   --version, -v          Show CLI version
   --help, -h             Show this help
 
-Inside chat: type / for commands, !cmd for shell, @file to attach, Ctrl+Enter for a new line.`);
+Inside chat: type / for commands, !cmd for shell, @file to attach, Ctrl+Enter for a new line.
+Custom slash commands come from .mycode/commands/*.md (also reads .opencode/command and .claude/commands).`);
       break;
     default:
       console.error(`Unknown command: ${cmd}`);

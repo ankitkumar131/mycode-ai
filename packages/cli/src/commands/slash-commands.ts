@@ -5,6 +5,8 @@
  *   1. Built-in commands (this file), grouped by category
  *   2. Installed skills  → `/<skill-name> [request]`
  *   3. Quick commands    → user-defined in ~/.mycode/settings.json (exec / alias)
+ *   4. Custom commands   → markdown in .mycode/commands/ (also reads the
+ *                          .opencode/command and .claude/commands directories)
  *
  * Commands are case-insensitive; aliases are supported. Several skills can be
  * stacked: `/plan /test-driven-development add caching to the API`.
@@ -40,6 +42,8 @@ import {
   type AgentSession,
   type ProviderRouter,
   type MyCodeConfig,
+  loadCustomCommands,
+  expandCustomCommand,
 } from '@mycode/core';
 import { pickChoiceArrowKeys } from '../ui/prompt.js';
 import { renderTodoPanel } from '../ui/todo-view.js';
@@ -82,7 +86,7 @@ export interface SlashCommandContext {
 
 export interface SlashCommandResult {
   handled: boolean;
-  type?: 'exit' | 'clear' | 'new' | 'model_change' | 'skill_load' | 'plan_mode' | 'compact' | 'prompt';
+  type?: 'exit' | 'clear' | 'new' | 'model_change' | 'skill_load' | 'plan_mode' | 'compact' | 'prompt' | 'custom_command';
   message?: string;
 }
 
@@ -1318,6 +1322,15 @@ export function buildMenuItems(cwd: string, config?: MyCodeConfig): SlashMenuIte
     items.push({ name: n, description: q.description ?? (q.type === 'alias' ? `→ ${q.target}` : `$ ${q.command}`), kind: 'quick' });
   }
   try {
+    for (const c of loadCustomCommands(cwd)) {
+      if (taken.has(c.name)) continue;
+      taken.add(c.name);
+      items.push({ name: c.name, description: c.description, argumentHint: c.argumentHint, kind: 'quick' });
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
     for (const s of skillManager.list(cwd)) {
       const n = `/${s.name}`;
       if (taken.has(n)) continue;
@@ -1359,7 +1372,20 @@ export async function handleSlashCommand(input: string, ctx: SlashCommandContext
     }
   }
 
-  // 3. Skills — allow stacking several leading /skill tokens
+  // 3. Custom command from .mycode/commands/*.md (or the .opencode/.claude
+  //    equivalents). Unlike quick commands these carry a prompt template, so
+  //    they are sent to the model rather than executed as a shell command.
+  const custom = loadCustomCommands(ctx.cwd).find((c) => c.name.toLowerCase() === cmdName);
+  if (custom) {
+    const body = expandCustomCommand(custom.template, args);
+    console.log(
+      `  ${chalk.hex(theme.amber)('◆')} ${chalk.bold(custom.name)} ${chalk.hex(theme.muted)(`(${custom.scope})`)}`,
+    );
+    await ctx.sendPrompt(body, { display: trimmed });
+    return { handled: true, type: 'custom_command' };
+  }
+
+  // 4. Skills — allow stacking several leading /skill tokens
   const tokens = trimmed.split(/\s+/);
   const loaded: InstalledSkill[] = [];
   let i = 0;
@@ -1382,7 +1408,7 @@ export async function handleSlashCommand(input: string, ctx: SlashCommandContext
     return { handled: true, type: 'skill_load' };
   }
 
-  // 4. Unknown → suggestions
+  // 5. Unknown → suggestions
   const all = buildMenuItems(ctx.cwd, ctx.config);
   const q = cmdName.slice(1);
   const near = all.filter(c => c.name.slice(1).startsWith(q.slice(0, 3)) || c.name.includes(q)).slice(0, 5);
