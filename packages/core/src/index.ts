@@ -4,6 +4,32 @@
 export { AgentSession } from './agent/agent-session.js';
 export type { SessionConfig, SessionUsage } from './agent/agent-session.js';
 export { EventTranslator } from './agent/event-translator.js';
+
+// Automatic intent routing and bounded multi-worker orchestration
+export { TaskRouter, taskRouter, formatTaskPlanGuidance } from './orchestration/task-router.js';
+export { TaskSupervisor } from './orchestration/task-supervisor.js';
+export {
+  runAutomaticPreflight,
+  runAutomaticPostflight,
+  formatAutomaticEvidence,
+} from './orchestration/automatic-orchestrator.js';
+export type { AutomaticOrchestrationRuntime, AutomaticEvidence } from './orchestration/automatic-orchestrator.js';
+export type {
+  OrchestrationMode,
+  OrchestrationRequest,
+  OrchestrationTaskKind,
+  OrchestrationTaskStatus,
+  OrchestrationTaskSpec,
+  WorkspaceBoundary,
+  ServerReadiness,
+  TaskPlan,
+  TaskPlanner,
+  TaskExecutionContext,
+  TaskResult,
+  TaskExecutor,
+  OrchestrationRunResult,
+  TaskSupervisorOptions,
+} from './orchestration/types.js';
 export { ConversationContext } from './agent/context.js';
 export type { AgentOptions, AgentEvent, Message as AgentMessage } from './agent/types.js';
 
@@ -28,6 +54,7 @@ export type {
   ToolResult,
   ToolFunctionDefinition,
   ToolExecuteOptions,
+  DelegatedTaskInput,
   SafetyLevel,
   SafetyResult,
   CommandRecord,
@@ -48,6 +75,10 @@ export { fetchWebPageTool } from './tools/definitions/web-fetch.js';
 export { webSearchTool } from './tools/definitions/web-search.js';
 export { globSearchTool } from './tools/definitions/glob-search.js';
 export { delegateTool } from './tools/definitions/delegate.js';
+export { browserVerifyTool } from './tools/definitions/browser-verify.js';
+export { decisionGateTool } from './tools/definitions/decision-gate.js';
+export { sandboxTaskTool } from './tools/definitions/sandbox-task.js';
+export { parallelDelegateTool } from './tools/definitions/parallel-delegate.js';
 export { codeExecTool } from './tools/definitions/code-exec.js';
 export { questionTool } from './tools/definitions/question.js';
 export { todoWriteTool } from './tools/definitions/todowrite.js';
@@ -64,6 +95,8 @@ export { ZipReader } from './documents/zip.js';
 // Sessions
 export { SessionStore, sessionStore } from './sessions/session-store.js';
 export type { SavedSession, SessionSummary } from './sessions/session-store.js';
+export { RunLedger, runLedger } from './sessions/run-ledger.js';
+export type { RunRecord, RunStatus } from './sessions/run-ledger.js';
 
 // Skills
 export { SkillLoader, parseFrontmatter, stripFrontmatter, isPlatformCompatible } from './skills/skill-loader.js';
@@ -75,7 +108,33 @@ export type { SkillManagerOptions, SkillSearchResult } from './skills/skill-mana
 // Providers
 export { BaseProvider } from './routing/base-provider.js';
 export { ProviderRouter } from './routing/provider-router.js';
+export { CliAgentProvider } from './routing/cli-agent-provider.js';
 export type { ProviderConfig, ProviderStats } from './routing/types.js';
+
+// Optional browser verification integration (Jev-compatible JSON bridge)
+export { ExternalBrowserVerifier } from './integrations/browser-verifier.js';
+export type {
+  BrowserVerifier,
+  BrowserVerifierConfig,
+  BrowserVerificationRequest,
+  BrowserVerificationResult,
+} from './integrations/browser-verifier.js';
+export { ExternalDecisionGate } from './integrations/decision-gate.js';
+export type {
+  DecisionGate,
+  DecisionGateConfig,
+  DecisionQuestion,
+  DecisionQuestionType,
+  DecisionRequest,
+  DecisionResult,
+} from './integrations/decision-gate.js';
+export { AxCliSandboxBackend } from './integrations/sandbox-backend.js';
+export type {
+  SandboxBackend,
+  SandboxBackendConfig,
+  SandboxTaskRequest,
+  SandboxTaskResult,
+} from './integrations/sandbox-backend.js';
 
 // Hooks
 export { HookAggregator, HookRunner } from './hooks/hooks.js';
@@ -104,8 +163,23 @@ export type { OutputFormat } from './output/types.js';
 // Prompts
 export { SystemPromptBuilder, findContextFiles, readMemory, CONTEXT_FILE_NAMES } from './prompts/system-prompt.js';
 
+// Native Ponytail policy
+export {
+  PONYTAIL_MOTTO,
+  PONYTAIL_MODES,
+  DEFAULT_PONYTAIL_MODE,
+  DEFAULT_PONYTAIL_SETTINGS,
+  getPonytailPolicy,
+  buildPonytailCommandPrompt,
+  normalizePonytailMode,
+  ponytailModeDescription,
+} from './policy/ponytail.js';
+export type { PonytailMode, PonytailSettings, PonytailReviewKind } from './policy/ponytail.js';
+
 // Safety & Policy
 export { SafetyChecker } from './safety/safety-checker.js';
 export { PolicyEngine } from './policy/policy-engine.js';
 export { PermissionManager, permissionManager } from './policy/permission-manager.js';
 export type { PermissionRule, RulesetArray, Effect, PermissionPromptRequest } from './policy/permission-manager.js';
+export { ApprovalStore, approvalStore } from './policy/approval-store.js';
+export type { ApprovalScope, ApprovalAction, ApprovalRecord } from './policy/approval-store.js';

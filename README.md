@@ -232,6 +232,103 @@ $ mycode chat
 
 ---
 
+## 🐎 Native Ponytail Policy
+
+MyCode enables Ponytail's minimal-solution policy in **full mode from the first request**, including ordinary questions, research, documentation, and coding tasks:
+
+> **The best code is the code never written.**
+
+Before adding work, MyCode prefers existing project code, the standard library, native platform features, and already-installed dependencies. It keeps security, validation, error handling, accessibility, explicit requirements, approvals, and runnable verification intact.
+
+Inside chat:
+
+```text
+/ponytail             show the active mode and motto
+/ponytail lite        use a lighter minimal-change bias
+/ponytail full        use the complete ladder (default)
+/ponytail ultra       require strict justification for additions
+/ponytail off         disable only the Ponytail overlay
+/ponytail-review      review a scope for unnecessary complexity
+/ponytail-audit       audit complexity and safety boundaries
+/ponytail-debt        find safe removals
+/ponytail-gain        find small, high-value improvements
+/ponytail-help        explain the policy
+```
+
+The policy is injected into the first system prompt and propagated to delegated workers. `off` does not disable MyCode safety checks or project instructions.
+
+### External agent CLIs
+
+Munder-style external agents can be configured with a `cli`, `munder`, or `external` provider. The provider must have its executable installed and authenticated locally; MyCode does not bypass the provider's quota, billing, network, or login requirements.
+
+```json
+{
+  "name": "codex-cli",
+  "apiProvider": "cli",
+  "model": "default",
+  "command": "codex",
+  "args": ["exec", "{prompt}"]
+}
+```
+
+MyCode has no application-level usage ceiling. Use continues while the configured API or CLI path is available, subject to that provider's own limits and availability.
+
+### Automatic orchestration and browser verification
+
+MyCode performs a conservative intent pass before each request. Ordinary questions stay on the native tool loop; installed skills are matched from the workspace/user skill index and loaded automatically; requests that combine a code fix with browser-visible behavior are planned as a fixer followed by a read-only browser verification task. Fixer and verifier tasks carry explicit dependency, shared-workspace/version, and server-readiness metadata. The plan never claims that a specialized runtime ran unless its tool returns evidence.
+
+Requests for independent work can use the bounded `parallel_delegate` tool. It runs independent delegated workers concurrently (default maximum two, configurable with `orchestration.maxParallelTasks`) and keeps delegated workers from recursively spawning more workers. A configured AX backend may run an isolated sandbox preflight for sandbox/parallel intents; without AX, MyCode continues with native/local workers. Automatic orchestration reserves configured Jev/Laya/AX calls for the planned preflight/postflight so the same specialized task is not silently run twice. Cancellation propagates to every child process and structured results report unavailable, blocked, failed, timeout, or aborted states explicitly.
+
+The Jev adapter uses a small JSON-over-stdin bridge so the Python browser runtime remains optional:
+
+```bash
+# In a separate Python 3.12 environment
+python -m pip install "git+https://github.com/browser-use/jev-ultrafast.git"
+```
+
+Add this to `~/.mycode/settings.json` to enable the included bridge:
+
+```json
+{
+  "orchestration": {
+    "enabled": true,
+    "maxParallelTasks": 2
+  },
+  "integrations": {
+    "browser": {
+      "enabled": true,
+      "command": "python",
+      "args": ["scripts/integrations/jev_bridge.py"],
+      "timeoutMs": 180000
+    },
+    "decision": {
+      "enabled": true,
+      "command": "python",
+      "args": ["scripts/integrations/laya_bridge.py"],
+      "timeoutMs": 30000
+    },
+    "sandbox": {
+      "enabled": true,
+      "command": "ax",
+      "image": "your-registry/mycode-task-runner:latest",
+      "workspaceName": "default-workspace",
+      "resume": true,
+      "timeoutMs": 900000
+    }
+  }
+}
+```
+
+Install Laya separately when typed routing or confidence decisions are useful:
+
+```bash
+python -m pip install laya
+```
+
+The user can then ask MyCode to fix a UI and verify it in a browser. Chrome, Browser Harness, the Jev model credentials, and a reachable application URL are still required. Browser verification is read-only by default; mutation-capable browser actions require approval. Laya is a decision gate, not a replacement for code tests or browser evidence.
+
+AX is an optional sandbox backend for isolated or parallel workers. It requires a working AX CLI, Agent Substrate/cluster, task-runner image, workspace, and network access. MyCode does not treat a missing AX backend as success and falls back to native tools when it is not configured.
+
 ## 🔄 Multi-Provider Failover
 
 MyCode's killer feature: **chain multiple AI providers with priority-based automatic failover.**

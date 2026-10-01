@@ -13,6 +13,21 @@ const PUBLISHED_PACKAGE_NAME = '@ankitkumar131/mycode-ai';
 const FETCH_TIMEOUT_MS = 3000;
 
 /**
+ * Source checkouts are updated with git, not with a global npm install. Do not
+ * show a registry update notice while running the repository's own launcher;
+ * otherwise a development checkout is incorrectly told to replace itself with
+ * a different published build.
+ */
+export function isSourceCheckout(cwd = process.cwd()): boolean {
+  return (
+    existsSync(resolve(cwd, 'package.json')) &&
+    existsSync(resolve(cwd, 'bin', 'mycode.js')) &&
+    existsSync(resolve(cwd, 'packages', 'cli')) &&
+    existsSync(resolve(cwd, 'scripts', 'build.mjs'))
+  );
+}
+
+/**
  * Compare two semver strings (e.g. "1.0.6" > "1.0.5").
  * Returns true if v2 is strictly newer than v1.
  */
@@ -83,6 +98,10 @@ export function getLocalPackageInfo(): { name: string; version: string } {
  * Non-blocking, max 3s timeout.
  */
 export async function checkForUpdate(): Promise<void> {
+  // A checked-out project should follow its git branch. Only installed/package
+  // builds should be offered the global npm upgrade command.
+  if (isSourceCheckout()) return;
+
   try {
     const { name: pkgName, version: localVersion } = getLocalPackageInfo();
 

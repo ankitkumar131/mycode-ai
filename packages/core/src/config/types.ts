@@ -1,4 +1,8 @@
 import type { ProviderConfig } from '../routing/types.js';
+import type { PonytailMode } from '../policy/ponytail.js';
+import type { BrowserVerifierConfig } from '../integrations/browser-verifier.js';
+import type { DecisionGateConfig } from '../integrations/decision-gate.js';
+import type { SandboxBackendConfig } from '../integrations/sandbox-backend.js';
 
 export interface MyCodeConfig {
   version: string;
@@ -9,6 +13,26 @@ export interface MyCodeConfig {
     confirmCommands: boolean;
     maxContextFiles?: number;
     logConversations?: boolean;
+  };
+  /** Native Ponytail policy. It is enabled for every task by default. */
+  ponytail?: {
+    mode: PonytailMode;
+    applyToAllTasks: boolean;
+  };
+  /** Application-level execution policy. Provider quotas remain outside MyCode's control. */
+  usage?: {
+    unlimited: boolean;
+  };
+  /** Automatic intent routing and bounded local/remote task orchestration. */
+  orchestration?: {
+    enabled?: boolean;
+    maxParallelTasks?: number;
+  };
+  /** Optional external adapters used by automatic orchestration. */
+  integrations?: {
+    browser?: BrowserVerifierConfig;
+    decision?: DecisionGateConfig;
+    sandbox?: SandboxBackendConfig;
   };
   mcp?: {
     servers: Array<{

@@ -1,5 +1,5 @@
 import { createInterface } from 'readline/promises';
-import { ConfigManager, AgentSession, ProviderRouter } from '@mycode/core';
+import { ConfigManager, AgentSession, ProviderRouter, ExternalBrowserVerifier, ExternalDecisionGate, AxCliSandboxBackend } from '@mycode/core';
 import chalk from 'chalk';
 import { renderMarkdown } from '../ui/renderer.js';
 import { createSpinner, createToolSpinner } from '../ui/spinner.js';
@@ -24,12 +24,29 @@ export async function agentCommand(task?: string): Promise<void> {
   }
 
   const router = new ProviderRouter(cfg.providers);
+  const browserVerifier = cfg.integrations?.browser?.enabled && cfg.integrations.browser.command
+    ? new ExternalBrowserVerifier(cfg.integrations.browser, process.cwd())
+    : undefined;
+  const decisionGate = cfg.integrations?.decision?.enabled && cfg.integrations.decision.command
+    ? new ExternalDecisionGate(cfg.integrations.decision, process.cwd())
+    : undefined;
+  const sandboxBackend = cfg.integrations?.sandbox?.enabled && cfg.integrations.sandbox.command
+    ? new AxCliSandboxBackend(cfg.integrations.sandbox, process.cwd())
+    : undefined;
   let currentSpinner: Ora | null = null;
 
   const session = new AgentSession({
     providerRouter: router,
     cwd: process.cwd(),
     maxIterations: 50,
+    ponytailMode: cfg.ponytail?.mode,
+    ponytailForAllTasks: cfg.ponytail?.applyToAllTasks !== false,
+    autoOrchestration: cfg.orchestration?.enabled !== false,
+    browserVerifier,
+    decisionGate,
+    sandboxBackend,
+    maxParallelTasks: cfg.orchestration?.maxParallelTasks,
+    skills: cfg.skills,
     confirmFn: async (target, _context, safety) => {
       return confirmCommand(target, process.cwd(), (safety as any) ?? null);
     },

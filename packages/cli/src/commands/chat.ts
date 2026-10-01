@@ -21,6 +21,9 @@ import {
   ConfigManager,
   AgentSession,
   ProviderRouter,
+  ExternalBrowserVerifier,
+  ExternalDecisionGate,
+  AxCliSandboxBackend,
   executeCommand,
   classifyCommand,
   skillManager,
@@ -30,7 +33,9 @@ import {
   extractDocument,
   renderDocument,
   type MyCodeConfig,
+  type PonytailMode,
 } from '@mycode/core';
+import { runLedger } from '../../../core/src/sessions/run-ledger.js';
 import chalk from 'chalk';
 import type { Ora } from 'ora';
 
@@ -181,9 +186,12 @@ export interface ChatOptions {
   yolo?: boolean;
 }
 
+const DEFAULT_PONYTAIL_MODE_LOCAL: PonytailMode = 'full';
+
 export async function chatCommand(options: ChatOptions = {}): Promise<void> {
   const configManager = new ConfigManager();
   const cfg = configManager.configExists() ? await configManager.load() : configManager.get();
+  const ponytailMode: PonytailMode = cfg.ponytail?.mode ?? DEFAULT_PONYTAIL_MODE_LOCAL;
 
   if (cfg.providers.length === 0) {
     console.log(S.error(`\n  ${ICONS.cross} No providers configured. Run ${S.brand('mycode init')} first.\n`));
@@ -194,6 +202,15 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
   if (options.model || options.provider) router.setActiveProvider(options.model ?? options.provider!);
   const version = getVersion();
   const cwd = process.cwd();
+  const browserVerifier = cfg.integrations?.browser?.enabled && cfg.integrations.browser.command
+    ? new ExternalBrowserVerifier(cfg.integrations.browser, cwd)
+    : undefined;
+  const decisionGate = cfg.integrations?.decision?.enabled && cfg.integrations.decision.command
+    ? new ExternalDecisionGate(cfg.integrations.decision, cwd)
+    : undefined;
+  const sandboxBackend = cfg.integrations?.sandbox?.enabled && cfg.integrations.sandbox.command
+    ? new AxCliSandboxBackend(cfg.integrations.sandbox, cwd)
+    : undefined;
   const normalPrompt = `${S.brand(ICONS.sparkle)} ${S.brand('❯')} `;
   const oneShot = !!options.query;
 
@@ -224,6 +241,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     yolo: !!options.yolo,
     reasoning: 'hide',
     personality: null,
+    ponytail: ponytailMode,
     loadedSkills: [],
     plan: false,
   };
@@ -250,6 +268,15 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     providerRouter: router,
     maxIterations: 40,
     cwd,
+    ponytailMode,
+    ponytailForAllTasks: cfg.ponytail?.applyToAllTasks !== false,
+    autoOrchestration: cfg.orchestration?.enabled !== false,
+    browserVerifier,
+    decisionGate,
+    sandboxBackend,
+    maxParallelTasks: cfg.orchestration?.maxParallelTasks,
+    skills: cfg.skills,
+    runLedger,
     contextWindow: contextWindowFor(cfg, router.getCurrentProvider()),
     toolRegistry: undefined,
     confirmFn: async (target, context, safety) => {
@@ -331,6 +358,9 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     const saved = options.resume ? sessionStore.load(options.resume) : sessionStore.latestFor(cwd);
     if (saved) {
       session.load({ id: saved.id, title: saved.title, messages: saved.messages, usage: saved.usage as any });
+      // Rebuild the system prompt so changed Ponytail settings also apply to
+      // resumed sessions instead of trusting an old saved prompt.
+      await session.refreshSystemPrompt();
       console.log(`  ${chalk.hex(theme.green)(ICONS.check)} Resumed session ${chalk.bold(saved.title ?? saved.id)} ${chalk.hex(theme.dim)(`(${saved.messages.filter(m => m.role === 'user').length} turns)`)}\n`);
     } else console.log(`  ${chalk.hex(theme.amber)(ICONS.warning)} No saved session to resume — starting fresh.\n`);
   }
@@ -367,6 +397,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     if (st.queued) parts.push(chalk.hex(theme.amber)(`${st.queued} queued`));
     if (textArea?.stashCount) parts.push(chalk.hex(theme.amber)(`${textArea.stashCount} stashed`));
     if (ui.personality) parts.push(chalk.hex(theme.dim)(ui.personality));
+    parts.push(chalk.hex(theme.green)(`ponytail:${ui.ponytail}`));
     let line = ' ' + parts.join(sep);
     if (stripAnsi(line).length > w - 1) line = ' ' + parts.slice(0, 3).join(sep);
     return line;

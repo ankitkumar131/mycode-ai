@@ -111,6 +111,10 @@ describe('ProviderRouter', () => {
 
     const result = await router.chat([{ role: 'user', content: 'Hi' }]);
     expect(result.content).toBe('From backup');
+    expect(router.getStats()).toEqual([
+      expect.objectContaining({ name: 'primary', status: 'error', failureCount: 1, lastError: 'Rate limit exceeded for provider: primary' }),
+      expect.objectContaining({ name: 'backup', status: 'active', successCount: 1 }),
+    ]);
   });
 
   it('failover exhausts all providers and throws', async () => {

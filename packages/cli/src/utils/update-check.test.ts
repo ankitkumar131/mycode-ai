@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isNewerVersion, getLocalPackageInfo } from './update-check.js';
+import { isNewerVersion, getLocalPackageInfo, isSourceCheckout } from './update-check.js';
 
 describe('update-check utility', () => {
   it('correctly compares semver strings', () => {
@@ -16,5 +16,10 @@ describe('update-check utility', () => {
     expect(info).toHaveProperty('name');
     expect(info).toHaveProperty('version');
     expect(info.name).toBe('@ankitkumar131/mycode-ai');
+  });
+
+  it('recognizes the repository checkout used by npm run start', () => {
+    expect(isSourceCheckout()).toBe(true);
+    expect(isSourceCheckout('/tmp/not-a-mycode-install')).toBe(false);
   });
 });

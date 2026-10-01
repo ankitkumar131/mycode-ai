@@ -110,6 +110,24 @@ describe('TextArea (simulated TTY)', () => {
     expect(submit).toEqual({ kind: 'text', text: 'a\nb' });
   });
 
+  it('treats a multiline bracketed paste as one draft and ignores synthetic paste keypresses', async () => {
+    const p = textarea.read();
+    await tick();
+    let resolved = false;
+    p.then(() => { resolved = true; });
+
+    stdin.emit('data', Buffer.from('\x1b[200~line one\nline two\nline three\nline four\nline five\x1b[201~', 'utf-8'));
+    // readline parses the same raw bytes into keypress events after the data
+    // listener runs. These must not submit once per pasted newline.
+    press('\r', { name: 'return', sequence: '\r' });
+    await tick();
+    expect(resolved).toBe(false);
+    expect((textarea as any).text).toMatch(/^\[Pasted text #1:/);
+
+    press('\r', { name: 'return', sequence: '\r' });
+    expect(await p).toMatchObject({ kind: 'text', text: 'line one\nline two\nline three\nline four\nline five' });
+  });
+
   it('inserts a newline with Ctrl+Enter (CSI-u / kitty encoding)', async () => {
     const p = textarea.read();
     await tick();

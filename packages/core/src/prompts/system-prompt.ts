@@ -3,11 +3,20 @@ import { resolve, join } from 'node:path';
 import { platform, arch, release, hostname, homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { skillManager } from '../skills/skill-manager.js';
+import {
+  DEFAULT_PONYTAIL_MODE,
+  getPonytailPolicy,
+  type PonytailMode,
+} from '../policy/ponytail.js';
 
 export interface SystemPromptOptions {
   tools?: string[];
   model?: string;
   provider?: string;
+  /** Native Ponytail mode. Defaults to full and is active on every task. */
+  ponytailMode?: PonytailMode;
+  /** Whether Ponytail should apply to non-coding requests too (default true). */
+  ponytailForAllTasks?: boolean;
   /** Include a compact index of installed skills (default true) */
   includeSkills?: boolean;
   /** Extra sections (e.g. personality overlay, loaded skills) */
@@ -92,6 +101,15 @@ export class SystemPromptBuilder {
     b.addSection(
       `You are MyCode${modelInfo}, an expert software-engineering agent running in the user's terminal. You work directly in their repository: you read and edit files, run commands, search the web and documents, and iterate until the task is verifiably done. Be direct, precise and honest about uncertainty.`
     );
+
+    // ── Native Ponytail policy ─────────────────────────────────────────────
+    // Keep this in the base prompt rather than an optional MCP call: every
+    // provider, first request, normal turn, and delegated task receives it.
+    const ponytail = getPonytailPolicy(
+      options.ponytailMode ?? DEFAULT_PONYTAIL_MODE,
+      options.ponytailForAllTasks !== false,
+    );
+    if (ponytail) b.addSection(ponytail);
 
     // ── Environment ───────────────────────────────────────────────────────
     const shell = platform() === 'win32' ? process.env.COMSPEC || 'cmd.exe' : process.env.SHELL || '/bin/bash';
@@ -187,6 +205,9 @@ export class SystemPromptBuilder {
     if (has('terminal')) guide.push('- terminal: run shell commands (tests, builds, git, installs). Use background=true for servers/watchers and manage them with process.');
     if (has('execute_code')) guide.push('- execute_code: run a short script (python/node/bash) when computation is easier than shell.');
     if (has('web_search')) guide.push('- web_search / web_fetch: look up current docs, errors, APIs when unsure.');
+    if (has('browser_verify')) guide.push('- browser_verify: verify browser-visible behavior with the configured Jev-compatible worker. Use it after a server is running; read-only verification is the default and an unavailable worker is never a pass.');
+    if (has('decision_gate')) guide.push('- decision_gate: use the configured Laya-compatible engine for typed classification, scoring, routing, or confidence decisions; it does not replace code tests or browser evidence.');
+    if (has('sandbox_task')) guide.push('- sandbox_task: run an isolated worker through the configured AX/local backend. Use it for parallel or untrusted work; do not claim isolation if the backend is unavailable.');
     if (has('todo_write')) guide.push('- todo_write: keep a visible checklist for multi-step tasks; update it as you go.');
     if (has('skill_manage')) guide.push('- skill_manage: after finishing a non-trivial workflow that is likely to recur, save it as a skill; patch skills that were wrong.');
     if (guide.length) b.addSection(`Tools:\n${guide.join('\n')}`);

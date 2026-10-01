@@ -107,8 +107,157 @@ const graphifySkill: BundledSkill = {
   },
 };
 
+const NEXTJS_SAAS_SKILL = skill(
+  'nextjs-saas',
+  `---
+name: nextjs-saas
+description: Build polished Next.js SaaS products with accessible motion and typed APIs
+version: 1.0.0
+category: frontend
+tags: [nextjs, react, frontend, saas, reactbits, motion, accessibility, api]
+argument-hint: "[product brief]"
+---
+
+# Next.js SaaS Product
+
+## When to Use
+Use for a new Next.js App Router SaaS product, especially when the request includes a marketing site, dashboard, typed backend routes, polished motion, or ReactBits-style components.
+
+## Procedure
+1. Create the requested application in the requested new folder. Do not modify unrelated source trees.
+2. Inspect current ReactBits, Motion, smooth-scroll, styling, database, and testing documentation before selecting packages. Never invent imports or package names.
+3. Establish a small design system first: color tokens, typography, spacing, radii, shadows, focus styles, responsive breakpoints, and reduced-motion behavior.
+4. Build shared accessible components before duplicating page markup. Prefer server components by default and isolate client components around interaction and animation.
+5. Use Motion and smooth scrolling carefully. Animations must enhance hierarchy, remain performant, and respect prefers-reduced-motion.
+6. Add typed Route Handlers or Server Actions with validation, explicit errors, loading states, and a local/mock data path that works without secrets.
+7. Add tests for important UI behavior and API validation. Run lint, typecheck, tests, and a production build.
+8. Start the app and verify the important routes in a browser. Record failures instead of hiding them.
+
+## Pitfalls
+- Do not copy a visually impressive component that breaks keyboard navigation, mobile layouts, or reduced-motion behavior.
+- Do not use fake package names or silently replace a requested dependency with an unrelated one.
+- Do not put secrets in source control or claim that a real provider was contacted when using mock data.
+- Do not replace the existing application when the user requested a new folder.
+`
+);
+
+const PONYTAIL_SKILLS: BundledSkill[] = [
+  skill(
+    'ponytail',
+    `---
+name: ponytail
+description: Prefer the smallest correct solution and avoid unnecessary code
+version: 1.0.0
+category: engineering
+tags: [minimalism, yagni, simplicity, ponytail]
+argument-hint: "[request]"
+---
+
+# Ponytail Minimal-Code Policy
+
+## Motto
+The best code is the code never written.
+
+## Procedure
+1. Decide whether the requested work is necessary.
+2. Reuse existing project code and behavior before adding anything.
+3. Prefer the standard library, native platform features, and installed dependencies in that order.
+4. Choose the smallest local change that remains correct and maintainable.
+5. Trace root causes instead of wrapping symptoms with abstractions.
+6. Verify non-trivial behavior with a runnable check.
+
+## Safety Boundaries
+Minimal does not mean careless. Keep explicit requirements, security, validation, error handling, accessibility, data integrity, and required tests. Never bypass MyCode approvals or project instructions.
+
+## Verification
+Report what was deliberately not added as well as what changed when that explains the minimal solution.
+`
+  ),
+  skill(
+    'ponytail-review',
+    `---
+name: ponytail-review
+description: Review changes for correctness and unnecessary complexity
+version: 1.0.0
+category: engineering
+tags: [review, minimalism, ponytail]
+argument-hint: "[scope]"
+---
+
+# Ponytail Review
+
+Review the requested scope without changing files unless explicitly asked. Check correctness, security, error handling, tests, duplication, unnecessary abstractions, dependencies, and files. Report findings by priority with file paths and the smallest safe fix. If no change is justified, say so.
+`
+  ),
+  skill(
+    'ponytail-audit',
+    `---
+name: ponytail-audit
+description: Audit a project for needless code and risky complexity
+version: 1.0.0
+category: engineering
+tags: [audit, complexity, ponytail]
+argument-hint: "[scope]"
+---
+
+# Ponytail Audit
+
+Inspect the relevant implementation and tests. Identify duplicate code, dead code, speculative configuration, avoidable dependencies, missing validation, weak error handling, and complex workarounds. Preserve behavior that is required for safety, accessibility, or explicit user requirements. Separate evidence from guesses.
+`
+  ),
+  skill(
+    'ponytail-debt',
+    `---
+name: ponytail-debt
+description: Find safe opportunities to remove code and dependencies
+version: 1.0.0
+category: engineering
+tags: [debt, deletion, cleanup, ponytail]
+argument-hint: "[scope]"
+---
+
+# Ponytail Debt
+
+Find code, configuration, dependencies, abstractions, files, and processes that can be removed safely. Prefer deletion and reuse over replacement. For every candidate, state why it is safe, what behavior might change, and the smallest verification needed. Do not remove security or required validation.
+`
+  ),
+  skill(
+    'ponytail-gain',
+    `---
+name: ponytail-gain
+description: Suggest small high-value improvements without scope creep
+version: 1.0.0
+category: engineering
+tags: [improvement, simplicity, ponytail]
+argument-hint: "[scope]"
+---
+
+# Ponytail Gain
+
+Suggest only small improvements with a clear user or maintenance benefit. Prefer existing utilities, standard library features, native platform behavior, and removal of complexity. Do not propose speculative features or a new abstraction without evidence.
+`
+  ),
+  skill(
+    'ponytail-help',
+    `---
+name: ponytail-help
+description: Explain the native Ponytail minimal-code policy and boundaries
+version: 1.0.0
+category: engineering
+tags: [help, policy, ponytail]
+---
+
+# Ponytail Help
+
+Explain the motto "The best code is the code never written", the minimal-solution ladder, the lite/full/ultra/off modes, and the boundary that minimalism never overrides security, validation, error handling, accessibility, tests, project instructions, approvals, or explicit user requirements.
+`
+  ),
+];
+
 export const BUNDLED_SKILLS: BundledSkill[] = [
   graphifySkill,
+  NEXTJS_SAAS_SKILL,
+  ...PONYTAIL_SKILLS,
   skill(
     'plan',
     `---

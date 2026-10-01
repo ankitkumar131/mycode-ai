@@ -159,6 +159,30 @@ describe('AgentSession', () => {
     expect(mockChat).toHaveBeenCalledWith(expect.any(Array), undefined, expect.any(Object));
   });
 
+  it('reserves configured automatic browser verification instead of running a duplicate tool call', async () => {
+    const verify = vi.fn().mockResolvedValue({ success: true, status: 'passed', summary: 'UI passed' });
+    mockChat
+      .mockResolvedValueOnce({
+        content: 'I will verify this.',
+        toolCalls: [{ id: 'browser-1', type: 'function', function: { name: 'browser_verify', arguments: '{"url":"http://app.test","goal":"check the page"}' } }],
+      })
+      .mockResolvedValueOnce({ content: 'The fix is ready.', toolCalls: [] });
+
+    const session = makeSession({
+      browserVerifier: { verify } as any,
+      taskPlanner: { plan: () => ({
+        id: 'plan-browser', mode: 'browser', reason: 'test', confidence: 1,
+        tasks: [{ id: 'browser-verifier', kind: 'browser-verifier', title: 'Verify', prompt: 'Verify', metadata: { url: 'http://app.test' }, serverReadiness: { required: false } }],
+        recommendedTools: ['browser_verify'], createdAt: new Date().toISOString(),
+      }) },
+    });
+
+    const result = await session.run('Check the page');
+    expect(mockExecuteTool).not.toHaveBeenCalled();
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(result).toContain('UI passed');
+  });
+
   it('handles tool execution errors gracefully', async () => {
     mockChat
       .mockResolvedValueOnce({

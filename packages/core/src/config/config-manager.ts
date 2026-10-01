@@ -3,6 +3,10 @@ import { homedir } from 'os';
 import { join } from 'path';
 import type { MyCodeConfig } from './types.js';
 import type { ProviderConfig } from '../routing/types.js';
+import {
+  DEFAULT_PONYTAIL_SETTINGS,
+  normalizePonytailMode,
+} from '../policy/ponytail.js';
 
 const SNAKE_TO_CAMEL = new Map<string, string>([
   ['api_key', 'apiKey'],
@@ -83,6 +87,10 @@ export class ConfigManager {
         maxContextFiles: 20,
         logConversations: true,
       },
+      ponytail: { ...DEFAULT_PONYTAIL_SETTINGS },
+      usage: { unlimited: true },
+      orchestration: { enabled: true, maxParallelTasks: 2 },
+      integrations: { browser: { enabled: false }, decision: { enabled: false }, sandbox: { enabled: false } },
     };
   }
 
@@ -118,13 +126,60 @@ export class ConfigManager {
         });
       }
 
+      const defaults = this.getDefault();
+      const rawPonytail = parsed.ponytail && typeof parsed.ponytail === 'object' ? parsed.ponytail : {};
+      const rawUsage = parsed.usage && typeof parsed.usage === 'object' ? parsed.usage : {};
+      const rawOrchestration = parsed.orchestration && typeof parsed.orchestration === 'object' ? parsed.orchestration : {};
+      const rawIntegrations = parsed.integrations && typeof parsed.integrations === 'object' ? parsed.integrations : {};
+      const rawBrowser = rawIntegrations.browser && typeof rawIntegrations.browser === 'object' ? rawIntegrations.browser : {};
+      const rawDecision = rawIntegrations.decision && typeof rawIntegrations.decision === 'object' ? rawIntegrations.decision : {};
+      const rawSandbox = rawIntegrations.sandbox && typeof rawIntegrations.sandbox === 'object' ? rawIntegrations.sandbox : {};
       this.config = {
-        ...this.getDefault(),
+        ...defaults,
         ...parsed,
         providers,
         preferences: {
-          ...this.getDefault().preferences,
+          ...defaults.preferences,
           ...(parsed.preferences || {}),
+        },
+        ponytail: {
+          ...defaults.ponytail,
+          ...rawPonytail,
+          mode: normalizePonytailMode(rawPonytail.mode),
+          applyToAllTasks: rawPonytail.applyToAllTasks !== false,
+        },
+        usage: {
+          ...defaults.usage,
+          ...rawUsage,
+          // Older settings files get the no-artificial-cap behavior on upgrade.
+          unlimited: rawUsage.unlimited !== false,
+        },
+        orchestration: {
+          ...defaults.orchestration,
+          ...rawOrchestration,
+          enabled: rawOrchestration.enabled !== false,
+          maxParallelTasks: typeof rawOrchestration.maxParallelTasks === 'number'
+            ? Math.max(1, Math.min(16, Math.floor(rawOrchestration.maxParallelTasks)))
+            : defaults.orchestration?.maxParallelTasks,
+        },
+        integrations: {
+          ...defaults.integrations,
+          ...rawIntegrations,
+          browser: {
+            ...defaults.integrations?.browser,
+            ...rawBrowser,
+            enabled: rawBrowser.enabled !== false && typeof rawBrowser.command === 'string' && rawBrowser.command.length > 0,
+          },
+          decision: {
+            ...defaults.integrations?.decision,
+            ...rawDecision,
+            enabled: rawDecision.enabled !== false && typeof rawDecision.command === 'string' && rawDecision.command.length > 0,
+          },
+          sandbox: {
+            ...defaults.integrations?.sandbox,
+            ...rawSandbox,
+            enabled: rawSandbox.enabled !== false && typeof rawSandbox.command === 'string' && rawSandbox.command.length > 0,
+          },
         },
       };
       return this.config as MyCodeConfig;

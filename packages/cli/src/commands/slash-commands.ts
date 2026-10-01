@@ -37,6 +37,16 @@ import {
   type AgentSession,
   type ProviderRouter,
   type MyCodeConfig,
+  type PonytailMode,
+  PONYTAIL_MOTTO,
+  PONYTAIL_MODES,
+  DEFAULT_PONYTAIL_MODE,
+  buildPonytailCommandPrompt,
+  normalizePonytailMode,
+  ponytailModeDescription,
+  getPonytailPolicy,
+  approvalStore,
+  runLedger,
 } from '@mycode/core';
 import { pickChoiceArrowKeys } from '../ui/prompt.js';
 import type { SlashMenuItem } from '../ui/text-area.js';
@@ -63,6 +73,7 @@ export interface SlashCommandContext {
     yolo: boolean;
     reasoning: 'hide' | 'show';
     personality: string | null;
+    ponytail: PonytailMode;
     loadedSkills: string[];
     plan: boolean;
   };
@@ -416,7 +427,7 @@ export const COMMANDS: CommandDef[] = [
         ['Tokens', `${fmtTokens(st.usage.promptTokens)} in / ${fmtTokens(st.usage.completionTokens)} out`],
         ['Context', `${fmtTokens(st.estimatedTokens)} / ${fmtTokens(st.contextWindow)} ${bar((st.estimatedTokens / st.contextWindow) * 100, 12)}`],
         ['Compressions', String(st.usage.compressions)],
-        ['Mode', [ctx.ui.yolo ? chalk.hex(theme.error)('YOLO') : 'approvals on', ctx.ui.plan ? chalk.hex(theme.amber)('plan') : null, ctx.ui.personality ? `personality: ${ctx.ui.personality}` : null].filter(Boolean).join(' · ')],
+        ['Mode', [ctx.ui.yolo ? chalk.hex(theme.error)('YOLO') : 'approvals on', `ponytail: ${ctx.ui.ponytail}`, ctx.ui.plan ? chalk.hex(theme.amber)('plan') : null, ctx.ui.personality ? `personality: ${ctx.ui.personality}` : null].filter(Boolean).join(' · ')],
       ];
       for (const [k, v] of rows) console.log(`  ${chalk.hex(theme.muted)(k.padEnd(14))} ${v}`);
       if (st.filesTouched.length || st.topTools.length) {
@@ -424,6 +435,26 @@ export const COMMANDS: CommandDef[] = [
         console.log(sectionHeader('Recap', { accent: 'amber' }));
         if (st.topTools.length) console.log(`  ${chalk.hex(theme.muted)('Top tools'.padEnd(14))} ${st.topTools.map(([n, c]) => `${n}×${c}`).join(', ')}`);
         if (st.filesTouched.length) console.log(`  ${chalk.hex(theme.muted)('Files'.padEnd(14))} ${st.filesTouched.slice(-8).join(', ')}`);
+      }
+      console.log();
+      return { handled: true };
+    },
+  },
+  {
+    name: '/runs',
+    description: 'Show durable agent run records and their recovery status',
+    argumentHint: '[n]',
+    category: 'Info',
+    handler: async (args) => {
+      const limit = Math.min(50, Math.max(1, parseInt(args.trim(), 10) || 10));
+      const runs = runLedger.list(limit);
+      console.log();
+      console.log(sectionHeader(`Runs (${runs.length})`, { accent: 'green' }));
+      if (!runs.length) console.log(dim(`  None yet. Records are stored in ${runLedger.getDir()}.`));
+      for (const run of runs) {
+        const started = run.startedAt.slice(0, 19).replace('T', ' ');
+        const provider = run.provider ? ` · ${run.provider}` : '';
+        console.log(`  ${chalk.hex(run.status === 'completed' ? theme.green : run.status === 'running' ? theme.amber : theme.red)(run.status.padEnd(9))} ${started} · ${run.sessionId}${provider} · ${run.toolCalls ?? 0} tools`);
       }
       console.log();
       return { handled: true };
@@ -547,8 +578,10 @@ export const COMMANDS: CommandDef[] = [
       console.log(`  Sessions:     ${dim(sessionStore.getDir())}`);
       console.log(`  Memory:       ${dim(memoryPath())}`);
       console.log(`  Confirm cmds: ${cfg.preferences.confirmCommands}   Confirm writes: ${cfg.preferences.confirmWrites}`);
+      console.log(`  Ponytail:     ${cfg.ponytail?.mode ?? DEFAULT_PONYTAIL_MODE} (all tasks: ${cfg.ponytail?.applyToAllTasks !== false})`);
+      console.log(`  Usage cap:    ${cfg.usage?.unlimited !== false ? 'none imposed by MyCode' : 'configured'}`);
       console.log(`  Providers:`);
-      for (const p of cfg.providers) console.log(`    ${chalk.hex(theme.green)('•')} ${p.name.padEnd(16)} ${dim(p.apiProvider.padEnd(11))} ${p.model}${p.baseUrl ? dim(`  ${p.baseUrl}`) : ''}`);
+      for (const p of cfg.providers) console.log(`    ${chalk.hex(theme.green)('•')} ${p.name.padEnd(16)} ${dim(p.apiProvider.padEnd(11))} ${p.model}${p.baseUrl ? dim(`  ${p.baseUrl}`) : ''}${p.command ? dim(`  command: ${p.command}`) : ''}`);
       if (cfg.disabledTools?.length) console.log(`  Disabled tools: ${cfg.disabledTools.join(', ')}`);
       console.log();
       return { handled: true };
@@ -587,6 +620,96 @@ export const COMMANDS: CommandDef[] = [
       ctx.session.addSystemSection(all[name]);
       ok(`Personality set to ${chalk.bold(name)}.`);
       return { handled: true };
+    },
+  },
+  {
+    name: '/ponytail',
+    aliases: ['/pt'],
+    description: 'Show or set the native Ponytail minimal-code policy (full by default for every task)',
+    argumentHint: '[lite|full|ultra|off|default]',
+    category: 'Configuration',
+    handler: async (args, ctx) => {
+      const requested = args.trim().toLowerCase();
+      const current = ctx.ui.ponytail ?? ctx.config.ponytail?.mode ?? DEFAULT_PONYTAIL_MODE;
+      if (!requested) {
+        console.log(`  Motto: ${chalk.hex(theme.green).bold(PONYTAIL_MOTTO)}`);
+        console.log(`  Mode: ${chalk.hex(theme.green).bold(current)} — ${ponytailModeDescription(current)}`);
+        console.log(`  Scope: every task from the first turn (${ctx.config.ponytail?.applyToAllTasks !== false ? 'on' : 'off'})`);
+        console.log(dim('  Modes: lite · full · ultra · off. Use /ponytail-help for the policy.'));
+        return { handled: true };
+      }
+
+      const mode = requested === 'default' || requested === 'on' ? DEFAULT_PONYTAIL_MODE : normalizePonytailMode(requested);
+      if (requested !== 'default' && requested !== 'on' && !PONYTAIL_MODES.includes(requested as PonytailMode)) {
+        warn(`Unknown Ponytail mode "${requested}". Choose: ${PONYTAIL_MODES.join(', ')}`);
+        return { handled: true };
+      }
+      ctx.ui.ponytail = mode;
+      ctx.config.ponytail = { mode, applyToAllTasks: true };
+      ctx.session.setPonytailMode(mode);
+      await ctx.saveConfig(ctx.config);
+      await ctx.session.refreshSystemPrompt();
+      ok(`Ponytail ${mode === 'off' ? 'disabled' : `set to ${chalk.bold(mode)}`} — ${mode === 'off' ? 'MyCode safety rules remain active.' : ponytailModeDescription(mode)}.`);
+      return { handled: true };
+    },
+  },
+  {
+    name: '/ponytail-help',
+    description: 'Explain the native Ponytail principle and safety boundaries',
+    category: 'Configuration',
+    handler: async (_args, ctx) => {
+      console.log();
+      console.log(sectionHeader('Ponytail — native MyCode policy', { accent: 'green' }));
+      console.log(`  ${chalk.hex(theme.green).bold(PONYTAIL_MOTTO)}`);
+      console.log(dim('  Active by default from the first request, for questions and tasks as well as coding.'));
+      console.log();
+      console.log('  Ladder:');
+      for (const line of ['question whether work is needed', 'reuse existing project code', 'prefer standard library', 'prefer native platform features', 'reuse installed dependencies', 'choose a small local change', 'write new code only when necessary']) console.log(`    ${chalk.hex(theme.green)('•')} ${line}`);
+      console.log();
+      console.log('  It never means skipping security, validation, error handling, accessibility, tests, project instructions, approvals, or an explicit user requirement.');
+      console.log(`  Current mode: ${chalk.bold(ctx.ui.ponytail)} · ${ponytailModeDescription(ctx.ui.ponytail)}`);
+      console.log();
+      return { handled: true };
+    },
+  },
+  {
+    name: '/ponytail-review',
+    description: 'Review a scope using the Ponytail minimal-code policy',
+    argumentHint: '[path|request]',
+    category: 'Tools & Skills',
+    handler: async (args, ctx) => {
+      await ctx.sendPrompt(buildPonytailCommandPrompt('review', args), { display: `/ponytail-review ${args}`.trim() });
+      return { handled: true, type: 'prompt' };
+    },
+  },
+  {
+    name: '/ponytail-audit',
+    description: 'Audit complexity, duplication, dependencies, and safety boundaries',
+    argumentHint: '[path|request]',
+    category: 'Tools & Skills',
+    handler: async (args, ctx) => {
+      await ctx.sendPrompt(buildPonytailCommandPrompt('audit', args), { display: `/ponytail-audit ${args}`.trim() });
+      return { handled: true, type: 'prompt' };
+    },
+  },
+  {
+    name: '/ponytail-debt',
+    description: 'Find code and dependencies that can be removed safely',
+    argumentHint: '[path|request]',
+    category: 'Tools & Skills',
+    handler: async (args, ctx) => {
+      await ctx.sendPrompt(buildPonytailCommandPrompt('debt', args), { display: `/ponytail-debt ${args}`.trim() });
+      return { handled: true, type: 'prompt' };
+    },
+  },
+  {
+    name: '/ponytail-gain',
+    description: 'Find small, high-value improvements without speculative work',
+    argumentHint: '[path|request]',
+    category: 'Tools & Skills',
+    handler: async (args, ctx) => {
+      await ctx.sendPrompt(buildPonytailCommandPrompt('gain', args), { display: `/ponytail-gain ${args}`.trim() });
+      return { handled: true, type: 'prompt' };
     },
   },
   {
@@ -660,14 +783,26 @@ export const COMMANDS: CommandDef[] = [
   },
   {
     name: '/approvals',
-    description: 'Set approval mode: manual (ask everything), smart (ask for risky only), off',
-    argumentHint: '[manual|smart|off]',
+    description: 'Set approval mode or inspect durable command approvals',
+    argumentHint: '[manual|smart|off|list|clear]',
     category: 'Configuration',
     handler: async (args, ctx) => {
       const a = args.trim();
       if (!a) {
         const mode = ctx.ui.yolo ? 'off' : ctx.config.preferences.confirmCommands && ctx.config.preferences.confirmWrites ? 'manual' : 'smart';
         console.log(`  Approval mode: ${chalk.bold(mode)}`);
+        console.log(`  Durable approvals: ${approvalStore.list().length} · ${approvalStore.getPath()}`);
+        return { handled: true };
+      }
+      if (a === 'list') {
+        const records = approvalStore.list();
+        if (!records.length) console.log(dim('  No project/global approvals saved.'));
+        for (const record of records) console.log(`  ${record.scope.padEnd(7)} ${record.action.padEnd(14)} ${record.pattern}${record.cwd ? `  (${record.cwd})` : ''}`);
+        return { handled: true };
+      }
+      if (a === 'clear') {
+        approvalStore.revokeAll();
+        ok('Cleared durable and session approvals.');
         return { handled: true };
       }
       if (a === 'off') ctx.ui.yolo = true;
@@ -679,7 +814,7 @@ export const COMMANDS: CommandDef[] = [
         ctx.ui.yolo = false;
         ctx.config.preferences.confirmCommands = true;
         ctx.config.preferences.confirmWrites = false;
-      } else return (usage('/approvals [manual|smart|off]'), { handled: true });
+      } else return (usage('/approvals [manual|smart|off|list|clear]'), { handled: true });
       await ctx.saveConfig(ctx.config);
       ok(`Approval mode: ${a}`);
       return { handled: true };
@@ -945,7 +1080,7 @@ Include: what the project is; how to install, build, test and lint (exact comman
       try {
         const res = await ctx.router.chat(
           [
-            { role: 'system', content: 'Answer the user\'s side question about the following conversation transcript. Be brief and direct.' },
+            { role: 'system', content: `${getPonytailPolicy(ctx.ui.ponytail, true)}\n\nAnswer the user's side question about the following conversation transcript. Be brief and direct.` },
             { role: 'user', content: `Transcript:\n${transcript}\n\nQuestion: ${q}` },
           ],
           undefined,

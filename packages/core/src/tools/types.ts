@@ -1,3 +1,8 @@
+import type { PonytailMode } from '../policy/ponytail.js';
+import type { BrowserVerifier } from '../integrations/browser-verifier.js';
+import type { DecisionGate } from '../integrations/decision-gate.js';
+import type { SandboxBackend } from '../integrations/sandbox-backend.js';
+
 export interface ToolFunctionDefinition {
   type: 'function';
   function: {
@@ -7,12 +12,29 @@ export interface ToolFunctionDefinition {
   };
 }
 
+export interface DelegatedTaskInput {
+  task: string;
+  agent?: string;
+}
+
 export interface ToolExecuteOptions {
   confirmFn?: (target: string, context?: string | null, safety?: SafetyResult) => Promise<boolean>;
   commandHistory?: {
     add(record: CommandRecord): void;
   };
   abortSignal?: AbortSignal;
+  /** Propagated to delegated workers so Ponytail is never lost at a boundary. */
+  ponytailMode?: PonytailMode;
+  /** Agent-session-owned delegation runtime. */
+  delegate?: (task: string, agent: string) => Promise<string>;
+  /** Agent-session-owned bounded parallel delegation runtime. */
+  delegateParallel?: (tasks: DelegatedTaskInput[]) => Promise<unknown>;
+  /** Optional Jev-compatible browser verifier runtime. */
+  browserVerifier?: BrowserVerifier;
+  /** Optional Laya-compatible typed decision runtime. */
+  decisionGate?: DecisionGate;
+  /** Optional AX/local sandbox runtime. */
+  sandboxBackend?: SandboxBackend;
 }
 
 export interface ToolModule {

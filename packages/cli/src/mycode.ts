@@ -91,6 +91,12 @@ async function main() {
       console.log(`\n  Node:      ${process.version}`);
       console.log(`  Config:    ${cm.getConfigPath()} ${cm.configExists() ? '✓' : '✗ (run mycode init)'}`);
       console.log(`  Providers: ${cfg.providers.length ? cfg.providers.map(p => p.name).join(', ') : 'none'}`);
+      console.log(`  Ponytail:  ${cfg.ponytail?.mode ?? 'full'} (all tasks: ${cfg.ponytail?.applyToAllTasks !== false})`);
+      console.log(`  Usage cap: ${cfg.usage?.unlimited !== false ? 'none imposed by MyCode' : 'configured'}`);
+      console.log(`  Routing:   ${cfg.orchestration?.enabled === false ? 'manual' : `automatic (max ${cfg.orchestration?.maxParallelTasks ?? 2})`}`);
+      console.log(`  Browser:   ${cfg.integrations?.browser?.enabled ? cfg.integrations.browser.command : 'not configured'}`);
+      console.log(`  Decisions: ${cfg.integrations?.decision?.enabled ? cfg.integrations.decision.command : 'not configured'}`);
+      console.log(`  Sandbox:   ${cfg.integrations?.sandbox?.enabled ? cfg.integrations.sandbox.command : 'not configured'}`);
       console.log(`  Skills:    ${skillManager.list(process.cwd()).length} in ${skillManager.getSkillsDir()}`);
       console.log(`  Editor:    ${process.env.VISUAL || process.env.EDITOR || '(unset — Ctrl+G uses vi/notepad)'}`);
       console.log(`  TTY:       ${process.stdout.isTTY ? 'yes' : 'no'}  TERM=${process.env.TERM ?? ''}  ${process.env.TERM_PROGRAM ?? ''}\n`);
@@ -125,7 +131,9 @@ Commands:
   --version, -v          Show CLI version
   --help, -h             Show this help
 
-Inside chat: type / for commands, !cmd for shell, @file to attach, Ctrl+Enter for a new line.`);
+Inside chat: type / for commands, !cmd for shell, @file to attach, Ctrl+Enter for a new line.
+
+Native Ponytail is active in full mode for every task from the first request. Use /ponytail to change it.`);
       break;
     default:
       console.error(`Unknown command: ${cmd}`);
