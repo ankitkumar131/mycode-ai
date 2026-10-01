@@ -26,6 +26,10 @@
     "packages/test-utils"
   ],
   "scripts": {
+    "eval": "node evals/run.mjs",
+    "eval:dry": "node evals/run.mjs --dry-run --runs 1",
+    "eval:report": "node evals/report.mjs",
+    "eval:selftest": "sh evals/lib/selftest.sh",
     "smoke:failover": "node scripts/smoke-failover.mjs",
     "smoke:mock": "node scripts/mock-provider.mjs 4141",
     "smoke:mock-failover": "node scripts/mock-failover-provider.mjs 4242 4243",

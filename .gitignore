@@ -17,3 +17,6 @@ Thumbs.db
 
 # MyCode config
 .mycode/settings.json
+
+# eval harness output
+evals/runs/
