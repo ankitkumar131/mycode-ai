@@ -40,7 +40,10 @@
     "typecheck": "tsc --noEmit",
     "start": "node bin/mycode.js chat",
     "dev": "node --watch bin/mycode.js chat",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "smoke:failover": "node scripts/smoke-failover.mjs",
+    "smoke:mock": "node scripts/mock-provider.mjs 4141",
+    "smoke:mock-failover": "node scripts/mock-failover-provider.mjs 4242 4243"
   },
   "repository": {
     "type": "git",
@@ -81,8 +84,5 @@
     "rimraf": "^6.0.0",
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"
-  },
-  "dependencies": {
-    "@ankitkumar131/mycode-ai": "^1.0.10"
   }
 }

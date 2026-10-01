@@ -440,7 +440,7 @@ export class SkillManager {
   }
 
   private parseSource(nameOrSpec: string, source?: string, skillPath?: string): { name: string; repo: string; ref: string; path: string } {
-    let s = (source ?? nameOrSpec).trim();
+    const s = (source ?? nameOrSpec).trim();
     let name = source ? nameOrSpec.trim() : '';
     let ref = 'main';
 
