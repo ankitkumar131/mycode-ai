@@ -3,11 +3,19 @@ import { resolve, join } from 'node:path';
 import { platform, arch, release, hostname, homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { skillManager } from '../skills/skill-manager.js';
+import { currentPonytailSection } from './ponytail.js';
 
 export interface SystemPromptOptions {
   tools?: string[];
   model?: string;
   provider?: string;
+  /**
+   * Include the ponytail lazy-senior-dev rules (default: true when the resolved
+   * mode is not 'off'). On by default so it applies from the first query without
+   * any setup; disable with PONYTAIL_DEFAULT_MODE=off, the ponytail config file,
+   * or `/ponytail off` at runtime.
+   */
+  ponytail?: boolean;
   /** Include a compact index of installed skills (default true) */
   includeSkills?: boolean;
   /** Extra sections (e.g. personality overlay, loaded skills) */
@@ -190,6 +198,14 @@ export class SystemPromptBuilder {
     if (has('todo_write')) guide.push('- todo_write: keep a visible checklist for multi-step tasks; update it as you go.');
     if (has('skill_manage')) guide.push('- skill_manage: after finishing a non-trivial workflow that is likely to recur, save it as a skill; patch skills that were wrong.');
     if (guide.length) b.addSection(`Tools:\n${guide.join('\n')}`);
+
+    // ── Ponytail (lazy senior dev mode) ───────────────────────────────────
+    // Placed before the working rules so it frames how work is approached
+    // rather than reading as one more constraint among many.
+    if (options.ponytail !== false) {
+      const section = currentPonytailSection();
+      if (section) b.addSection(section);
+    }
 
     // ── Working rules ─────────────────────────────────────────────────────
     b.addSection(

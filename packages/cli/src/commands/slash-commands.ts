@@ -44,6 +44,14 @@ import {
   type MyCodeConfig,
   loadCustomCommands,
   expandCustomCommand,
+  parsePonytailMode,
+  getPonytailMode,
+  setPonytailMode,
+  describePonytailMode,
+  PONYTAIL_MODES,
+  PONYTAIL_SOURCE,
+  PONYTAIL_VERSION,
+  PONYTAIL_LICENSE,
 } from '@mycode/core';
 import { parseAllowAllArgs, type SessionApprovals } from '../permissions/session-approvals.js';
 import { pickChoiceArrowKeys } from '../ui/prompt.js';
@@ -546,6 +554,7 @@ export const COMMANDS: CommandDef[] = [
           ? ([['Failover', chalk.hex(theme.switch)(st.failover.summary)]] as Array<[string, string]>)
           : []),
         ['Mode', [ctx.ui.yolo ? chalk.hex(theme.error)('YOLO') : ctx.ui.approvals.badge() ? chalk.hex(theme.error)(ctx.ui.approvals.badge()!) : 'approvals on', ctx.ui.plan ? chalk.hex(theme.amber)('plan') : null, ctx.ui.personality ? `personality: ${ctx.ui.personality}` : null].filter(Boolean).join(' · ')],
+        ['Rules', getPonytailMode() === 'off' ? chalk.hex(theme.dim)('ponytail: off') : `${chalk.hex(theme.amber)('🐴')} ${chalk.hex(theme.dim)(describePonytailMode())}`],
       ];
       for (const [k, v] of rows) console.log(`  ${chalk.hex(theme.muted)(k.padEnd(14))} ${v}`);
       if (st.filesTouched.length || st.topTools.length) {
@@ -814,6 +823,156 @@ export const COMMANDS: CommandDef[] = [
       return { handled: true };
     },
   },
+  // ── Ponytail (lazy senior dev mode) ─────────────────────────────────────
+  {
+    name: '/ponytail',
+    description: 'Lazy senior dev mode: set intensity (lite/full/ultra/off), on by default',
+    usage: '/ponytail [lite|full|ultra|off]',
+    argumentHint: '[lite|full|ultra|off]',
+    category: 'Configuration',
+    handler: async (args, ctx) => {
+      const wanted = parsePonytailMode(args);
+      if (args.trim() && !wanted) {
+        usage('/ponytail [lite|full|ultra|off]');
+        return { handled: true };
+      }
+      if (!wanted) {
+        const mode = getPonytailMode();
+        console.log();
+        console.log(`  ${chalk.hex(theme.amber).bold('🐴 ponytail')} ${chalk.hex(theme.dim)('— ' + describePonytailMode())}`);
+        console.log(`  ${chalk.hex(theme.dim)(PONYTAIL_MODES.filter(m => m !== 'off').map(m => (m === mode ? chalk.bold(m) : m)).join(' · '))}`);
+        console.log(`  ${chalk.hex(theme.muted)('lite: build it, name the lazier option.  full: the ladder, enforced.  ultra: challenge the requirement itself.')}`);
+        console.log(`  ${chalk.hex(theme.dim)('off disables it. Change the default with PONYTAIL_DEFAULT_MODE or ~/.config/ponytail/config.json.')}`);
+        console.log();
+        return { handled: true };
+      }
+      setPonytailMode(wanted);
+      // Rebuild the system prompt so the change applies to the very next query,
+      // not the next session.
+      try {
+        await ctx.session.refreshSystemPrompt();
+      } catch {
+        /* the change still sticks; the prompt refreshes on the next turn anyway */
+      }
+      if (wanted === 'off') {
+        ok('ponytail off — over-building rules removed from the system prompt.');
+      } else {
+        console.log(`  ${chalk.hex(theme.amber).bold('🐴 ponytail')} ${chalk.bold(wanted)} ${chalk.hex(theme.dim)('— active on every response from now on.')}`);
+      }
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/ponytail-review',
+    description: 'Review the current changes for over-engineering — what can be deleted',
+    usage: '/ponytail-review [target]',
+    argumentHint: '[target]',
+    category: 'Tools & Skills',
+    handler: async (args, ctx) => {
+      const target = args.trim() || 'the current uncommitted changes (git diff, staged and unstaged)';
+      await ctx.sendPrompt(
+        `Review ${target} for over-engineering only, not correctness. One line per finding: <file>:<line>: <tag> <what to cut>. <replacement>. ` +
+          `Tags: delete (dead code or speculative feature), stdlib (reinvented standard library), native (dependency doing what the platform does), ` +
+          `yagni (abstraction with one implementation), shrink (same logic, fewer lines). ` +
+          `End with the net lines removable. Report only — change nothing. If there is nothing to cut: "Lean already. Ship."`,
+        { display: '/ponytail-review' },
+      );
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/ponytail-audit',
+    description: 'Audit the whole repo for over-engineering, biggest cut first',
+    usage: '/ponytail-audit [path]',
+    argumentHint: '[path]',
+    category: 'Tools & Skills',
+    handler: async (args, ctx) => {
+      const target = args.trim() || 'this repository';
+      await ctx.sendPrompt(
+        `Audit ${target} for over-engineering only, not correctness. Scan the whole tree, not a diff. ` +
+          `One line per finding, ranked biggest cut first: <tag> <what to cut>. <replacement>. [path]. ` +
+          `Tags: delete (dead code or speculative feature), stdlib (reinvented standard library), native (dependency doing what the platform does), ` +
+          `yagni (abstraction with one implementation), shrink (same logic, fewer lines). ` +
+          `End with the net lines and dependencies removable. Report only — change nothing. If nothing to cut: "Lean already. Ship."`,
+        { display: '/ponytail-audit' },
+      );
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/ponytail-debt',
+    description: 'Harvest ponytail: comments into a tracked debt ledger',
+    category: 'Tools & Skills',
+    handler: async (_args, ctx) => {
+      await ctx.sendPrompt(
+        'Harvest every `ponytail:` comment in this repository into a debt ledger so deferrals do not rot into "later means never". ' +
+          `Grep the whole tree for the marker (grep -rnE '(#|//) ?ponytail:' ., skipping node_modules, .git and build output). ` +
+          'One row per marker, grouped by file: <file>:<line> — <what was simplified>. ceiling: <the limit named in the comment>. upgrade: <the trigger to revisit>. ' +
+          'Tag any marker that names no upgrade path or trigger as no-trigger — those rot silently. ' +
+          'End with the count of markers and how many lack a trigger. Report only — change nothing. If there are none: "No ponytail: debt. Clean ledger."',
+        { display: '/ponytail-debt' },
+      );
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/ponytail-gain',
+    description: "Show ponytail's published benchmark scoreboard",
+    category: 'Info',
+    handler: async () => {
+      // Upstream's published medians. Rendered locally and labelled as such:
+      // they come from the ponytail project, not from this repository.
+      const bar = (pct: number) => '█'.repeat(Math.max(1, Math.round(pct / 5))) + '░'.repeat(20 - Math.max(1, Math.round(pct / 5)));
+      console.log();
+      console.log(`  ${chalk.hex(theme.amber).bold('🐴 ponytail — published benchmark medians')}`);
+      console.log(`  ${chalk.hex(theme.dim)(`from ${PONYTAIL_SOURCE} v${PONYTAIL_VERSION} · 5 everyday tasks · Haiku, Sonnet, Opus`)}`);
+      console.log();
+      console.log(`  ${chalk.bold('Lines of code')}   no-skill ${bar(100)} 100%`);
+      console.log(`                  ponytail ${chalk.hex(theme.green)(bar(13))} 6–20%   ${chalk.hex(theme.green)('down 80–94%')}`);
+      console.log(`  ${chalk.bold('Cost')}            no-skill ${bar(100)} 100%`);
+      console.log(`                  ponytail ${chalk.hex(theme.green)(bar(38))} 23–53%  ${chalk.hex(theme.green)('down 47–77%')}`);
+      console.log(`  ${chalk.bold('Speed')}           ponytail ${chalk.hex(theme.green)('3–6× faster')}`);
+      console.log();
+      console.log(`  ${chalk.hex(theme.dim)('These are upstream benchmark medians, not measurements of this repository.')}`);
+      console.log(`  ${chalk.hex(theme.dim)('There is no per-repo figure to give: the unbuilt version was never written, so there is nothing to subtract.')}`);
+      console.log(`  ${chalk.hex(theme.dim)('For this repo: /ponytail-debt counts the shortcuts, /ponytail-audit shows what is still cuttable.')}`);
+      console.log();
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/ponytail-help',
+    description: 'Quick reference for ponytail levels and commands',
+    category: 'Info',
+    handler: async () => {
+      console.log();
+      console.log(`  ${chalk.hex(theme.amber).bold('🐴 ponytail')} ${chalk.hex(theme.dim)('— the laziest solution that actually works')}`);
+      console.log();
+      console.log(`  ${chalk.bold('Levels')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail lite')}   ${chalk.hex(theme.muted)('Build what is asked; name the lazier alternative in one line.')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail')}        ${chalk.hex(theme.muted)('full (default): the ladder — YAGNI, stdlib, native, one line, minimum.')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail ultra')}  ${chalk.hex(theme.muted)('Deletion before addition; challenge the requirement itself.')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail off')}    ${chalk.hex(theme.muted)('Disable. Also: "stop ponytail", "normal mode".')}`);
+      console.log();
+      console.log(`  ${chalk.bold('Commands')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail-review')}  ${chalk.hex(theme.muted)('Over-engineering review of the current changes')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail-audit')}   ${chalk.hex(theme.muted)('Whole-repo over-engineering audit')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail-debt')}    ${chalk.hex(theme.muted)('Harvest ponytail: comments into a debt ledger')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail-gain')}    ${chalk.hex(theme.muted)('Published benchmark scoreboard')}`);
+      console.log();
+      console.log(`  ${chalk.hex(theme.dim)('Active on every response by default. Change the default with PONYTAIL_DEFAULT_MODE=off|lite|full|ultra')}`);
+      console.log(`  ${chalk.hex(theme.dim)('or ~/.config/ponytail/config.json  →  {"defaultMode": "lite"}   (Windows: %APPDATA%\\ponytail\\config.json)')}`);
+      console.log(`  ${chalk.hex(theme.dim)(`Vendored from ${PONYTAIL_SOURCE} v${PONYTAIL_VERSION} (${PONYTAIL_LICENSE}); runtime mode is process-local and never persisted.`)}`);
+      console.log();
+      return { handled: true };
+    },
+  },
+
   {
     name: '/allow-all',
     aliases: ['/allowall', '/allow', '/bypass'],

@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@mycode/core', () => {
+  // Ponytail defaults on; the banner asks for the live mode.
+  const getPonytailMode = vi.fn(() => 'full');
+  const describePonytailMode = vi.fn(() => 'ponytail: full (default)');
   const mockRun = vi.fn().mockResolvedValue('Mock response');
   const noop = () => () => {};
   const FailoverCoordinator = vi.fn().mockImplementation(() => ({
@@ -32,6 +35,8 @@ vi.mock('@mycode/core', () => {
     queuedCount: 0,
   }));
   return {
+    getPonytailMode,
+    describePonytailMode,
     ConfigManager: vi.fn().mockImplementation(() => ({
       configExists: () => true,
       load: () =>

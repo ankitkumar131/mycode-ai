@@ -19,6 +19,9 @@ import { resolve, relative, join } from 'path';
 import { homedir } from 'os';
 import {
   ConfigManager,
+  setPonytailMode,
+  getPonytailMode,
+  describePonytailMode,
   AgentSession,
   ProviderRouter,
   FailoverCoordinator,
@@ -247,6 +250,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         writes: !!cfg.preferences.confirmWrites,
         commands: !!cfg.preferences.confirmCommands,
       },
+      ponytail: getPonytailMode() === 'off' ? null : describePonytailMode(),
     });
   }
 
@@ -738,8 +742,44 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     autosave,
   };
 
+  /**
+   * The phrase switches ponytail documents for turning it off or on in plain
+   * language. Matched only when the message is *exactly* the phrase, so an
+   * incidental "normal mode" inside a sentence never silently changes the
+   * agent's behaviour.
+   */
+  const PONYTAIL_PHRASES: Record<string, 'off' | 'full'> = {
+    'stop ponytail': 'off',
+    'ponytail off': 'off',
+    'normal mode': 'off',
+    'no ponytail': 'off',
+    'ponytail on': 'full',
+    'ponytail mode': 'full',
+    'be lazy': 'full',
+    'lazy mode': 'full',
+  };
+
   const dispatch = async (input: string): Promise<'exit' | void> => {
     if (!input) return;
+
+    // Plain-language ponytail switch, checked before anything that would spend
+    // a request on it.
+    const phrase = input.trim().toLowerCase().replace(/[.!]+$/, '');
+    const wantsMode = PONYTAIL_PHRASES[phrase];
+    if (wantsMode && !input.startsWith('/')) {
+      setPonytailMode(wantsMode);
+      try {
+        await session.refreshSystemPrompt();
+      } catch {
+        /* applies on the next turn regardless */
+      }
+      if (wantsMode === 'off') {
+        console.log(`  ${chalk.hex(theme.amber)('🐴')} ${chalk.bold('ponytail off')} ${chalk.hex(theme.dim)('— back to normal mode. /ponytail to resume.')}`);
+      } else {
+        console.log(`  ${chalk.hex(theme.amber)('🐴')} ${chalk.bold('ponytail on')} ${chalk.hex(theme.dim)('— lazy senior dev mode. /ponytail off to stop.')}`);
+      }
+      return;
+    }
 
     if (input.startsWith('/')) {
       textArea!.setBusy(true);

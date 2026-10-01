@@ -16,6 +16,8 @@ interface BannerOptions {
   build?: string | null;
   /** Whether approvals are currently being asked for. */
   approvals?: { writes: boolean; commands: boolean };
+  /** Active ponytail mode description, e.g. "ponytail: full (default)". */
+  ponytail?: string | null;
 }
 
 export function renderBanner(opts: BannerOptions): void {
@@ -49,6 +51,9 @@ export function renderBanner(opts: BannerOptions): void {
   console.log(`  ${chalk.hex(theme.dim)(`${osLabel} · ${shell} · Node ${nodeV}`)}`);
   if (opts.build) {
     console.log(`  ${chalk.hex(theme.greenMute)('build:')} ${chalk.hex(theme.dim)(opts.build)}`);
+  }
+  if (opts.ponytail) {
+    console.log(`  ${chalk.hex(theme.amber)('🐴')} ${chalk.hex(theme.dim)(opts.ponytail)} ${chalk.hex(theme.muted)('— /ponytail off to disable')}`);
   }
   console.log();
   console.log(

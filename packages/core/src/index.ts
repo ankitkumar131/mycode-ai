@@ -138,6 +138,26 @@ export type { OutputFormat } from './output/types.js';
 // Prompts
 export { SystemPromptBuilder, findContextFiles, readMemory, CONTEXT_FILE_NAMES } from './prompts/system-prompt.js';
 export {
+  type PonytailMode,
+  PONYTAIL_MODES,
+  DEFAULT_PONYTAIL_MODE,
+  PONYTAIL_SOURCE,
+  PONYTAIL_VERSION,
+  PONYTAIL_LICENSE,
+  isPonytailMode,
+  parsePonytailMode,
+  resolvePonytailMode,
+  readPonytailConfig,
+  ponytailConfigPaths,
+  getPonytailMode,
+  setPonytailMode,
+  isPonytailOverridden,
+  resetPonytailMode,
+  ponytailSection,
+  currentPonytailSection,
+  describePonytailMode,
+} from './prompts/ponytail.js';
+export {
   loadCustomCommands,
   findCustomCommand,
   expandCustomCommand,
