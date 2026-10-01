@@ -24,7 +24,7 @@ function parseChatFlags(args: string[]): { opts: ChatOptions; rest: string[] } {
     else if (a === '--query' || a === '-q' || a === '-Q') opts.query = next();
     else if (a === '--model' || a === '-m') opts.model = next();
     else if (a.startsWith('--model=')) opts.model = a.slice(8);
-    else if (a === '--yolo' || a === '--dangerously-skip-permissions') opts.yolo = true;
+    else if (a === '--yolo' || a === '--dangerously-skip-permissions' || a === '--allow-all' || a === '--dangerously-allow-all') opts.yolo = true;
     else rest.push(a);
   }
   if (!opts.query && rest.length && !opts.continue) {
@@ -34,7 +34,7 @@ function parseChatFlags(args: string[]): { opts: ChatOptions; rest: string[] } {
   return { opts, rest };
 }
 
-const CHAT_FLAGS = new Set(['--continue', '-c', '--resume', '-r', '--query', '-q', '-Q', '--model', '-m', '--yolo']);
+const CHAT_FLAGS = new Set(['--continue', '-c', '--resume', '-r', '--query', '-q', '-Q', '--model', '-m', '--yolo', '--allow-all', '--dangerously-skip-permissions']);
 const first = argv[0];
 const cmd = first === undefined || CHAT_FLAGS.has(first) || first.startsWith('--resume=') || first.startsWith('--model=') ? 'chat' : first;
 const args = cmd === 'chat' && first !== 'chat' ? argv : argv.slice(1);
@@ -69,8 +69,9 @@ async function main() {
       break;
     case 'agent': {
       // Flags belong to the command, not to the prompt: passing `--yolo`
-      // through as task text makes the model try to act on it.
-      const agentFlags = new Set(['--yolo', '-y', '--dangerously-skip-permissions']);
+      // through as task text makes the model try to act on it. `--allow-all`
+      // is the same switch under the name used by the /allow-all command.
+      const agentFlags = new Set(['--yolo', '-y', '--allow-all', '--dangerously-skip-permissions']);
       const yolo = args.some((a) => agentFlags.has(a));
       const task = args.filter((a) => !agentFlags.has(a)).join(' ');
       await agentCommand(task || undefined, { yolo });
@@ -123,7 +124,7 @@ Commands:
       -r, --resume <id>      Resume a saved session by id or title
       -q, --query <text>     Run a single query and exit
       -m, --model <name>     Use a specific configured provider/model
-      --yolo                 Skip approval prompts
+      --yolo                 Skip approval prompts (alias: --allow-all)
   init | setup           Setup configuration
   config                 Manage providers
   skills                 List installed skills
@@ -137,6 +138,7 @@ Commands:
   --help, -h             Show this help
 
 Inside chat: type / for commands, !cmd for shell, @file to attach, Ctrl+Enter for a new line.
+  /allow-all             Stop being asked for the rest of the session (writes, commands, or both).
 Custom slash commands come from .mycode/commands/*.md (also reads .opencode/command and .claude/commands).`);
       break;
     default:

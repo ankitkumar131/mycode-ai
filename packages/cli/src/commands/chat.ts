@@ -54,6 +54,7 @@ import { renderStatusLine, estimateCost } from '../ui/status-line.js';
 import { renderDiff, openDiffViewer, diffStats } from '../ui/diff-viewer.js';
 import { setTheme, prefersLightTheme } from '../ui/themes/registry.js';
 import { supportsCursorControl, describeTerminal } from '../ui/capabilities.js';
+import { SessionApprovals, shouldPrompt } from '../permissions/session-approvals.js';
 import { effectiveWindowFor, safeContextWindow, type ProviderConfig } from '@mycode/core';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -246,6 +247,10 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
 
   // ─── UI state ───────────────────────────────────────────────────────────
 
+  // Session-scoped: `/allow-all` bypasses confirmation until the process exits.
+  // Deliberately never persisted — see session-approvals.ts.
+  const approvals = new SessionApprovals();
+
   const ui: SlashCommandContext['ui'] = {
     verbose: 'new',
     focus: false,
@@ -256,6 +261,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     personality: null,
     loadedSkills: [],
     plan: false,
+    approvals,
   };
 
   let currentSpinner: Ora | null = null;
@@ -369,9 +375,14 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     toolRegistry: undefined,
     confirmFn: async (target, context, safety) => {
       stopSpinner();
-      if (ui.yolo) return true;
-      if (safety && !cfg.preferences.confirmCommands) return true;
-      if (!safety && !cfg.preferences.confirmWrites) return true;
+      // `safety` marks a shell command; its absence marks a file mutation.
+      const needed = shouldPrompt(approvals, {
+        yolo: ui.yolo,
+        isCommand: !!safety,
+        confirmCommands: cfg.preferences.confirmCommands,
+        confirmWrites: cfg.preferences.confirmWrites,
+      });
+      if (!needed) return true;
       return confirmCommand(target, cwd, (safety as any) ?? null, context ?? null);
     },
     onText(chunk: string) {
@@ -526,18 +537,26 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     const filled = Math.round((pct / 100) * barW);
     const bar = chalk.hex(color)('█'.repeat(filled)) + chalk.hex(theme.dim)('░'.repeat(barW - filled));
     const sep = chalk.hex(theme.dim)(' │ ');
+    // An active approval bypass leads the line: it is the one piece of state
+    // that must never be hidden by width truncation below.
+    const bypassBadge = ui.yolo ? 'YOLO' : approvals.badge();
     const parts = [
+      ...(bypassBadge ? [chalk.hex(theme.error).bold(`⚡ ${bypassBadge}`)] : []),
       chalk.hex(theme.green)('⚕ ') + chalk.hex(theme.greenGlow)(formatProviderLabel(router.getCurrentProvider())),
       chalk.hex(color)(`${fmtTokens(st.estimatedTokens)}/${fmtTokens(st.contextWindow)}`),
       `${bar} ${chalk.hex(color)(pct.toFixed(0) + '%')}`,
       chalk.hex(theme.dim)(fmtDuration(st.elapsedMs)),
     ];
-    if (ui.yolo) parts.push(chalk.hex(theme.error).bold('YOLO'));
+    if (st.queued) parts.push(chalk.hex(theme.amber)(`${st.queued} queued`));
     if (st.queued) parts.push(chalk.hex(theme.amber)(`${st.queued} queued`));
     if (textArea?.stashCount) parts.push(chalk.hex(theme.amber)(`${textArea.stashCount} stashed`));
     if (ui.personality) parts.push(chalk.hex(theme.dim)(ui.personality));
     let line = ' ' + parts.join(sep);
-    if (stripAnsi(line).length > w - 1) line = ' ' + parts.slice(0, 3).join(sep);
+    if (stripAnsi(line).length > w - 1) {
+      // Trim from the end, never the bypass badge at the front.
+      const keep = bypassBadge ? 4 : 3;
+      line = ' ' + parts.slice(0, keep).join(sep);
+    }
     return line;
   };
 
@@ -579,7 +598,13 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       console.log(`  ${S.error(ICONS.cross)} Command blocked: ${safety.reason}`);
       return 126;
     }
-    if (!ui.yolo && cfg.preferences.confirmCommands) {
+    const needsPrompt = shouldPrompt(approvals, {
+      yolo: ui.yolo,
+      isCommand: true,
+      confirmCommands: cfg.preferences.confirmCommands,
+      confirmWrites: cfg.preferences.confirmWrites,
+    });
+    if (needsPrompt) {
       const ok = await confirmCommand(command, cwd, safety, null);
       if (!ok) {
         console.log(`  ${chalk.hex(theme.dim)('cancelled')}`);
@@ -632,6 +657,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
 
       console.log(
         renderStatusLine({
+          bypass: ui.yolo ? 'YOLO' : approvals.badge(),
           model,
           provider: router.getCurrentProvider()?.name,
           usedTokens: st.estimatedTokens,

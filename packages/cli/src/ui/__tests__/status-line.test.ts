@@ -99,3 +99,27 @@ describe('compactStatus', () => {
     expect(out).not.toContain('\n');
   });
 });
+
+describe('approval bypass badge', () => {
+  const stripAnsi = strip;
+  const base = { model: 'gpt-4o', usedTokens: 1000, contextWindow: 128_000 };
+
+  it('leads the status line so truncation cannot hide it', () => {
+    const line = renderStatusLine({ ...base, bypass: 'ALLOW-ALL' });
+    expect(stripAnsi(line)).toMatch(/^\s*⚡ ALLOW-ALL/);
+  });
+
+  it('renders a scoped badge verbatim', () => {
+    expect(stripAnsi(renderStatusLine({ ...base, bypass: 'ALLOW-ALL:writes' }))).toContain('ALLOW-ALL:writes');
+  });
+
+  it('is absent when no bypass is active', () => {
+    expect(stripAnsi(renderStatusLine({ ...base, bypass: null }))).not.toContain('⚡');
+    expect(stripAnsi(renderStatusLine(base))).not.toContain('⚡');
+  });
+
+  it('also appears in the compact form used for prompt prefixes', () => {
+    expect(compactStatus({ ...base, bypass: 'YOLO' })).toContain('⚡ YOLO');
+    expect(compactStatus(base)).not.toContain('⚡');
+  });
+});

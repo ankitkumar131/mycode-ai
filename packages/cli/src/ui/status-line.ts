@@ -29,6 +29,11 @@ export interface StatusLineState {
   failover?: string | null;
   /** Estimated spend, when the provider is one we can price. */
   costUsd?: number;
+  /**
+   * Active approval bypass ('ALLOW-ALL', 'ALLOW-ALL:writes', 'YOLO').
+   * Rendered first: it is safety-relevant state, so it must survive truncation.
+   */
+  bypass?: string | null;
 }
 
 export function fmtTokens(n: number): string {
@@ -82,6 +87,11 @@ export function renderStatusLine(s: StatusLineState): string {
 
   if (s.elapsedMs !== undefined) parts.push(chalk.hex(theme.textMuted)(fmtDuration(s.elapsedMs)));
 
+  const bypass = s.bypass
+    ? chalk.hex(theme.error).bold(`⚡ ${s.bypass}`)
+    : null;
+  if (bypass) parts.unshift(bypass);
+
   const stats: string[] = [];
   if (s.toolCalls) stats.push(`${s.toolCalls} tools`);
   if (s.filesTouched) stats.push(`${s.filesTouched} file${s.filesTouched === 1 ? '' : 's'}`);
@@ -101,6 +111,7 @@ function truncate(s: string, max: number): string {
 /** Single-line string for embedding in a prompt prefix. */
 export function compactStatus(s: StatusLineState): string {
   const bits: string[] = [];
+  if (s.bypass) bits.push(`⚡ ${s.bypass}`);
   if (s.model) bits.push(s.model);
   if (s.usedTokens !== undefined && s.contextWindow) {
     const pct = s.contextWindow > 0 ? Math.round((s.usedTokens / s.contextWindow) * 100) : 0;

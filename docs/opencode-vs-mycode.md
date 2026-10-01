@@ -416,6 +416,30 @@ npm run eval:report
   substituted prompt, not the template.
 - **`mycode run "..."`** alias for the one-shot path, matching the subcommand
   other agents expose.
+- **`/allow-all` — stop being asked, for this session only.** `/allow-all` bypasses
+  both writes and shell commands until the process exits; `/allow-all writes` or
+  `/allow-all commands` scope it; `/allow-all off` puts the prompts back;
+  `/allow-all status` reports the state. `--allow-all` is the startup equivalent
+  of `--yolo`, and `mycode agent --allow-all` applies to autonomous runs.
+
+  Three decisions make it safe to have:
+  1. **Nothing is persisted.** It is process state, never written to
+     `settings.json`, so a decision taken in a hurry is not silently inherited by
+     the next run. Exiting restores the normal approval mode.
+  2. **The catastrophic floor stays.** `BLOCKED_PATTERNS` in `command-safety.ts`
+     (`rm -rf /`, `mkfs`, `dd` to a raw device, `chown -R`, `halt`/`reboot`) still
+     refuses to run. "Don't interrupt me" is not the same instruction as "format
+     my disk", and a bypass reachable by a mis-typed prompt is how machines are
+     lost. The command says so when it arms.
+  3. **It is always visible.** The badge leads both status surfaces
+     (`⚡ ALLOW-ALL` in the composer line and in the turn summary), and it is
+     placed first specifically so width truncation cannot hide it. `/status`
+     reports it too.
+
+  Both approval gates — agent tool calls and `!cmd` shell runs — now go through a
+  single `shouldPrompt()` decision, so the two paths cannot drift apart. 23 unit
+  tests cover the truth table; end-to-end, the confirmation box appears without
+  `/allow-all` and disappears with it, and reappears after `/allow-all off`.
 
 ## 5.6 What is still behind, in order
 

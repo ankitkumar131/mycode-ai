@@ -45,6 +45,7 @@ import {
   loadCustomCommands,
   expandCustomCommand,
 } from '@mycode/core';
+import { parseAllowAllArgs, type SessionApprovals } from '../permissions/session-approvals.js';
 import { pickChoiceArrowKeys } from '../ui/prompt.js';
 import { renderTodoPanel } from '../ui/todo-view.js';
 import { renderDiff, openDiffViewer, diffStats } from '../ui/diff-viewer.js';
@@ -75,6 +76,8 @@ export interface SlashCommandContext {
     personality: string | null;
     loadedSkills: string[];
     plan: boolean;
+    /** Session-scoped approval bypass, driven by /allow-all */
+    approvals: SessionApprovals;
   };
   /** Rebuild the composer's command list (after skills change etc.) */
   refreshCommands: () => void;
@@ -542,7 +545,7 @@ export const COMMANDS: CommandDef[] = [
         ...(st.failover?.summary
           ? ([['Failover', chalk.hex(theme.switch)(st.failover.summary)]] as Array<[string, string]>)
           : []),
-        ['Mode', [ctx.ui.yolo ? chalk.hex(theme.error)('YOLO') : 'approvals on', ctx.ui.plan ? chalk.hex(theme.amber)('plan') : null, ctx.ui.personality ? `personality: ${ctx.ui.personality}` : null].filter(Boolean).join(' · ')],
+        ['Mode', [ctx.ui.yolo ? chalk.hex(theme.error)('YOLO') : ctx.ui.approvals.badge() ? chalk.hex(theme.error)(ctx.ui.approvals.badge()!) : 'approvals on', ctx.ui.plan ? chalk.hex(theme.amber)('plan') : null, ctx.ui.personality ? `personality: ${ctx.ui.personality}` : null].filter(Boolean).join(' · ')],
       ];
       for (const [k, v] of rows) console.log(`  ${chalk.hex(theme.muted)(k.padEnd(14))} ${v}`);
       if (st.filesTouched.length || st.topTools.length) {
@@ -796,34 +799,102 @@ export const COMMANDS: CommandDef[] = [
   },
   {
     name: '/yolo',
-    description: 'Toggle YOLO mode — skip all command/write approval prompts',
+    aliases: ['/yolo-mode'],
+    description: 'Toggle skipping all approval prompts for this session (same as /allow-all)',
     category: 'Configuration',
     handler: async (_args, ctx) => {
-      ctx.ui.yolo = !ctx.ui.yolo;
-      if (ctx.ui.yolo) console.log(`  ${chalk.hex(theme.error).bold('⚠ YOLO mode ON')} — commands and edits run without confirmation.`);
-      else ok('YOLO mode off — approvals restored.');
+      if (ctx.ui.approvals.isEverything) {
+        ctx.ui.approvals.revoke();
+        ok('Approvals restored — writes and commands are confirmed again.');
+      } else {
+        ctx.ui.approvals.allowAll();
+        console.log(`  ${chalk.hex(theme.error).bold('⚡ ALLOW-ALL')} — commands and edits run without confirmation for this session.`);
+        console.log(`  ${chalk.hex(theme.dim)('Nothing is saved; exiting restores your normal mode. Catastrophic commands stay blocked.')}`);
+      }
       return { handled: true };
     },
   },
   {
-    name: '/approvals',
+    name: '/allow-all',
+    aliases: ['/allowall', '/allow', '/bypass'],
+    description: 'Run without approval prompts for this session, until you exit',
+    usage: '/allow-all [writes|commands|off|status]',
+    argumentHint: '[writes|commands|off|status]',
+    category: 'Configuration',
+    handler: async (args, ctx) => {
+      const parsed = parseAllowAllArgs(args);
+      const { approvals } = ctx.ui;
+
+      if (parsed.action === 'invalid') {
+        usage('/allow-all [writes|commands|off|status]');
+        return { handled: true };
+      }
+
+      if (parsed.action === 'status') {
+        const st = approvals.status();
+        if (st.all) {
+          const secs = Math.round((st.activeForMs ?? 0) / 1000);
+          console.log(`  ${chalk.hex(theme.error).bold('⚡ allow-all')} — on for this session (${secs}s)`);
+        } else if (!approvals.isOff) {
+          const scopes = [st.writes ? 'writes' : null, st.commands ? 'commands' : null].filter(Boolean).join(' + ');
+          console.log(`  ${chalk.hex(theme.amber).bold('⚡ partial')} — ${scopes} bypassed for this session`);
+        } else {
+          console.log(`  Approvals on — nothing bypassed. ${chalk.hex(theme.muted)('Use /allow-all to stop being asked.')}`);
+        }
+        for (const line of approvals.describe()) console.log(`  ${chalk.hex(theme.dim)(line)}`);
+        return { handled: true };
+      }
+
+      if (parsed.action === 'off') {
+        approvals.revoke();
+        ok('Approval prompts restored. Writes and commands are confirmed as configured again.');
+        return { handled: true };
+      }
+
+      // on
+      if (parsed.scope) approvals.allow(parsed.scope);
+      else approvals.allowAll();
+
+      const scopeLabel = parsed.scope ? (parsed.scope === 'writes' ? 'file writes' : 'shell commands') : 'ALL tools';
+      console.log();
+      console.log(`  ${chalk.hex(theme.error).bold('⚡ ALLOW-ALL')} ${chalk.hex(theme.dim)('—')} ${chalk.bold(scopeLabel)} run without confirmation`);
+      console.log(`  ${chalk.hex(theme.amber)('This session only.')} ${chalk.hex(theme.dim)('Exiting restores your normal approval mode — nothing is saved.')}`);
+      console.log(`  ${chalk.hex(theme.dim)('Catastrophic commands (disk formatting, raw device writes, power control) stay blocked.')}`);
+      if (!parsed.scope) {
+        console.log(`  ${chalk.hex(theme.dim)('Scope it with /allow-all writes or /allow-all commands; undo with /allow-all off.')}`);
+      }
+      console.log();
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/yolo',
     description: 'Set approval mode: manual (ask everything), smart (ask for risky only), off',
     argumentHint: '[manual|smart|off]',
     category: 'Configuration',
     handler: async (args, ctx) => {
       const a = args.trim();
       if (!a) {
-        const mode = ctx.ui.yolo ? 'off' : ctx.config.preferences.confirmCommands && ctx.config.preferences.confirmWrites ? 'manual' : 'smart';
+        const mode = ctx.ui.yolo || ctx.ui.approvals.isEverything
+          ? 'off'
+          : ctx.config.preferences.confirmCommands && ctx.config.preferences.confirmWrites
+            ? 'manual'
+            : 'smart';
         console.log(`  Approval mode: ${chalk.bold(mode)}`);
         return { handled: true };
       }
-      if (a === 'off') ctx.ui.yolo = true;
-      else if (a === 'manual') {
+      if (a === 'off') {
         ctx.ui.yolo = false;
+        ctx.ui.approvals.allowAll();
+      } else if (a === 'manual') {
+        ctx.ui.yolo = false;
+        ctx.ui.approvals.revoke();
         ctx.config.preferences.confirmCommands = true;
         ctx.config.preferences.confirmWrites = true;
       } else if (a === 'smart') {
         ctx.ui.yolo = false;
+        ctx.ui.approvals.revoke();
         ctx.config.preferences.confirmCommands = true;
         ctx.config.preferences.confirmWrites = false;
       } else return (usage('/approvals [manual|smart|off]'), { handled: true });
