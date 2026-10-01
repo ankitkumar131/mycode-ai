@@ -36,6 +36,7 @@ import { join, dirname, basename, sep } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import chalk from 'chalk';
+import { supportsCursorControl } from './capabilities.js';
 import { theme, stripAnsi } from './themes/theme.js';
 import {
   visLen,
@@ -189,7 +190,12 @@ export class TextArea {
   }
 
   async read(): Promise<TextAreaSubmit> {
-    if (!process.stdin.isTTY) return this.readLineNonTTY();
+    if (!process.stdin.isTTY) return this.readLineNonTTY(false);
+    // A TTY does not imply cursor control: bare cmd.exe / Windows PowerShell
+    // ignore the escape sequences, and the region redraw then appends a fresh
+    // copy of the status line on every keystroke. Degrade to a plain prompt
+    // rather than corrupt the screen.
+    if (!supportsCursorControl()) return this.readLineNonTTY(true);
     this.ensureInput();
     this.rearmInput();
     if (this.readPromise) throw new Error('TextArea.read() already pending');
@@ -1186,8 +1192,17 @@ export class TextArea {
   private nonTTYBuf = '';
   private nonTTYEnded = false;
 
-  private readLineNonTTY(): Promise<TextAreaSubmit> {
+  /**
+   * Line-based fallback used both for piped input and for terminals without
+   * cursor control. `echo` adds the prompt, which is wanted on a real console
+   * (the terminal's own line editing handles the rest) but not when piped.
+   */
+  private readLineNonTTY(echo: boolean): Promise<TextAreaSubmit> {
     return new Promise<TextAreaSubmit>(resolve => {
+      if (echo) {
+        // Drop our TTY hint so nothing tries to position a cursor.
+        process.stdout.write(this.opts.prompt);
+      }
       const takeLine = (): TextAreaSubmit | null => {
         const nl = this.nonTTYBuf.indexOf('\n');
         if (nl !== -1) {

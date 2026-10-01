@@ -53,6 +53,7 @@ import { renderTodoPanel } from '../ui/todo-view.js';
 import { renderStatusLine, estimateCost } from '../ui/status-line.js';
 import { renderDiff, openDiffViewer, diffStats } from '../ui/diff-viewer.js';
 import { setTheme, prefersLightTheme } from '../ui/themes/registry.js';
+import { supportsCursorControl, describeTerminal } from '../ui/capabilities.js';
 import { effectiveWindowFor, safeContextWindow, type ProviderConfig } from '@mycode/core';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -513,7 +514,10 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
   // ─── Status line (Hermes-style) ──────────────────────────────────────────
 
   const statusLine = (): string | null => {
-    if (!ui.statusBar) return null;
+    // Only meaningful where the region can be redrawn in place. Without cursor
+    // control this line would be re-printed on every keystroke, so it is
+    // replaced by a single status printed after each turn instead.
+    if (!ui.statusBar || !supportsCursorControl()) return null;
     const st = session.getState();
     const w = process.stdout.columns ?? 80;
     const pct = Math.min(100, (st.estimatedTokens / st.contextWindow) * 100);
@@ -642,6 +646,11 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       );
       if (st.aborted) console.log(`  ${chalk.hex(theme.warning)(ICONS.warning)} ${chalk.hex(theme.dim)('interrupted')}`);
       console.log();
+      if (!supportsCursorControl() && ui.statusBar) {
+        // No live region on this terminal, so report once per turn instead.
+        const plain = stripAnsi(statusLine() ?? '');
+        if (plain.trim()) console.log(chalk.hex(theme.dim)(plain.trim()));
+      }
     } catch (err: any) {
       if (currentSpinner) {
         currentSpinner.fail(S.error(err.message));

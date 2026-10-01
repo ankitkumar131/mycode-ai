@@ -99,7 +99,8 @@ async function main() {
       console.log(`  Providers: ${cfg.providers.length ? cfg.providers.map(p => p.name).join(', ') : 'none'}`);
       console.log(`  Skills:    ${skillManager.list(process.cwd()).length} in ${skillManager.getSkillsDir()}`);
       console.log(`  Editor:    ${process.env.VISUAL || process.env.EDITOR || '(unset — Ctrl+G uses vi/notepad)'}`);
-      console.log(`  TTY:       ${process.stdout.isTTY ? 'yes' : 'no'}  TERM=${process.env.TERM ?? ''}  ${process.env.TERM_PROGRAM ?? ''}\n`);
+      const { describeTerminal } = await import('./ui/capabilities.js');
+      console.log(`  Terminal:  ${describeTerminal()}\n`);
       break;
     }
     case '--version':
