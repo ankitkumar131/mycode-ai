@@ -486,7 +486,76 @@ npm run eval:report
   so a switch (including a failover) still announces and a stable session stays
   quiet.
 
-## 5.6 What is still behind, in order
+## 5.6 Ponytail: the minimal-code rules, on by default
+
+Requested: *"integrate this from default and will be used automatically from start
+in each query asked."* Source: <https://github.com/DietrichGebert/ponytail>
+(MIT, © 2026 DietrichGebert, v4.10.0) — *"the laziest senior dev in the room."*
+It ships as plugins and rules packs for a dozen agents; there is no library to
+install, so the behaviour was vendored into the source tree as a real module
+rather than imported or documented. The MIT text and the exact list of
+adaptations are in `NOTICE.md`.
+
+**What it does.** Before answering, the model works down a seven-rung ladder:
+*(1)* does this need to exist at all, *(2)* does it already exist in this
+codebase, *(3)* does the standard library do it, *(4)* does a native platform
+feature cover it, *(5)* does an already-installed dependency solve it, *(6)* can
+it be one line, and only then *(7)* write the minimum code that works. Bug fixes
+are root-cause fixes — grep every caller, fix the shared function once. Deletion
+beats addition, and the shortest working diff wins. A deliberate corner cut is
+marked with a `ponytail:` comment naming its ceiling and upgrade path, so the
+cheap choice is honest instead of invisible.
+
+**The list of things that are never simplified away** is carried verbatim in the
+prompt, because "minimum code" without it is just an excuse: understanding the
+problem first, input validation at trust boundaries, error handling that
+prevents data loss, security, accessibility, hardware calibration, explicitly
+requested work, and one runnable check behind any non-trivial logic.
+
+**Levels and resolution.** `lite` / `full` / `ultra`, with `full` the default.
+Resolution order is `PONYTAIL_DEFAULT_MODE` → config file → `full`, matching
+upstream: `~/.config/ponytail/config.json` with XDG honoured, or
+`%APPDATA%\ponytail\config.json` on Windows, key `defaultMode`. An invalid
+value in either place — a typo — is ignored, not propagated; a typo must never
+silently switch the rules off. The runtime mode is process-local and never
+persisted, again matching upstream.
+
+**How it is wired.**
+
+| Surface | Behaviour |
+|---|---|
+| System prompt | The section is inserted ahead of the Working rules on every query, unless the mode is `off` or a caller passes `ponytail: false`. No trigger, no install step. |
+| `/ponytail` | Bare form prints the level, where it came from, and the level guide; `/ponytail lite|full|ultra|off` switches. The switch re-runs `refreshSystemPrompt()`, so it applies to the **next query** in the same session. |
+| `/ponytail-review [target]` | Reviews the target against the ladder. |
+| `/ponytail-audit [path]` | Audits a path for over-build: abstractions nobody asked for, dependencies that duplicate the stdlib, boilerplate with no caller. |
+| `/ponytail-debt` | Lists the deliberate corner cuts — every `ponytail:` marker with its ceiling. |
+| `/ponytail-gain` | Renders upstream's published medians as ASCII bars: lines of code 6–20% of no-skill, cost 23–53%, 3–6× faster. **Those are upstream's benchmark numbers, not this repository's**, and the command says so on screen. |
+| `/ponytail-help` | The ladder and the never-simplify list. |
+| Plain language | A message that is *entirely* "stop ponytail", "ponytail off", "normal mode", "no ponytail" switches it off; "ponytail on", "ponytail mode", "be lazy", "lazy mode" switches it to `full`. Matched on the whole trimmed message only, so an incidental "normal mode" mid-sentence never changes behaviour. |
+| Startup banner | `🐴 ponytail: full (default) — /ponytail off to disable`, and nothing at all when it is off. Same reasoning as the approvals line: a behaviour the user cannot see is a behaviour they cannot trust, and an off switch they cannot find is not much of a switch. |
+| `/status` | A `Rules` row, so the current mode is inspectable mid-session. |
+
+**Verified by execution, not by reading the diff.** A recording provider logged
+whether the ladder and its provenance reached the model:
+
+| Run | Result |
+|---|---|
+| Fresh session, nothing configured | Request **#1** carries the ladder — `full`, 7 760 chars of system prompt; 3 857 without it |
+| `PONYTAIL_DEFAULT_MODE=off` | Gone from request #1 |
+| `defaultMode: "lite"` in the config | Present, intensity `lite` |
+| `/ponytail ultra` mid-session | Next request carries `ultra` |
+| `/ponytail off` mid-session | Next request carries nothing (req 11 has the ladder, req 12 does not) |
+| `normal mode` typed as a whole message | Gone from the next request |
+
+26 unit tests cover parsing, the env→config→default resolution, invalid values,
+XDG and Windows paths, session-override precedence, rung ordering in the section
+text, the never-simplify list, per-level intensity, and the null-when-off case.
+Three more cover the banner. Two real bugs were caught by those tests before
+they shipped: the config file was not read when the caller supplied an
+environment whose home differed from the ambient one, and the status line
+reported `(from config)` in every case, including the plain default.
+
+## 5.7 What is still behind, in order
 
 1. **Markdown-defined agents.** Commands are done; agents are not. This is the
    next real extensibility item.
