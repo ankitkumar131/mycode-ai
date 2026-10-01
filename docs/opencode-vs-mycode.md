@@ -236,7 +236,9 @@ Ordered by expected effect on task success, not by how impressive it sounds.
 | 19 | Background process manager | execution | medium | partial |
 | 20 | Desktop/web front-ends | surface | low (for CLI users) | n/a |
 | 21 | ACP / editor integration | surface | low | n/a |
-| 22 | 37 themes | polish | low | 8 |
+| 22 | Markdown-defined skills | extensibility | medium | shipped (pre-existing) |
+| 23 | Minimal-code discipline in the prompt | prompt | medium | **shipped this branch** |
+| 24 | 37 themes | polish | low | 8 |
 
 ---
 
