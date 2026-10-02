@@ -1,7 +1,8 @@
 node_modules/
 dist/
 *.tsbuildinfo
-
+portfolio
+saas-web
 # Editor
 .idea/
 *.swp
