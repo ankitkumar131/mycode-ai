@@ -9,11 +9,17 @@ export type { AgentOptions, AgentEvent, Message as AgentMessage } from './agent/
 
 // Multi-Agent Engine
 export { AgentService, agentService } from './agents/agent-service.js';
+export { SubAgentRunner, SUBAGENTS, renderSubAgentResult, subAgentToolsets, extractReport } from './agents/subagent.js';
+export type { SubAgentKind, SubAgentDefinition, SubAgentResult, SubAgentRunOptions } from './agents/subagent.js';
 export { registerBuiltInAgents, buildInfo, planInfo, generalInfo, exploreInfo } from './agents/built-in.js';
 export type { AgentInfo, AgentMode, Agent, GenerateOptions, GenerateResult } from './agents/types.js';
 
 // Tools
 export { ToolRegistry, TOOLSETS, ALIASES as TOOL_ALIASES } from './tools/tool-registry.js';
+export { todoStore, normalizeTodos, countTodos, hasOpenWork } from './tools/todo-store.js';
+export type { Todo, TodoStatus, TodoPriority, TodoCounts } from './tools/todo-store.js';
+export { truncateToolOutput, pruneToolOutputs, toolOutputDir, readSpilledOutput } from './tools/output-store.js';
+export type { TruncateOptions, TruncateResult } from './tools/output-store.js';
 export { ProcessManager, processManager } from './tools/process-manager.js';
 export type { ManagedProcess } from './tools/process-manager.js';
 export { classifyCommand, isBlocked, getSafetyLabel } from './tools/command-safety.js';
@@ -72,6 +78,32 @@ export { SkillManager, skillManager } from './skills/skill-manager.js';
 export type { SkillDefinition, InstalledSkill, SkillsLockFile, SkillFrontmatter, SkillIndexEntry } from './skills/types.js';
 export type { SkillManagerOptions, SkillSearchResult } from './skills/skill-manager.js';
 
+// Failover
+export { FailoverCoordinator, effectiveWindowFor, safeContextWindow, describeFailoverReason } from './routing/failover.js';
+export type { FailoverEvent, FailoverCoordinatorOptions, CheckpointPayload, CheckpointFn } from './routing/failover.js';
+
+// Compaction
+export {
+  DEFAULT_COMPACTION,
+  planCompaction,
+  buildSummaryPrompt,
+  applySummary,
+  serializeForSummary,
+  findPreviousSummary,
+  estimateTokens,
+  estimateMessageTokens,
+  shouldCompact,
+  pruneStaleToolOutput,
+  SUMMARY_TEMPLATE,
+  ROLL_FORWARD_INSTRUCTIONS,
+  SUMMARY_MARKER,
+} from './session/compaction.js';
+export type { CompactionSettings, CompactionPlan } from './session/compaction.js';
+
+// Verification
+export { runDiagnostics, runFormatter, renderVerification, filterDiagnostics, isVerifiable } from './verify/verify.js';
+export type { VerifyResult } from './verify/verify.js';
+
 // Providers
 export { BaseProvider } from './routing/base-provider.js';
 export { ProviderRouter } from './routing/provider-router.js';
@@ -82,6 +114,8 @@ export { HookAggregator, HookRunner } from './hooks/hooks.js';
 export type { HookDefinition, HookEvent } from './hooks/types.js';
 
 // MCP
+export { SnapshotStore, snapshotStore } from './git/snapshots.js';
+export { AnthropicProvider } from './routing/anthropic-provider.js';
 export { MCPClient, MCPClientManager, mcpManager } from './mcp/mcp-client.js';
 export type { MCPConfig, MCPServerConfig, MCPToolInfo } from './mcp/types.js';
 
@@ -103,9 +137,37 @@ export type { OutputFormat } from './output/types.js';
 
 // Prompts
 export { SystemPromptBuilder, findContextFiles, readMemory, CONTEXT_FILE_NAMES } from './prompts/system-prompt.js';
+export {
+  type PonytailMode,
+  PONYTAIL_MODES,
+  DEFAULT_PONYTAIL_MODE,
+  PONYTAIL_SOURCE,
+  PONYTAIL_VERSION,
+  PONYTAIL_LICENSE,
+  isPonytailMode,
+  parsePonytailMode,
+  resolvePonytailMode,
+  readPonytailConfig,
+  ponytailConfigPaths,
+  getPonytailMode,
+  setPonytailMode,
+  isPonytailOverridden,
+  resetPonytailMode,
+  ponytailSection,
+  currentPonytailSection,
+  describePonytailMode,
+} from './prompts/ponytail.js';
+export {
+  loadCustomCommands,
+  findCustomCommand,
+  expandCustomCommand,
+  type CustomCommand,
+} from './prompts/custom-commands.js';
 
 // Safety & Policy
 export { SafetyChecker } from './safety/safety-checker.js';
 export { PolicyEngine } from './policy/policy-engine.js';
 export { PermissionManager, permissionManager } from './policy/permission-manager.js';
 export type { PermissionRule, RulesetArray, Effect, PermissionPromptRequest } from './policy/permission-manager.js';
+
+export * from './mcp/tool-bridge.js';

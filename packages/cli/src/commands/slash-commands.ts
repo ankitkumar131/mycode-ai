@@ -5,6 +5,8 @@
  *   1. Built-in commands (this file), grouped by category
  *   2. Installed skills  → `/<skill-name> [request]`
  *   3. Quick commands    → user-defined in ~/.mycode/settings.json (exec / alias)
+ *   4. Custom commands   → markdown in .mycode/commands/ (also reads the
+ *                          .opencode/command and .claude/commands directories)
  *
  * Commands are case-insensitive; aliases are supported. Several skills can be
  * stacked: `/plan /test-driven-development add caching to the API`.
@@ -33,12 +35,29 @@ import {
   renderDocument,
   isDocumentFile,
   findContextFiles,
+  todoStore,
+  countTodos,
+  snapshotStore,
   type InstalledSkill,
   type AgentSession,
   type ProviderRouter,
   type MyCodeConfig,
+  loadCustomCommands,
+  expandCustomCommand,
+  parsePonytailMode,
+  getPonytailMode,
+  setPonytailMode,
+  describePonytailMode,
+  PONYTAIL_MODES,
+  PONYTAIL_SOURCE,
+  PONYTAIL_VERSION,
+  PONYTAIL_LICENSE,
 } from '@mycode/core';
+import { parseAllowAllArgs, type SessionApprovals } from '../permissions/session-approvals.js';
 import { pickChoiceArrowKeys } from '../ui/prompt.js';
+import { renderTodoPanel } from '../ui/todo-view.js';
+import { renderDiff, openDiffViewer, diffStats } from '../ui/diff-viewer.js';
+import { listThemes, getThemeName, setTheme } from '../ui/themes/registry.js';
 import type { SlashMenuItem } from '../ui/text-area.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -65,6 +84,8 @@ export interface SlashCommandContext {
     personality: string | null;
     loadedSkills: string[];
     plan: boolean;
+    /** Session-scoped approval bypass, driven by /allow-all */
+    approvals: SessionApprovals;
   };
   /** Rebuild the composer's command list (after skills change etc.) */
   refreshCommands: () => void;
@@ -76,7 +97,7 @@ export interface SlashCommandContext {
 
 export interface SlashCommandResult {
   handled: boolean;
-  type?: 'exit' | 'clear' | 'new' | 'model_change' | 'skill_load' | 'plan_mode' | 'compact' | 'prompt';
+  type?: 'exit' | 'clear' | 'new' | 'model_change' | 'skill_load' | 'plan_mode' | 'compact' | 'prompt' | 'custom_command';
   message?: string;
 }
 
@@ -233,12 +254,45 @@ export const COMMANDS: CommandDef[] = [
   },
   {
     name: '/undo',
-    description: 'Remove the last user/assistant exchange from history',
+    description: 'Undo the last exchange; with "files", restore the files it changed',
+    argumentHint: '[files | yes]',
     category: 'Session',
-    handler: async (_args, ctx) => {
+    handler: async (args, ctx) => {
+      const mode = args.trim().toLowerCase();
+      const snapshots = snapshotStore.list(ctx.session.id);
+
+      if (mode === 'files' || mode === 'yes' || mode === 'both') {
+        if (!snapshots.length) {
+          warn('No file changes recorded for this session.');
+          return { handled: true };
+        }
+        // Undo removes the exchange from history as well, so the model does not
+        // keep reasoning about work that no longer exists on disk.
+        if (mode === 'both') ctx.session.undo();
+        const { restored, failed } = snapshotStore.restoreAll(ctx.session.id);
+        if (restored.length) {
+          ok(`Restored ${restored.length} file${restored.length === 1 ? '' : 's'}:`);
+          for (const f of restored.slice(-10)) console.log(`    ${dim(relative(ctx.cwd, f))}`);
+          if (restored.length > 10) console.log(`    ${dim(`… and ${restored.length - 10} more`)}`);
+        }
+        for (const f of failed) console.log(`  ${chalk.hex(theme.red)(ICONS.cross)} could not restore ${f}`);
+        snapshotStore.clear(ctx.session.id);
+        return { handled: true };
+      }
+
       const removed = ctx.session.undo();
-      if (!removed) warn('Nothing to undo.');
-      else ok(`Removed last exchange: ${dim(removed.slice(0, 60).replace(/\n/g, ' '))}`);
+      if (!removed) {
+        warn('Nothing to undo.');
+        return { handled: true };
+      }
+      ok(`Removed last exchange: ${dim(removed.slice(0, 60).replace(/\n/g, ' '))}`);
+      if (snapshots.length) {
+        console.log(
+          `  ${chalk.hex(theme.amber)(ICONS.warning)} ${dim(
+            `${snapshots.length} file${snapshots.length === 1 ? '' : 's'} were changed — run ${chalk.bold('/undo files')} to restore them too`
+          )}`
+        );
+      }
       return { handled: true };
     },
   },
@@ -346,19 +400,23 @@ export const COMMANDS: CommandDef[] = [
   {
     name: '/compress',
     aliases: ['/compact'],
-    description: 'Summarise older context to free the window. "here N" keeps last N exchanges',
+    description: 'Compact older context to free the window. "here N" keeps ~N×4k tokens of recent work',
     argumentHint: '[here [N] | focus topic]',
     category: 'Session',
     handler: async (args, ctx) => {
       const a = args.trim();
-      let keepLast = 2;
+      // The argument is a token budget expressed in units of ~4k tokens, not a
+      // count of turns: one turn can hold a 60k-character file dump and another
+      // is a one-line question, so counting turns is unrelated to what is kept.
+      let units = 2;
       let focus: string | undefined;
       const m = a.match(/^here(?:\s+(\d+))?$/i);
-      if (m) keepLast = m[1] ? parseInt(m[1], 10) : 2;
+      if (m) units = m[1] ? parseInt(m[1], 10) : 2;
       else if (a) focus = a;
-      console.log(dim('  Compressing context…'));
-      const r = await ctx.session.compress({ keepLast, focus });
-      ok(`Context compressed: ${fmtTokens(r.before)} → ${fmtTokens(r.after)} tokens.`);
+      const keepTokens = Math.max(2_000, units * 4_000);
+      console.log(dim(`  Compacting context (keeping ~${fmtTokens(keepTokens)} tokens of recent work)…`));
+      const r = await ctx.session.compress({ keepTokens, focus });
+      ok(`Context compacted: ${fmtTokens(r.before)} → ${fmtTokens(r.after)} tokens.`);
       return { handled: true, type: 'compact' };
     },
   },
@@ -398,6 +456,82 @@ export const COMMANDS: CommandDef[] = [
     },
   },
   {
+    name: '/todo',
+    aliases: ['/todos', '/plan'],
+    description: "Show the agent's plan (its current todo list)",
+    argumentHint: '[expand]',
+    category: 'Info',
+    handler: async (args, ctx) => {
+      const todos = todoStore.get(ctx.session.id);
+      console.log();
+      if (!todos.length) {
+        console.log(dim('  No plan yet. The agent creates one for multi-step work.'));
+        console.log();
+        return { handled: true };
+      }
+      const counts = countTodos(todos);
+      console.log(
+        renderTodoPanel(todos, { expand: true, showWhenDone: true })
+      );
+      console.log();
+      const bits = [
+        `${counts.completed} completed`,
+        counts.inProgress ? chalk.hex(theme.warning)(`${counts.inProgress} in progress`) : null,
+        `${counts.pending} pending`,
+        counts.cancelled ? `${counts.cancelled} cancelled` : null,
+      ].filter(Boolean);
+      console.log(`  ${chalk.hex(theme.muted)(bits.join(' · '))}`);
+      console.log();
+      void args;
+      return { handled: true };
+    },
+  },
+  {
+    name: '/theme',
+    aliases: ['/themes'],
+    description: 'Switch colour theme, or list them with previews',
+    argumentHint: '[name]',
+    category: 'Configuration',
+    handler: async (args, ctx) => {
+      const requested = args.trim().toLowerCase();
+      console.log();
+
+      if (!requested) {
+        console.log(sectionHeader('Themes', { accent: 'green' }));
+        const active = getThemeName();
+        for (const t of listThemes()) {
+          const marker = t.name === active ? chalk.hex(theme.green)('●') : chalk.hex(theme.dim)('○');
+          const swatch =
+            chalk.hex(t.tokens.brand)('██') +
+            chalk.hex(t.tokens.accent)('██') +
+            chalk.hex(t.tokens.brandGlow)('██') +
+            chalk.hex(t.tokens.diffAdd)('██') +
+            chalk.hex(t.tokens.diffDel)('██');
+          console.log(
+            `  ${marker} ${chalk.hex(t.tokens.brand).bold(t.name.padEnd(14))} ${swatch}  ${chalk.hex(theme.muted)(t.description)}`
+          );
+        }
+        console.log();
+        console.log(dim('  Use /theme <name> to switch. Persisted to settings.json → preferences.theme'));
+        console.log();
+        return { handled: true };
+      }
+
+      if (!setTheme(requested)) {
+        console.log(`  ${chalk.hex(theme.red)(ICONS.cross)} Unknown theme "${requested}". Run ${chalk.hex(theme.green)('/theme')} to list them.`);
+        console.log();
+        return { handled: true };
+      }
+
+      ctx.config.preferences = ctx.config.preferences ?? ({} as MyCodeConfig['preferences']);
+      ctx.config.preferences.theme = requested;
+      await ctx.saveConfig(ctx.config);
+      console.log(`  ${chalk.hex(theme.green)(ICONS.check)} Theme switched to ${chalk.bold(requested)} — remembered for next time.`);
+      console.log();
+      return { handled: true };
+    },
+  },
+  {
     name: '/status',
     description: 'Session info + local recap (model, tokens, files touched, top tools)',
     category: 'Info',
@@ -416,7 +550,11 @@ export const COMMANDS: CommandDef[] = [
         ['Tokens', `${fmtTokens(st.usage.promptTokens)} in / ${fmtTokens(st.usage.completionTokens)} out`],
         ['Context', `${fmtTokens(st.estimatedTokens)} / ${fmtTokens(st.contextWindow)} ${bar((st.estimatedTokens / st.contextWindow) * 100, 12)}`],
         ['Compressions', String(st.usage.compressions)],
-        ['Mode', [ctx.ui.yolo ? chalk.hex(theme.error)('YOLO') : 'approvals on', ctx.ui.plan ? chalk.hex(theme.amber)('plan') : null, ctx.ui.personality ? `personality: ${ctx.ui.personality}` : null].filter(Boolean).join(' · ')],
+        ...(st.failover?.summary
+          ? ([['Failover', chalk.hex(theme.switch)(st.failover.summary)]] as Array<[string, string]>)
+          : []),
+        ['Mode', [ctx.ui.yolo ? chalk.hex(theme.error)('YOLO') : ctx.ui.approvals.badge() ? chalk.hex(theme.error)(ctx.ui.approvals.badge()!) : 'approvals on', ctx.ui.plan ? chalk.hex(theme.amber)('plan') : null, ctx.ui.personality ? `personality: ${ctx.ui.personality}` : null].filter(Boolean).join(' · ')],
+        ['Rules', getPonytailMode() === 'off' ? chalk.hex(theme.dim)('ponytail: off') : `${chalk.hex(theme.amber)('🐴')} ${chalk.hex(theme.dim)(describePonytailMode())}`],
       ];
       for (const [k, v] of rows) console.log(`  ${chalk.hex(theme.muted)(k.padEnd(14))} ${v}`);
       if (st.filesTouched.length || st.topTools.length) {
@@ -496,8 +634,29 @@ export const COMMANDS: CommandDef[] = [
         if (untracked) out += `\n\nUntracked files:\n${untracked.split('\n').map(f => '  ' + f).join('\n')}`;
       }
       console.log();
-      if (!out.trim()) console.log(dim('  No changes.'));
-      else console.log(renderMarkdown('```diff\n' + out.slice(0, 40_000) + '\n```'));
+      if (!out.trim()) {
+        console.log(dim('  No changes.'));
+        console.log();
+        return { handled: true };
+      }
+
+      // `--view` opens the interactive pager; `--stat` stays terse; the default
+      // renders a bounded, colourised preview instead of dumping to scrollback.
+      if (parts.includes('--view')) {
+        await openDiffViewer(out);
+        return { handled: true };
+      }
+      if (stat) {
+        console.log(chalk.hex(theme.dim)('  ' + out.trim().split('\n').slice(-1)[0]));
+        console.log();
+        return { handled: true };
+      }
+      const stats = diffStats(out);
+      console.log(
+        `  ${chalk.hex(theme.diffAdd)(`+${stats.additions}`)} ${chalk.hex(theme.diffDel)(`-${stats.deletions}`)} ` +
+          `${chalk.hex(theme.dim)(`across ${stats.files} file${stats.files === 1 ? '' : 's'}  ( /diff --view for the pager )`)}`
+      );
+      console.log(renderDiff(out, { maxLines: 400 }));
       console.log();
       return { handled: true };
     },
@@ -649,34 +808,252 @@ export const COMMANDS: CommandDef[] = [
   },
   {
     name: '/yolo',
-    description: 'Toggle YOLO mode — skip all command/write approval prompts',
+    aliases: ['/yolo-mode'],
+    description: 'Toggle skipping all approval prompts for this session (same as /allow-all)',
     category: 'Configuration',
     handler: async (_args, ctx) => {
-      ctx.ui.yolo = !ctx.ui.yolo;
-      if (ctx.ui.yolo) console.log(`  ${chalk.hex(theme.error).bold('⚠ YOLO mode ON')} — commands and edits run without confirmation.`);
-      else ok('YOLO mode off — approvals restored.');
+      if (ctx.ui.approvals.isEverything) {
+        ctx.ui.approvals.revoke();
+        ok('Approvals restored — writes and commands are confirmed again.');
+      } else {
+        ctx.ui.approvals.allowAll();
+        console.log(`  ${chalk.hex(theme.error).bold('⚡ ALLOW-ALL')} — commands and edits run without confirmation for this session.`);
+        console.log(`  ${chalk.hex(theme.dim)('Nothing is saved; exiting restores your normal mode. Catastrophic commands stay blocked.')}`);
+      }
       return { handled: true };
     },
   },
+  // ── Ponytail (lazy senior dev mode) ─────────────────────────────────────
   {
-    name: '/approvals',
+    name: '/ponytail',
+    description: 'Lazy senior dev mode: set intensity (lite/full/ultra/off), on by default',
+    usage: '/ponytail [lite|full|ultra|off]',
+    argumentHint: '[lite|full|ultra|off]',
+    category: 'Configuration',
+    handler: async (args, ctx) => {
+      const wanted = parsePonytailMode(args);
+      if (args.trim() && !wanted) {
+        usage('/ponytail [lite|full|ultra|off]');
+        return { handled: true };
+      }
+      if (!wanted) {
+        const mode = getPonytailMode();
+        console.log();
+        console.log(`  ${chalk.hex(theme.amber).bold('🐴 ponytail')} ${chalk.hex(theme.dim)('— ' + describePonytailMode())}`);
+        console.log(`  ${chalk.hex(theme.dim)(PONYTAIL_MODES.filter(m => m !== 'off').map(m => (m === mode ? chalk.bold(m) : m)).join(' · '))}`);
+        console.log(`  ${chalk.hex(theme.muted)('lite: build it, name the lazier option.  full: the ladder, enforced.  ultra: challenge the requirement itself.')}`);
+        console.log(`  ${chalk.hex(theme.dim)('off disables it. Change the default with PONYTAIL_DEFAULT_MODE or ~/.config/ponytail/config.json.')}`);
+        console.log();
+        return { handled: true };
+      }
+      setPonytailMode(wanted);
+      // Rebuild the system prompt so the change applies to the very next query,
+      // not the next session.
+      try {
+        await ctx.session.refreshSystemPrompt();
+      } catch {
+        /* the change still sticks; the prompt refreshes on the next turn anyway */
+      }
+      if (wanted === 'off') {
+        ok('ponytail off — over-building rules removed from the system prompt.');
+      } else {
+        console.log(`  ${chalk.hex(theme.amber).bold('🐴 ponytail')} ${chalk.bold(wanted)} ${chalk.hex(theme.dim)('— active on every response from now on.')}`);
+      }
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/ponytail-review',
+    description: 'Review the current changes for over-engineering — what can be deleted',
+    usage: '/ponytail-review [target]',
+    argumentHint: '[target]',
+    category: 'Tools & Skills',
+    handler: async (args, ctx) => {
+      const target = args.trim() || 'the current uncommitted changes (git diff, staged and unstaged)';
+      await ctx.sendPrompt(
+        `Review ${target} for over-engineering only, not correctness. One line per finding: <file>:<line>: <tag> <what to cut>. <replacement>. ` +
+          `Tags: delete (dead code or speculative feature), stdlib (reinvented standard library), native (dependency doing what the platform does), ` +
+          `yagni (abstraction with one implementation), shrink (same logic, fewer lines). ` +
+          `End with the net lines removable. Report only — change nothing. If there is nothing to cut: "Lean already. Ship."`,
+        { display: '/ponytail-review' },
+      );
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/ponytail-audit',
+    description: 'Audit the whole repo for over-engineering, biggest cut first',
+    usage: '/ponytail-audit [path]',
+    argumentHint: '[path]',
+    category: 'Tools & Skills',
+    handler: async (args, ctx) => {
+      const target = args.trim() || 'this repository';
+      await ctx.sendPrompt(
+        `Audit ${target} for over-engineering only, not correctness. Scan the whole tree, not a diff. ` +
+          `One line per finding, ranked biggest cut first: <tag> <what to cut>. <replacement>. [path]. ` +
+          `Tags: delete (dead code or speculative feature), stdlib (reinvented standard library), native (dependency doing what the platform does), ` +
+          `yagni (abstraction with one implementation), shrink (same logic, fewer lines). ` +
+          `End with the net lines and dependencies removable. Report only — change nothing. If nothing to cut: "Lean already. Ship."`,
+        { display: '/ponytail-audit' },
+      );
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/ponytail-debt',
+    description: 'Harvest ponytail: comments into a tracked debt ledger',
+    category: 'Tools & Skills',
+    handler: async (_args, ctx) => {
+      await ctx.sendPrompt(
+        'Harvest every `ponytail:` comment in this repository into a debt ledger so deferrals do not rot into "later means never". ' +
+          `Grep the whole tree for the marker (grep -rnE '(#|//) ?ponytail:' ., skipping node_modules, .git and build output). ` +
+          'One row per marker, grouped by file: <file>:<line> — <what was simplified>. ceiling: <the limit named in the comment>. upgrade: <the trigger to revisit>. ' +
+          'Tag any marker that names no upgrade path or trigger as no-trigger — those rot silently. ' +
+          'End with the count of markers and how many lack a trigger. Report only — change nothing. If there are none: "No ponytail: debt. Clean ledger."',
+        { display: '/ponytail-debt' },
+      );
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/ponytail-gain',
+    description: "Show ponytail's published benchmark scoreboard",
+    category: 'Info',
+    handler: async () => {
+      // Upstream's published medians. Rendered locally and labelled as such:
+      // they come from the ponytail project, not from this repository.
+      const bar = (pct: number) => '█'.repeat(Math.max(1, Math.round(pct / 5))) + '░'.repeat(20 - Math.max(1, Math.round(pct / 5)));
+      console.log();
+      console.log(`  ${chalk.hex(theme.amber).bold('🐴 ponytail — published benchmark medians')}`);
+      console.log(`  ${chalk.hex(theme.dim)(`from ${PONYTAIL_SOURCE} v${PONYTAIL_VERSION} · 5 everyday tasks · Haiku, Sonnet, Opus`)}`);
+      console.log();
+      console.log(`  ${chalk.bold('Lines of code')}   no-skill ${bar(100)} 100%`);
+      console.log(`                  ponytail ${chalk.hex(theme.green)(bar(13))} 6–20%   ${chalk.hex(theme.green)('down 80–94%')}`);
+      console.log(`  ${chalk.bold('Cost')}            no-skill ${bar(100)} 100%`);
+      console.log(`                  ponytail ${chalk.hex(theme.green)(bar(38))} 23–53%  ${chalk.hex(theme.green)('down 47–77%')}`);
+      console.log(`  ${chalk.bold('Speed')}           ponytail ${chalk.hex(theme.green)('3–6× faster')}`);
+      console.log();
+      console.log(`  ${chalk.hex(theme.dim)('These are upstream benchmark medians, not measurements of this repository.')}`);
+      console.log(`  ${chalk.hex(theme.dim)('There is no per-repo figure to give: the unbuilt version was never written, so there is nothing to subtract.')}`);
+      console.log(`  ${chalk.hex(theme.dim)('For this repo: /ponytail-debt counts the shortcuts, /ponytail-audit shows what is still cuttable.')}`);
+      console.log();
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/ponytail-help',
+    description: 'Quick reference for ponytail levels and commands',
+    category: 'Info',
+    handler: async () => {
+      console.log();
+      console.log(`  ${chalk.hex(theme.amber).bold('🐴 ponytail')} ${chalk.hex(theme.dim)('— the laziest solution that actually works')}`);
+      console.log();
+      console.log(`  ${chalk.bold('Levels')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail lite')}   ${chalk.hex(theme.muted)('Build what is asked; name the lazier alternative in one line.')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail')}        ${chalk.hex(theme.muted)('full (default): the ladder — YAGNI, stdlib, native, one line, minimum.')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail ultra')}  ${chalk.hex(theme.muted)('Deletion before addition; challenge the requirement itself.')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail off')}    ${chalk.hex(theme.muted)('Disable. Also: "stop ponytail", "normal mode".')}`);
+      console.log();
+      console.log(`  ${chalk.bold('Commands')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail-review')}  ${chalk.hex(theme.muted)('Over-engineering review of the current changes')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail-audit')}   ${chalk.hex(theme.muted)('Whole-repo over-engineering audit')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail-debt')}    ${chalk.hex(theme.muted)('Harvest ponytail: comments into a debt ledger')}`);
+      console.log(`    ${chalk.hex(theme.green)('/ponytail-gain')}    ${chalk.hex(theme.muted)('Published benchmark scoreboard')}`);
+      console.log();
+      console.log(`  ${chalk.hex(theme.dim)('Active on every response by default. Change the default with PONYTAIL_DEFAULT_MODE=off|lite|full|ultra')}`);
+      console.log(`  ${chalk.hex(theme.dim)('or ~/.config/ponytail/config.json  →  {"defaultMode": "lite"}   (Windows: %APPDATA%\\ponytail\\config.json)')}`);
+      console.log(`  ${chalk.hex(theme.dim)(`Vendored from ${PONYTAIL_SOURCE} v${PONYTAIL_VERSION} (${PONYTAIL_LICENSE}); runtime mode is process-local and never persisted.`)}`);
+      console.log();
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/allow-all',
+    aliases: ['/allowall', '/allow', '/bypass'],
+    description: 'Run without approval prompts for this session, until you exit',
+    usage: '/allow-all [writes|commands|off|status]',
+    argumentHint: '[writes|commands|off|status]',
+    category: 'Configuration',
+    handler: async (args, ctx) => {
+      const parsed = parseAllowAllArgs(args);
+      const { approvals } = ctx.ui;
+
+      if (parsed.action === 'invalid') {
+        usage('/allow-all [writes|commands|off|status]');
+        return { handled: true };
+      }
+
+      if (parsed.action === 'status') {
+        const st = approvals.status();
+        if (st.all) {
+          const secs = Math.round((st.activeForMs ?? 0) / 1000);
+          console.log(`  ${chalk.hex(theme.error).bold('⚡ allow-all')} — on for this session (${secs}s)`);
+        } else if (!approvals.isOff) {
+          const scopes = [st.writes ? 'writes' : null, st.commands ? 'commands' : null].filter(Boolean).join(' + ');
+          console.log(`  ${chalk.hex(theme.amber).bold('⚡ partial')} — ${scopes} bypassed for this session`);
+        } else {
+          console.log(`  Approvals on — nothing bypassed. ${chalk.hex(theme.muted)('Use /allow-all to stop being asked.')}`);
+        }
+        for (const line of approvals.describe()) console.log(`  ${chalk.hex(theme.dim)(line)}`);
+        return { handled: true };
+      }
+
+      if (parsed.action === 'off') {
+        approvals.revoke();
+        ok('Approval prompts restored. Writes and commands are confirmed as configured again.');
+        return { handled: true };
+      }
+
+      // on
+      if (parsed.scope) approvals.allow(parsed.scope);
+      else approvals.allowAll();
+
+      const scopeLabel = parsed.scope ? (parsed.scope === 'writes' ? 'file writes' : 'shell commands') : 'ALL tools';
+      console.log();
+      console.log(`  ${chalk.hex(theme.error).bold('⚡ ALLOW-ALL')} ${chalk.hex(theme.dim)('—')} ${chalk.bold(scopeLabel)} run without confirmation`);
+      console.log(`  ${chalk.hex(theme.amber)('This session only.')} ${chalk.hex(theme.dim)('Exiting restores your normal approval mode — nothing is saved.')}`);
+      console.log(`  ${chalk.hex(theme.dim)('Catastrophic commands (disk formatting, raw device writes, power control) stay blocked.')}`);
+      if (!parsed.scope) {
+        console.log(`  ${chalk.hex(theme.dim)('Scope it with /allow-all writes or /allow-all commands; undo with /allow-all off.')}`);
+      }
+      console.log();
+      return { handled: true };
+    },
+  },
+
+  {
+    name: '/yolo',
     description: 'Set approval mode: manual (ask everything), smart (ask for risky only), off',
     argumentHint: '[manual|smart|off]',
     category: 'Configuration',
     handler: async (args, ctx) => {
       const a = args.trim();
       if (!a) {
-        const mode = ctx.ui.yolo ? 'off' : ctx.config.preferences.confirmCommands && ctx.config.preferences.confirmWrites ? 'manual' : 'smart';
+        const mode = ctx.ui.yolo || ctx.ui.approvals.isEverything
+          ? 'off'
+          : ctx.config.preferences.confirmCommands && ctx.config.preferences.confirmWrites
+            ? 'manual'
+            : 'smart';
         console.log(`  Approval mode: ${chalk.bold(mode)}`);
         return { handled: true };
       }
-      if (a === 'off') ctx.ui.yolo = true;
-      else if (a === 'manual') {
+      if (a === 'off') {
         ctx.ui.yolo = false;
+        ctx.ui.approvals.allowAll();
+      } else if (a === 'manual') {
+        ctx.ui.yolo = false;
+        ctx.ui.approvals.revoke();
         ctx.config.preferences.confirmCommands = true;
         ctx.config.preferences.confirmWrites = true;
       } else if (a === 'smart') {
         ctx.ui.yolo = false;
+        ctx.ui.approvals.revoke();
         ctx.config.preferences.confirmCommands = true;
         ctx.config.preferences.confirmWrites = false;
       } else return (usage('/approvals [manual|smart|off]'), { handled: true });
@@ -1175,6 +1552,15 @@ export function buildMenuItems(cwd: string, config?: MyCodeConfig): SlashMenuIte
     items.push({ name: n, description: q.description ?? (q.type === 'alias' ? `→ ${q.target}` : `$ ${q.command}`), kind: 'quick' });
   }
   try {
+    for (const c of loadCustomCommands(cwd)) {
+      if (taken.has(c.name)) continue;
+      taken.add(c.name);
+      items.push({ name: c.name, description: c.description, argumentHint: c.argumentHint, kind: 'quick' });
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
     for (const s of skillManager.list(cwd)) {
       const n = `/${s.name}`;
       if (taken.has(n)) continue;
@@ -1216,7 +1602,20 @@ export async function handleSlashCommand(input: string, ctx: SlashCommandContext
     }
   }
 
-  // 3. Skills — allow stacking several leading /skill tokens
+  // 3. Custom command from .mycode/commands/*.md (or the .opencode/.claude
+  //    equivalents). Unlike quick commands these carry a prompt template, so
+  //    they are sent to the model rather than executed as a shell command.
+  const custom = loadCustomCommands(ctx.cwd).find((c) => c.name.toLowerCase() === cmdName);
+  if (custom) {
+    const body = expandCustomCommand(custom.template, args);
+    console.log(
+      `  ${chalk.hex(theme.amber)('◆')} ${chalk.bold(custom.name)} ${chalk.hex(theme.muted)(`(${custom.scope})`)}`,
+    );
+    await ctx.sendPrompt(body, { display: trimmed });
+    return { handled: true, type: 'custom_command' };
+  }
+
+  // 4. Skills — allow stacking several leading /skill tokens
   const tokens = trimmed.split(/\s+/);
   const loaded: InstalledSkill[] = [];
   let i = 0;
@@ -1239,7 +1638,7 @@ export async function handleSlashCommand(input: string, ctx: SlashCommandContext
     return { handled: true, type: 'skill_load' };
   }
 
-  // 4. Unknown → suggestions
+  // 5. Unknown → suggestions
   const all = buildMenuItems(ctx.cwd, ctx.config);
   const q = cmdName.slice(1);
   const near = all.filter(c => c.name.slice(1).startsWith(q.slice(0, 3)) || c.name.includes(q)).slice(0, 5);

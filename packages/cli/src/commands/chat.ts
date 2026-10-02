@@ -19,12 +19,21 @@ import { resolve, relative, join } from 'path';
 import { homedir } from 'os';
 import {
   ConfigManager,
+  setPonytailMode,
+  getPonytailMode,
+  describePonytailMode,
   AgentSession,
   ProviderRouter,
+  FailoverCoordinator,
+  SubAgentRunner,
+  mcpManager,
+  registerMCPTools,
+  renderSubAgentResult,
+  todoStore,
+  sessionStore,
   executeCommand,
   classifyCommand,
   skillManager,
-  sessionStore,
   processManager,
   isDocumentFile,
   extractDocument,
@@ -42,7 +51,14 @@ import { TextArea } from '../ui/text-area.js';
 import { handleSlashCommand, buildMenuItems, type SlashCommandContext } from './slash-commands.js';
 import { decodeEntities } from '../utils/html.js';
 import { getLocalPackageInfo } from '../utils/update-check.js';
-import { confirmCommand } from '../ui/prompt.js';
+import { confirmCommand, askQuestions } from '../ui/prompt.js';
+import { renderTodoPanel } from '../ui/todo-view.js';
+import { renderStatusLine, estimateCost } from '../ui/status-line.js';
+import { renderDiff, openDiffViewer, diffStats } from '../ui/diff-viewer.js';
+import { setTheme, prefersLightTheme } from '../ui/themes/registry.js';
+import { supportsCursorControl, describeTerminal, describeBuild } from '../ui/capabilities.js';
+import { SessionApprovals, shouldPrompt } from '../permissions/session-approvals.js';
+import { effectiveWindowFor, safeContextWindow, type ProviderConfig } from '@mycode/core';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -65,6 +81,12 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
+/** Truncate a string for one-line display. */
+function truncate(s: string, max: number): string {
+  const clean = s.replace(/\s+/g, ' ').trim();
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+}
+
 function fmtDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
@@ -73,15 +95,22 @@ function fmtDuration(ms: number): string {
   return `${Math.floor(m / 60)}h${(m % 60).toString().padStart(2, '0')}m`;
 }
 
+/**
+ * Context window for a provider. Delegates to the routing layer so an explicit
+ * `contextWindow` in the provider config wins, and so chat mode agrees with the
+ * compaction and failover code instead of keeping a second copy of the table.
+ */
 function contextWindowFor(cfg: MyCodeConfig, provider: any): number {
-  const model: string = provider?.model ?? '';
-  const table = cfg.contextWindows ?? {};
-  for (const [k, v] of Object.entries(table)) if (model.includes(k)) return v;
-  const m = model.toLowerCase();
-  if (/gemini/.test(m)) return 1_000_000;
-  if (/claude|gpt-4\.1|gpt-5|o3|o4|deepseek|qwen3|kimi|grok/.test(m)) return 200_000;
-  if (/gpt-4o|llama-?3|mistral|gemma/.test(m)) return 128_000;
-  return 128_000;
+  return effectiveWindowFor((provider ?? {}) as ProviderConfig, cfg.contextWindows ?? {});
+}
+
+/**
+ * The window compaction is measured against: the smallest window in the failover
+ * chain. Compacting against the current provider alone means that when a switch
+ * happens the conversation no longer fits the provider that just took over.
+ */
+function safeWindowFor(cfg: MyCodeConfig): number {
+  return safeContextWindow(cfg.providers as ProviderConfig[], cfg.contextWindows ?? {});
 }
 
 /** Resolve @path references, extracting PDFs/Office docs as text. */
@@ -190,6 +219,11 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     return;
   }
 
+  // Apply the saved theme (falling back to auto-detection on light terminals)
+  // before anything is rendered, so the banner is already correct.
+  if (cfg.preferences?.theme) setTheme(cfg.preferences.theme);
+  else if (prefersLightTheme()) setTheme('light');
+
   const router = new ProviderRouter(cfg.providers);
   if (options.model || options.provider) router.setActiveProvider(options.model ?? options.provider!);
   const version = getVersion();
@@ -211,10 +245,20 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       model: formatProviderLabel(router.getCurrentProvider()),
       providerChain: cfg.providers.map((p: any) => p.name || p.model),
       cwd,
+      build: describeBuild(),
+      approvals: {
+        writes: !!cfg.preferences.confirmWrites,
+        commands: !!cfg.preferences.confirmCommands,
+      },
+      ponytail: getPonytailMode() === 'off' ? null : describePonytailMode(),
     });
   }
 
   // ─── UI state ───────────────────────────────────────────────────────────
+
+  // Session-scoped: `/allow-all` bypasses confirmation until the process exits.
+  // Deliberately never persisted — see session-approvals.ts.
+  const approvals = new SessionApprovals();
 
   const ui: SlashCommandContext['ui'] = {
     verbose: 'new',
@@ -226,6 +270,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     personality: null,
     loadedSkills: [],
     plan: false,
+    approvals,
   };
 
   let currentSpinner: Ora | null = null;
@@ -241,8 +286,86 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       currentSpinner = null;
     }
   };
+  const strictSpinnerStop = stopSpinner;
   const out = (line: string) => (textArea && textArea.isBusy() === false ? textArea.log(line) : console.log(line));
   const stamp = () => (ui.timestamps ? chalk.hex(theme.dim)(`[${new Date().toTimeString().slice(0, 5)}] `) : '');
+
+  // ─── Failover coordination ──────────────────────────────────────────────
+  //
+  // A mid-task provider switch is not a UI event: the replacement provider has a
+  // different tokenizer, context window and tool dialect. The coordinator makes
+  // the switch survivable — it announces it, checkpoints the session to disk
+  // before continuing, and hands the new model a short re-orientation brief.
+
+  let sessionRef: AgentSession | null = null;
+
+  const failover = new FailoverCoordinator({
+    providers: cfg.providers,
+    onAnnounce: (event) => {
+      stopSpinner();
+      console.log();
+      console.log(
+        `  ${chalk.hex(theme.switch)('↻')} ${chalk.hex(theme.warning).bold('Provider failover')}  ` +
+          `${chalk.hex(theme.textSecondary)(event.from)} ${chalk.hex(theme.textDim)('→')} ` +
+          `${chalk.hex(theme.brand).bold(event.to)}`
+      );
+      console.log(`    ${chalk.hex(theme.textDim)(event.reason)}`);
+      console.log(
+        `    ${chalk.hex(theme.textDim)('Context preserved and checkpointed; the agent will continue where it left off.')}`
+      );
+      console.log();
+    },
+    onCheckpoint: (payload) => {
+      try {
+        const json = sessionRef?.toJSON();
+        if (!json) return;
+        sessionStore.save({
+          id: json.id,
+          title: json.title,
+          cwd: json.cwd,
+          createdAt: json.createdAt,
+          updatedAt: new Date().toISOString(),
+          model: router.getCurrentProvider()?.model,
+          usage: json.usage,
+          messages: json.messages,
+        });
+      } catch {
+        /* a failed checkpoint must never abort the task */
+      }
+      void payload;
+    },
+  });
+  failover.prime(router.getCurrentProvider()?.name ?? 'unknown');
+
+  // ─── Sub-agents & user questions ────────────────────────────────────────
+  //
+  // `delegate` hands a subtask to a child session whose transcript is discarded;
+  // only its report returns. This is what keeps forty file reads out of the
+  // parent's context.
+  let activeSubAgents = 0;
+
+  const delegateFn = async (req: { kind: 'explore' | 'general'; task: string }): Promise<string> => {
+    activeSubAgents++;
+    stopSpinner();
+    console.log(
+      `  ${chalk.hex(theme.tool)('◆')} ${chalk.hex(theme.tool).bold(`sub-agent ${req.kind}`)} ` +
+        chalk.hex(theme.textDim)(truncate(req.task, 60))
+    );
+    try {
+      const runner = new SubAgentRunner({
+        kind: req.kind,
+        task: req.task,
+        cwd,
+        router,
+        contextWindow: Math.min(failover.safeWindow, 128_000),
+        abortSignal: undefined,
+      });
+      const result = await runner.run();
+      return renderSubAgentResult(result);
+    } finally {
+      activeSubAgents--;
+    }
+  };
 
   // ─── Agent session ──────────────────────────────────────────────────────
 
@@ -250,14 +373,37 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     providerRouter: router,
     maxIterations: 40,
     cwd,
-    contextWindow: contextWindowFor(cfg, router.getCurrentProvider()),
+    contextWindow: safeWindowFor(cfg),
+    failover,
+    verify: { enabled: true, formatter: true, diagnostics: true },
+    delegateFn,
+    askUserFn: async (questions) => {
+      stopSpinner();
+      return askQuestions(questions);
+    },
     toolRegistry: undefined,
     confirmFn: async (target, context, safety) => {
       stopSpinner();
-      if (ui.yolo) return true;
-      if (safety && !cfg.preferences.confirmCommands) return true;
-      if (!safety && !cfg.preferences.confirmWrites) return true;
-      return confirmCommand(target, cwd, (safety as any) ?? null, context ?? null);
+      // `safety` marks a shell command; its absence marks a file mutation.
+      const needed = shouldPrompt(approvals, {
+        yolo: ui.yolo,
+        isCommand: !!safety,
+        confirmCommands: cfg.preferences.confirmCommands,
+        confirmWrites: cfg.preferences.confirmWrites,
+      });
+      if (!needed) return true;
+      const scope = safety ? 'commands' : 'writes';
+      return confirmCommand(target, cwd, (safety as any) ?? null, context ?? null, {
+        allowAllLabel: `Always allow all ${scope === 'commands' ? 'commands' : 'file writes'} for this session`,
+        onAllowAll: () => {
+          approvals.allow(scope);
+          console.log(
+            `  ${chalk.hex(theme.error).bold('⚡ ALLOW-ALL')} ${chalk.hex(theme.dim)(
+              `— ${scope === 'commands' ? 'commands' : 'file writes'} run without confirmation for the rest of this session`,
+            )}`,
+          );
+        },
+      });
     },
     onText(chunk: string) {
       stopSpinner();
@@ -304,6 +450,21 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         else currentSpinner.succeed(line);
         currentSpinner = null;
       }
+      // The agent's plan is only useful if the user can see it. Re-render on
+      // every todo update (and hide the panel automatically once work is done).
+      if (name === 'todo_write') {
+        try {
+          const todos = todoStore.get(session.id);
+          const panel = renderTodoPanel(todos);
+          if (panel) {
+            console.log();
+            console.log(panel);
+            console.log();
+          }
+        } catch {
+          /* rendering must never break the loop */
+        }
+      }
       if ((ui.verbose === 'all' || ui.verbose === 'verbose') && !ui.focus && result) {
         const max = ui.verbose === 'verbose' ? 4000 : 600;
         const body = result.length > max ? result.slice(0, max) + `\n… (${result.length - max} more chars)` : result;
@@ -316,15 +477,51 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         currentSpinner = null;
       } else console.log(`  ${S.error(ICONS.cross)} ${message}`);
     },
-    onCompress({ before, after }) {
+    onCompress({ before, after, pruned }) {
       stopSpinner();
-      console.log(`  ${chalk.hex(theme.amber)('⟲')} ${chalk.hex(theme.dim)(`context compressed ${fmtTokens(before)} → ${fmtTokens(after)} tokens`)}`);
+      const saved = before - after;
+      const pctSaved = before > 0 ? Math.round((saved / before) * 100) : 0;
+      console.log(
+        `  ${chalk.hex(theme.accent)('⟲')} ${chalk.hex(theme.textDim)(
+          `context compacted ${fmtTokens(before)} → ${fmtTokens(after)} tokens (−${pctSaved}%)` +
+            (pruned ? ` · ${pruned} stale tool output pruned` : '')
+        )}`
+      );
     },
     onFinish() {
       stopSpinner();
     },
+
+
   });
+  sessionRef = session;
   if (cfg.disabledTools?.length) for (const t of cfg.disabledTools) session.getRegistry().disable(t);
+
+  // ─── MCP servers ────────────────────────────────────────────────────────
+  //
+  // Connects configured servers and exposes their tools to the agent. Without
+  // this the servers were listed by /mcp and unreachable in practice.
+  if (cfg.mcp?.servers?.length) {
+    try {
+      mcpManager.configure({ servers: cfg.mcp.servers });
+      registerMCPTools(mcpManager, session.getRegistry())
+        .then(({ servers, tools, failed }) => {
+          if (tools > 0) {
+            console.log(
+              `  ${chalk.hex(theme.tool)('⚙')} ${chalk.hex(theme.textDim)(`MCP: ${servers} server${servers === 1 ? '' : 's'}, ${tools} tool${tools === 1 ? '' : 's'} available`)}`
+            );
+          }
+          for (const f of failed) {
+            console.log(`  ${chalk.hex(theme.warning)(ICONS.warning)} ${chalk.hex(theme.textDim)(`MCP ${f}`)}`);
+          }
+        })
+        .catch(() => {
+          /* MCP is an enhancement; never block startup */
+        });
+    } catch {
+      /* ignore */
+    }
+  }
 
   // Resume?
   if (options.continue || options.resume) {
@@ -348,7 +545,10 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
   // ─── Status line (Hermes-style) ──────────────────────────────────────────
 
   const statusLine = (): string | null => {
-    if (!ui.statusBar) return null;
+    // Only meaningful where the region can be redrawn in place. Without cursor
+    // control this line would be re-printed on every keystroke, so it is
+    // replaced by a single status printed after each turn instead.
+    if (!ui.statusBar || !supportsCursorControl()) return null;
     const st = session.getState();
     const w = process.stdout.columns ?? 80;
     const pct = Math.min(100, (st.estimatedTokens / st.contextWindow) * 100);
@@ -357,18 +557,26 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     const filled = Math.round((pct / 100) * barW);
     const bar = chalk.hex(color)('█'.repeat(filled)) + chalk.hex(theme.dim)('░'.repeat(barW - filled));
     const sep = chalk.hex(theme.dim)(' │ ');
+    // An active approval bypass leads the line: it is the one piece of state
+    // that must never be hidden by width truncation below.
+    const bypassBadge = ui.yolo ? 'YOLO' : approvals.badge();
     const parts = [
+      ...(bypassBadge ? [chalk.hex(theme.error).bold(`⚡ ${bypassBadge}`)] : []),
       chalk.hex(theme.green)('⚕ ') + chalk.hex(theme.greenGlow)(formatProviderLabel(router.getCurrentProvider())),
       chalk.hex(color)(`${fmtTokens(st.estimatedTokens)}/${fmtTokens(st.contextWindow)}`),
       `${bar} ${chalk.hex(color)(pct.toFixed(0) + '%')}`,
       chalk.hex(theme.dim)(fmtDuration(st.elapsedMs)),
     ];
-    if (ui.yolo) parts.push(chalk.hex(theme.error).bold('YOLO'));
+    if (st.queued) parts.push(chalk.hex(theme.amber)(`${st.queued} queued`));
     if (st.queued) parts.push(chalk.hex(theme.amber)(`${st.queued} queued`));
     if (textArea?.stashCount) parts.push(chalk.hex(theme.amber)(`${textArea.stashCount} stashed`));
     if (ui.personality) parts.push(chalk.hex(theme.dim)(ui.personality));
     let line = ' ' + parts.join(sep);
-    if (stripAnsi(line).length > w - 1) line = ' ' + parts.slice(0, 3).join(sep);
+    if (stripAnsi(line).length > w - 1) {
+      // Trim from the end, never the bypass badge at the front.
+      const keep = bypassBadge ? 4 : 3;
+      line = ' ' + parts.slice(0, keep).join(sep);
+    }
     return line;
   };
 
@@ -410,8 +618,17 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       console.log(`  ${S.error(ICONS.cross)} Command blocked: ${safety.reason}`);
       return 126;
     }
-    if (!ui.yolo && cfg.preferences.confirmCommands) {
-      const ok = await confirmCommand(command, cwd, safety, null);
+    const needsPrompt = shouldPrompt(approvals, {
+      yolo: ui.yolo,
+      isCommand: true,
+      confirmCommands: cfg.preferences.confirmCommands,
+      confirmWrites: cfg.preferences.confirmWrites,
+    });
+    if (needsPrompt) {
+      const ok = await confirmCommand(command, cwd, safety, null, {
+        allowAllLabel: 'Always allow all commands for this session',
+        onAllowAll: () => approvals.allow('commands'),
+      });
       if (!ok) {
         console.log(`  ${chalk.hex(theme.dim)('cancelled')}`);
         return 130;
@@ -458,12 +675,31 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       }
       const u = session.getUsage();
       const st = session.getState();
+      const model = router.getCurrentProvider()?.model;
+      const cost = estimateCost(u.promptTokens, u.completionTokens, model);
+
       console.log(
-        chalk.hex(theme.dim)(
-          `  ${stamp()}${fmtDuration(Date.now() - turnStart)} · ${fmtTokens(u.promptTokens)} in / ${fmtTokens(u.completionTokens)} out · ctx ${((st.estimatedTokens / st.contextWindow) * 100).toFixed(0)}%${st.aborted ? ' · interrupted' : ''}`
-        )
+        renderStatusLine({
+          bypass: ui.yolo ? 'YOLO' : approvals.badge(),
+          model,
+          provider: router.getCurrentProvider()?.name,
+          usedTokens: st.estimatedTokens,
+          contextWindow: st.contextWindow,
+          elapsedMs: Date.now() - turnStart,
+          toolCalls: u.toolCalls,
+          filesTouched: st.filesTouched.length,
+          queued: st.queued,
+          failover: st.failover?.summary ?? null,
+          costUsd: cost ?? undefined,
+        })
       );
+      if (st.aborted) console.log(`  ${chalk.hex(theme.warning)(ICONS.warning)} ${chalk.hex(theme.dim)('interrupted')}`);
       console.log();
+      if (!supportsCursorControl() && ui.statusBar) {
+        // No live region on this terminal, so report once per turn instead.
+        const plain = stripAnsi(statusLine() ?? '');
+        if (plain.trim()) console.log(chalk.hex(theme.dim)(plain.trim()));
+      }
     } catch (err: any) {
       if (currentSpinner) {
         currentSpinner.fail(S.error(err.message));
@@ -506,15 +742,58 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     autosave,
   };
 
+  /**
+   * The phrase switches ponytail documents for turning it off or on in plain
+   * language. Matched only when the message is *exactly* the phrase, so an
+   * incidental "normal mode" inside a sentence never silently changes the
+   * agent's behaviour.
+   */
+  const PONYTAIL_PHRASES: Record<string, 'off' | 'full'> = {
+    'stop ponytail': 'off',
+    'ponytail off': 'off',
+    'normal mode': 'off',
+    'no ponytail': 'off',
+    'ponytail on': 'full',
+    'ponytail mode': 'full',
+    'be lazy': 'full',
+    'lazy mode': 'full',
+  };
+
   const dispatch = async (input: string): Promise<'exit' | void> => {
     if (!input) return;
+
+    // Plain-language ponytail switch, checked before anything that would spend
+    // a request on it.
+    const phrase = input.trim().toLowerCase().replace(/[.!]+$/, '');
+    const wantsMode = PONYTAIL_PHRASES[phrase];
+    if (wantsMode && !input.startsWith('/')) {
+      setPonytailMode(wantsMode);
+      try {
+        await session.refreshSystemPrompt();
+      } catch {
+        /* applies on the next turn regardless */
+      }
+      if (wantsMode === 'off') {
+        console.log(`  ${chalk.hex(theme.amber)('🐴')} ${chalk.bold('ponytail off')} ${chalk.hex(theme.dim)('— back to normal mode. /ponytail to resume.')}`);
+      } else {
+        console.log(`  ${chalk.hex(theme.amber)('🐴')} ${chalk.bold('ponytail on')} ${chalk.hex(theme.dim)('— lazy senior dev mode. /ponytail off to stop.')}`);
+      }
+      return;
+    }
 
     if (input.startsWith('/')) {
       textArea!.setBusy(true);
       try {
         const res = await handleSlashCommand(input, slashCtx);
         if (res?.type === 'exit') return 'exit';
-        if (res?.type === 'model_change') session.getContext().maxTokens = contextWindowFor(cfg, router.getCurrentProvider());
+        // A model change can pick up an explicit window, but never one larger
+        // than the chain's safe minimum.
+        if (res?.type === 'model_change') {
+          session.getContext().maxTokens = Math.min(
+            contextWindowFor(cfg, router.getCurrentProvider()),
+            safeWindowFor(cfg)
+          );
+        }
       } catch (err: any) {
         console.log(`  ${S.error(ICONS.cross)} ${err.message}`);
       } finally {
