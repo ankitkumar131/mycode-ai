@@ -576,3 +576,99 @@ reported `(from config)` in every case, including the plain default.
 Each of these is now measurable rather than arguable: the harness reports what a
 change did to solve rate, tokens, and fixed overhead, on the same tasks, with the
 same verifier, at the same wire.
+
+---
+
+# Part 6 — The gap list, re-verified against opencode's current `dev`
+
+> **Provenance.** Written 2026-10-08. opencode was read at `anomalyco/opencode@dev`,
+> HEAD `5d9cd9b` (docs tree at `663fbd7`); the feature surface below is the set of
+> pages opencode publishes in `packages/web/src/content/docs/*.mdx` plus the README —
+> i.e. every item on this list is something opencode *documents as a feature*, not
+> something inferred from a file name. MyCode was read at `da3ab4a` (v3.2.1) by
+> grep/read of the code, with "0 hits" meaning `grep -rniE <pattern> packages/{core,cli}/src`.
+> Where a claim is a count, the count was measured. Nothing here is carried over
+> from Parts 1–5 on trust.
+>
+> opencode's docs pages, mapped: `acp` `agents` `cli` `commands` `config`
+> `custom-tools` `ecosystem` `enterprise` `formatters` `github` `gitlab` `go` `ide`
+> `keybinds` `lsp` `mcp-servers` `models` `network` `permissions` `plugins`
+> `policies` `providers` `references` `rules` `sdk` `server` `share` `skills`
+> `themes` `tools` `troubleshooting` `tui` `web` `windows-wsl` `zen`.
+
+## 6.1 Hard gaps — opencode ships it, MyCode has no implementation
+
+| # | Capability | opencode evidence | MyCode evidence |
+| --- | --- | --- | --- |
+| 1 | **Plugin host** — third-party TS/JS plugins on documented hooks, can contribute tools, auth and transforms | `docs/plugins.mdx`, `packages/core/src/plugin/*` | `grep -rni plugin` → 2 hits, both comments. No loader, no hook bus. |
+| 2 | **On-disk custom tools** — a file in a tool directory becomes a tool | `docs/custom-tools.mdx` | 0 hits. `registerTool()` exists, but only in-process via the SDK. |
+| 3 | **Markdown-defined agents** — user agents with own model, prompt, tool allowlist; switchable | `docs/agents.mdx` | 0 hits for `.mycode/agents`. Commands and skills are markdown; agents are not. |
+| 4 | **LSP diagnostics** — language server errors after an edit, no command to run | `docs/lsp.mdx`, `packages/opencode/src/lsp/` | 0 hits for lsp/language-server. Verification re-runs the project's own command. |
+| 5 | **PTY shell** | `docs/tools.mdx`, `packages/core/src/pty.ts` | 0 hits for pty/node-pty. `exec-command.ts` uses `child_process`. |
+| 6 | **Session forking / branching** | `docs/tui.mdx`, `session.fork` | 0 hits. There is `/undo` (snapshots) but no branch-a-conversation. |
+| 7 | **Navigable sub-agent child sessions** | regression test `subagent-child-navigation.spec.ts` | Sub-agents render inline; there is no child session to open. |
+| 8 | **Server / headless mode with an HTTP API** (plus mDNS discovery) | `docs/server.mdx`, `docs/network.mdx` | 0 hits for `createServer`/`listen(`. Nothing in the process listens on a socket. |
+| 9 | **ACP — editor/agent protocol** so Zed et al. can drive the agent | `docs/acp.mdx` | 0 hits for acp. |
+| 10 | **IDE integration** (VS Code / Cursor / Zed config, auto-install) | `docs/ide.mdx`, `sdks/vscode` | 0 hits. No extension, no config writer. |
+| 11 | **Session sharing via links** | `docs/share.mdx` | 0 hits (the 13 grep hits are `sharedStrings.xml` in the xlsx reader — unrelated). |
+| 12 | **GitHub integration** — run the agent from issues/PRs via a GitHub Action | `docs/github.mdx`, `github/` package | 0 hits. |
+| 13 | **GitLab integration** | `docs/gitlab.mdx` | 0 hits. |
+| 14 | **Desktop application** (beta, all platforms) | README, `packages/app` | none. |
+| 15 | **Web UI** (`opencode web`) | `docs/web.mdx` | none. |
+| 16 | **Configurable keybinds** | `docs/keybinds.mdx` | 1 incidental hit. `TextArea` reads raw keypresses; nothing is rebindable. |
+| 17 | **Custom themes + 37 built-ins** | `docs/themes.mdx`, JSON theme files | 8 built-ins, no custom-theme loading (`registry.ts`). |
+| 18 | **SQLite persistence with migrations** — sessions, parts, resume after a crash mid-turn | `docs/config.mdx`, `packages/core/src/database/migration/` | Sessions are JSON files (`sessions/session-store.ts`); a crash loses the in-flight turn. |
+| 19 | **Per-agent model routing** — the cheap model titles, the strong one codes | `docs/agents.mdx` (`model` per agent) | One model per session; compaction and sub-agents use the current provider, not a chosen model. |
+| 20 | **`@agent` mentions in a message** (`@general …`) | `docs/agents.mdx` | 0 hits. Delegation is the model's decision via the `delegate` tool. |
+| 21 | **Structured outputs** (JSON-schema-constrained responses in the SDK) | `docs/sdk.mdx` | not implemented; the SDK returns text. |
+| 22 | **Installer matrix** — curl installer, Homebrew, Scoop/Chocolatey, pacman/AUR, mise, nix | README | npm only (`@ankitkumar131/mycode-ai`). |
+| 23 | **Translations** — 20+ READMEs, docs set per language | README, `docs/<lang>/` | English only. |
+| 24 | **Agent roster beyond subagents** — `build`/`plan` switchable at runtime, plus `scout`, and title/summary/compaction as first-class agents | `docs/agents.mdx` (2026-05: "add scout agent") | 2 sub-agents (`explore`, `general`) + the main loop; compaction is a module, not an agent. |
+
+## 6.2 Partial — the shape exists, the capability does not
+
+| # | Capability | What MyCode has | What is missing |
+| --- | --- | --- | --- |
+| 25 | **Permissions** | `confirmWrites` / `confirmCommands`, session allow-all (`/allow-all`, or the in-prompt option) scoped to writes/commands, catastrophic floor in `command-safety.ts` | No per-tool allow/ask/deny, no path/glob rules, no directory-level config layering (`docs/permissions.mdx`, `docs/policies.mdx`). It is two switches, not a policy. |
+| 26 | **Plan mode** | `/plan` writes a plan to `.mycode/plans/`; the `explore` sub-agent is read-only by construction | No read-only *primary* agent the user can switch to and back mid-session. |
+| 27 | **Background processes** | `process-manager.ts`: `background: true`, log polling, stdin writes, kill | No PTY (see #5). This is otherwise shipped, not partial. |
+| 28 | **Persistence** | `SessionStore` with list/search/load/latestFor, `/compress`, `--continue` | File-per-session, no DB, no mid-turn crash resume (#18). |
+| 29 | **Verification** | formatter + diagnostics after a write, bounded retries (`verify/verify.ts`) | Command-based only; no LSP (#4). |
+| 30 | **SDK** | `@mycode/sdk` — `MyCodeAgent`, events, `registerTool`, `registerProvider`, fail-closed approvals; publishable (`.d.ts`, external core) | Unpublished; not generated from a server API (there is no server, #8), so it cannot drive a running session the way opencode's SDK does. |
+
+## 6.3 Closed since Parts 1–5 — do not re-report these as gaps
+
+| Item | Evidence |
+| --- | --- |
+| SDK had "no `registerTool`/`registerProvider`" (Part 5 §10) | Both exist on `MyCodeAgent`; core gained a provider-factory registry. Publishable (`npm pack`: 490 kB/18 kB), still deliberately unpublished. |
+| Session approval bypass outlived its session | Fixed: `/new`, `/clear`, `/allow-all off` restore prompts; regression test drives the real TUI loop. |
+| "Background process manager (partial)" | Verified shipped: `ProcessManager` spawns detached, keeps logs, accepts stdin. |
+| Markdown commands, `mycode run`, `/allow-all`, AGENTS.md | All shipped and covered by tests (`custom-commands.ts`, `mycode.ts`, `session-approvals.ts`, `system-prompt.ts`). |
+| Failover, native Anthropic, sub-agents, compaction, todo/output stores, MCP, snapshots, 22 tools | Shipped — MyCode's side of the ranked table in Part 2.4 is unchanged and still ahead on failover. |
+
+## 6.4 Commercial surfaces — parity is not the goal
+
+`docs/zen.mdx` and `docs/go.mdx` document opencode's own hosted model gateway and
+subscription plan; `docs/enterprise.mdx` covers SSO/SAML, audit logs and policy
+management. There is no equivalent in MyCode and none is planned: these are
+business surfaces, not agent capabilities, and they are the only part of the
+"gap list" that costs money rather than engineering time.
+
+## 6.5 If only three of these get built
+
+Ranked by effect on a single task, using the same reasoning as Part 2.4:
+
+1. **LSP diagnostics (#4).** Turns post-write verification from "run the project's
+   command and parse it" into "ask the language server", which is cheaper, faster
+   and already running in the user's editor.
+2. **Markdown-defined agents (#3) + per-agent model routing (#19).** Together they
+   are the extensibility story users ask for first, and they reuse the markdown
+   loader that already exists for commands.
+3. **MCP is the stable extension point today**, which is why the plugin host (#1)
+   and on-disk tools (#2) rank below these two: MCP already covers "contribute
+   tools from outside the process", and it is the interface MyCode does not have
+   to invent.
+
+Deliberately not in the top three, despite being large: the server (#8) and the
+front-ends (#14, #15) are projects, not changes; each becomes worth doing only
+once something that is not a terminal needs to attach.
