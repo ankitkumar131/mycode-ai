@@ -1,10 +1,11 @@
 /**
  * Session-scoped approvals.
  *
- * "Allow all" here means: stop asking. For the rest of this process, tools run
- * without an interactive confirmation. Nothing about it is written to
- * settings.json — exiting the session (or `/allow-all off`) ends it — so a
- * decision made in a hurry is never silently inherited by the next run.
+ * "Allow all" here means: stop asking — for the rest of *this session*, where a
+ * session is the conversation, not the process. Follow-up questions keep the
+ * bypass; exiting, `/new` / `/clear` (which start a fresh conversation) and
+ * `/allow-all off` all end it. Nothing is written to settings.json, so a
+ * decision made in a hurry is never silently inherited by the next session.
  *
  * It does *not* remove the hard floor in `command-safety.ts`. A short list of
  * genuinely catastrophic commands (`rm -rf /`, `mkfs`, writing to a raw disk,

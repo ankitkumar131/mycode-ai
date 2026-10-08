@@ -36,6 +36,17 @@ function addAlwaysAllow(command: string): void {
   ALWAYS_ALLOW.add(normalizeCommand(command));
 }
 
+/**
+ * Drop every per-command approval.
+ *
+ * The set is process-global because the prompt has no session to hang it on,
+ * so the chat loop calls this when the session those approvals were granted
+ * for ends (`/new`, `/clear`) instead of letting them leak into the next one.
+ */
+export function resetAlwaysAllowed(): void {
+  ALWAYS_ALLOW.clear();
+}
+
 async function askYesNo(
   rl: readlinePromises.Interface,
   question: string,

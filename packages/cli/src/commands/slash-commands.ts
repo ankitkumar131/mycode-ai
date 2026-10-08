@@ -54,7 +54,7 @@ import {
   PONYTAIL_LICENSE,
 } from '@mycode/core';
 import { parseAllowAllArgs, type SessionApprovals } from '../permissions/session-approvals.js';
-import { pickChoiceArrowKeys } from '../ui/prompt.js';
+import { pickChoiceArrowKeys, resetAlwaysAllowed } from '../ui/prompt.js';
 import { renderTodoPanel } from '../ui/todo-view.js';
 import { renderDiff, openDiffViewer, diffStats } from '../ui/diff-viewer.js';
 import { listThemes, getThemeName, setTheme } from '../ui/themes/registry.js';
@@ -1189,7 +1189,7 @@ export const COMMANDS: CommandDef[] = [
   {
     name: '/allow-all',
     aliases: ['/allowall', '/allow', '/bypass'],
-    description: 'Run without approval prompts for this session, until you exit',
+    description: 'Run without approval prompts for this session (until /new or exit)',
     usage: '/allow-all [writes|commands|off|status]',
     argumentHint: '[writes|commands|off|status]',
     category: 'Configuration',
@@ -1227,6 +1227,7 @@ export const COMMANDS: CommandDef[] = [
 
       if (parsed.action === 'off') {
         approvals.revoke();
+        resetAlwaysAllowed();
         ok('Approval prompts restored. Writes and commands are confirmed as configured again.');
         return { handled: true };
       }

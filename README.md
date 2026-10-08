@@ -255,7 +255,8 @@ disabled (`disabledTools`).
 ### What makes the loop more than a `while` statement
 
 - **Confirmation gates.** Writes and shell commands prompt before running, with the target and cwd
-  shown. `/allow-all` or `--yolo` opts out; the settings file sets the default.
+  shown. `/allow-all` or `--yolo` opts out; the settings file sets the default. A session bypass is
+  bound to the conversation — follow-up questions stay silent, `/new` puts the prompts back.
 - **Command safety classifier.** Shell commands are graded `blocked` / `dangerous` / `elevated` /
   `normal` before execution — pattern-blocked commands cannot be approved away.
 - **Post-write verification.** After a successful write the agent runs the project formatter and

@@ -51,7 +51,7 @@ import { TextArea } from '../ui/text-area.js';
 import { handleSlashCommand, buildMenuItems, type SlashCommandContext } from './slash-commands.js';
 import { decodeEntities } from '../utils/html.js';
 import { getLocalPackageInfo } from '../utils/update-check.js';
-import { confirmCommand, askQuestions } from '../ui/prompt.js';
+import { confirmCommand, askQuestions, resetAlwaysAllowed } from '../ui/prompt.js';
 import { renderTodoPanel } from '../ui/todo-view.js';
 import { renderStatusLine, estimateCost } from '../ui/status-line.js';
 import { setTheme, prefersLightTheme } from '../ui/themes/registry.js';
@@ -800,6 +800,11 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       session.reset();
       session.title = title ?? null;
       ui.loadedSkills = [];
+      // "Allow all for this session" is bound to the session it was granted
+      // in. Starting a new one (or clearing the screen into a fresh one) puts
+      // the prompts back, so a hurried approval is never inherited.
+      approvals.revoke();
+      resetAlwaysAllowed();
     },
     autosave,
   };
