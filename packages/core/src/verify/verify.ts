@@ -46,7 +46,7 @@ interface CommandSpec {
 function runCommand(
   spec: CommandSpec,
   cwd: string,
-  timeoutMs = DEFAULT_TIMEOUT_MS
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     let settled = false;
@@ -56,7 +56,11 @@ function runCommand(
       resolve(v);
     };
     try {
-      const child = spawn(spec.cmd, spec.args, { cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+      const child = spawn(spec.cmd, spec.args, {
+        cwd,
+        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
       let stdout = '';
       let stderr = '';
       const cap = (s: string) => (s.length > 200_000 ? s.slice(0, 200_000) : s);
@@ -82,7 +86,9 @@ function runCommand(
 function which(cmd: string): Promise<boolean> {
   return new Promise((resolve) => {
     try {
-      const child = spawn(process.platform === 'win32' ? 'where' : 'which', [cmd], { stdio: 'ignore' });
+      const child = spawn(process.platform === 'win32' ? 'where' : 'which', [cmd], {
+        stdio: 'ignore',
+      });
       child.on('error', () => resolve(false));
       child.on('close', (code) => resolve(code === 0));
     } catch {
@@ -96,7 +102,10 @@ export function hasDependency(cwd: string, pkg: string): boolean {
   try {
     const p = `${cwd}/package.json`;
     if (!existsSync(p)) return false;
-      const json = JSON.parse(require('fs').readFileSync(p, 'utf-8')) as Record<string, Record<string, string>>;
+    const json = JSON.parse(require('fs').readFileSync(p, 'utf-8')) as Record<
+      string,
+      Record<string, string>
+    >;
     return Boolean(json.dependencies?.[pkg] || json.devDependencies?.[pkg]);
   } catch {
     return false;
@@ -116,7 +125,8 @@ async function typescriptDiagnostics(files: string[], cwd: string): Promise<Veri
   if (res.code === null && !res.stdout && !res.stderr) return null; // tsc unavailable
 
   const combined = `${res.stdout}\n${res.stderr}`;
-  if (!combined.trim()) return { diagnostics: '', formatted: '', ran: ['tsc --noEmit'], skipped: false };
+  if (!combined.trim())
+    return { diagnostics: '', formatted: '', ran: ['tsc --noEmit'], skipped: false };
 
   return {
     diagnostics: filterDiagnostics(combined, files),
@@ -133,13 +143,23 @@ async function pythonDiagnostics(files: string[], cwd: string): Promise<VerifyRe
       const res = await runCommand({ cmd: tool, args: ['--outputjson', ...files] }, cwd);
       if (res.code === null) continue;
       const text = summarizePyright(res.stdout);
-      return { diagnostics: text, formatted: '', ran: [`${tool} ${files.length} file(s)`], skipped: false };
+      return {
+        diagnostics: text,
+        formatted: '',
+        ran: [`${tool} ${files.length} file(s)`],
+        skipped: false,
+      };
     }
   }
   if (await which('ruff')) {
     const res = await runCommand({ cmd: 'ruff', args: ['check', ...files] }, cwd);
     if (res.code === null) return null;
-    return { diagnostics: cap(res.stdout || res.stderr, MAX_DIAGNOSTIC_CHARS), formatted: '', ran: ['ruff check'], skipped: false };
+    return {
+      diagnostics: cap(res.stdout || res.stderr, MAX_DIAGNOSTIC_CHARS),
+      formatted: '',
+      ran: ['ruff check'],
+      skipped: false,
+    };
   }
   return null;
 }
@@ -152,17 +172,31 @@ async function goDiagnostics(files: string[], cwd: string): Promise<VerifyResult
   if (res.code === null) return null;
   const out = `${res.stdout}${res.stderr}`.trim();
   if (!out) return { diagnostics: '', formatted: '', ran: ['go vet'], skipped: false };
-  return { diagnostics: cap(out, MAX_DIAGNOSTIC_CHARS), formatted: '', ran: ['go vet'], skipped: false };
+  return {
+    diagnostics: cap(out, MAX_DIAGNOSTIC_CHARS),
+    formatted: '',
+    ran: ['go vet'],
+    skipped: false,
+  };
 }
 
 /** Rust: `cargo check`. Whole-crate, so no file filtering. */
 async function rustDiagnostics(cwd: string): Promise<VerifyResult | null> {
   if (!(await which('cargo')) || !existsSync(`${cwd}/Cargo.toml`)) return null;
-  const res = await runCommand({ cmd: 'cargo', args: ['check', '--message-format', 'short'] }, cwd, 120_000);
+  const res = await runCommand(
+    { cmd: 'cargo', args: ['check', '--message-format', 'short'] },
+    cwd,
+    120_000,
+  );
   if (res.code === null) return null;
   const out = `${res.stdout}${res.stderr}`.trim();
   if (!out) return { diagnostics: '', formatted: '', ran: ['cargo check'], skipped: false };
-  return { diagnostics: cap(out, MAX_DIAGNOSTIC_CHARS), formatted: '', ran: ['cargo check'], skipped: false };
+  return {
+    diagnostics: cap(out, MAX_DIAGNOSTIC_CHARS),
+    formatted: '',
+    ran: ['cargo check'],
+    skipped: false,
+  };
 }
 
 /** Keep only lines mentioning our files; fall back to the head of the output. */
@@ -178,15 +212,25 @@ export function filterDiagnostics(raw: string, files: string[]): string {
 
 function summarizePyright(json: string): string {
   try {
-    const data = JSON.parse(json) as { generalDiagnostics?: Array<{ file: string; severity: string; message: string; range?: { start?: { line: number } } }> };
+    const data = JSON.parse(json) as {
+      generalDiagnostics?: Array<{
+        file: string;
+        severity: string;
+        message: string;
+        range?: { start?: { line: number } };
+      }>;
+    };
     const diags = data.generalDiagnostics ?? [];
     if (!diags.length) return '';
     return cap(
       diags
         .slice(0, 40)
-        .map((d) => `${relative(process.cwd(), d.file)}:${(d.range?.start?.line ?? 0) + 1} ${d.severity}: ${d.message}`)
+        .map(
+          (d) =>
+            `${relative(process.cwd(), d.file)}:${(d.range?.start?.line ?? 0) + 1} ${d.severity}: ${d.message}`,
+        )
         .join('\n'),
-      MAX_DIAGNOSTIC_CHARS
+      MAX_DIAGNOSTIC_CHARS,
     );
   } catch {
     return cap(json, MAX_DIAGNOSTIC_CHARS);
@@ -203,9 +247,19 @@ function cap(s: string, max: number): string {
 }
 
 export function isVerifiable(file: string): boolean {
-  return ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs'].includes(
-    extname(file).toLowerCase()
-  );
+  return [
+    '.ts',
+    '.tsx',
+    '.mts',
+    '.cts',
+    '.js',
+    '.jsx',
+    '.mjs',
+    '.cjs',
+    '.py',
+    '.go',
+    '.rs',
+  ].includes(extname(file).toLowerCase());
 }
 
 /**
@@ -220,7 +274,11 @@ export async function runDiagnostics(files: string[], cwd: string): Promise<Veri
   const exts = new Set(targets.map((f) => extname(f).toLowerCase()));
 
   try {
-    if ([...exts].some((e) => ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'].includes(e))) {
+    if (
+      [...exts].some((e) =>
+        ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'].includes(e),
+      )
+    ) {
       const r = await typescriptDiagnostics(abs, cwd);
       if (r) return r;
     }
@@ -252,8 +310,31 @@ interface FormatterSpec {
 }
 
 const FORMATTERS: FormatterSpec[] = [
-  { name: 'prettier', cmd: 'prettier', args: (f) => ['--write', ...f], exts: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.css', '.scss', '.md', '.yaml', '.yml'] },
-  { name: 'biome', cmd: 'biome', args: (f) => ['format', '--write', ...f], exts: ['.ts', '.tsx', '.js', '.jsx', '.json'] },
+  {
+    name: 'prettier',
+    cmd: 'prettier',
+    args: (f) => ['--write', ...f],
+    exts: [
+      '.ts',
+      '.tsx',
+      '.js',
+      '.jsx',
+      '.mjs',
+      '.cjs',
+      '.json',
+      '.css',
+      '.scss',
+      '.md',
+      '.yaml',
+      '.yml',
+    ],
+  },
+  {
+    name: 'biome',
+    cmd: 'biome',
+    args: (f) => ['format', '--write', ...f],
+    exts: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+  },
   { name: 'black', cmd: 'black', args: (f) => ['-q', ...f], exts: ['.py'] },
   { name: 'ruff-format', cmd: 'ruff', args: (f) => ['format', ...f], exts: ['.py'] },
   { name: 'gofmt', cmd: 'gofmt', args: (f) => ['-w', ...f], exts: ['.go'] },

@@ -49,13 +49,12 @@ export class ProviderRouter {
     }
   }
 
-  private getEligibleProviders(requirements: { needsWrite?: boolean; needsRead?: boolean } = {}): BaseProvider[] {
+  private getEligibleProviders(
+    requirements: { needsWrite?: boolean; needsRead?: boolean } = {},
+  ): BaseProvider[] {
     // Reorder providers so the active provider (_currentIndex) is tried FIRST
     const activeIdx = Math.max(0, Math.min(this._currentIndex, this.providers.length - 1));
-    const reordered = [
-      ...this.providers.slice(activeIdx),
-      ...this.providers.slice(0, activeIdx),
-    ];
+    const reordered = [...this.providers.slice(activeIdx), ...this.providers.slice(0, activeIdx)];
 
     return reordered.filter((p) => {
       const health = p.getHealth();
@@ -68,7 +67,8 @@ export class ProviderRouter {
 
   private handleProviderError(provider: BaseProvider, err: Error, remaining: BaseProvider[]): void {
     const idx = remaining.indexOf(provider);
-    const nextLabel = idx >= 0 && idx + 1 < remaining.length ? remaining[idx + 1].name : 'none available';
+    const nextLabel =
+      idx >= 0 && idx + 1 < remaining.length ? remaining[idx + 1].name : 'none available';
 
     if (err instanceof RateLimitError) {
       logger.switchProviders(provider.name, nextLabel, 'rate limit');
@@ -160,7 +160,12 @@ export class ProviderRouter {
     this._announcedProvider = null;
   }
 
-  private async attemptWithFailover(providers: BaseProvider[], messages: unknown[], tools?: unknown[], options?: any): Promise<any> {
+  private async attemptWithFailover(
+    providers: BaseProvider[],
+    messages: unknown[],
+    tools?: unknown[],
+    options?: any,
+  ): Promise<any> {
     const errors: Error[] = [];
     for (let i = 0; i < providers.length; i++) {
       const provider = providers[i];
@@ -168,7 +173,11 @@ export class ProviderRouter {
         this.announceOnce(provider);
         const result = await provider.chat(messages, tools, options);
         const switchedFrom = providers[this._attemptedProviderIndex];
-        if (this._attemptedProviderIndex >= 0 && switchedFrom && switchedFrom.name !== provider.name) {
+        if (
+          this._attemptedProviderIndex >= 0 &&
+          switchedFrom &&
+          switchedFrom.name !== provider.name
+        ) {
           // Record *why* we moved on, so the session can hand the replacement
           // model an accurate account of what happened.
           this._lastFailover = {
@@ -189,7 +198,12 @@ export class ProviderRouter {
     throw new AllProvidersExhaustedError(errors);
   }
 
-  private async *attemptStreamWithFailover(providers: BaseProvider[], messages: unknown[], tools?: unknown[], options?: any): AsyncGenerator<any> {
+  private async *attemptStreamWithFailover(
+    providers: BaseProvider[],
+    messages: unknown[],
+    tools?: unknown[],
+    options?: any,
+  ): AsyncGenerator<any> {
     const errors: Error[] = [];
     for (let i = 0; i < providers.length; i++) {
       const provider = providers[i];
@@ -200,7 +214,11 @@ export class ProviderRouter {
           yield chunk;
         }
         const switchedFrom = providers[this._attemptedProviderIndex];
-        if (this._attemptedProviderIndex >= 0 && switchedFrom && switchedFrom.name !== provider.name) {
+        if (
+          this._attemptedProviderIndex >= 0 &&
+          switchedFrom &&
+          switchedFrom.name !== provider.name
+        ) {
           this._lastFailover = {
             from: switchedFrom.name,
             to: provider.name,
@@ -227,11 +245,7 @@ export class ProviderRouter {
     let idx = this.providers.findIndex((p) => {
       const pName = p.name.toLowerCase();
       const pModel = p.model.toLowerCase();
-      return (
-        pName === lower ||
-        pModel === lower ||
-        `${pName}/${pModel}`.toLowerCase() === lower
-      );
+      return pName === lower || pModel === lower || `${pName}/${pModel}`.toLowerCase() === lower;
     });
 
     // 2. Fuzzy / Substring match

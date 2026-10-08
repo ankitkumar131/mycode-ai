@@ -108,7 +108,10 @@ export class AnthropicProvider extends BaseProvider {
    *   - `thinking` blocks must be echoed back exactly as received (with their
    *     signature) when extended thinking is on, or the request is rejected.
    */
-  private toAnthropic(messages: unknown[]): { system: AnthropicContentBlock[]; messages: AnthropicMessage[] } {
+  private toAnthropic(messages: unknown[]): {
+    system: AnthropicContentBlock[];
+    messages: AnthropicMessage[];
+  } {
     const system: AnthropicContentBlock[] = [];
     const out: AnthropicMessage[] = [];
 
@@ -137,7 +140,12 @@ export class AnthropicProvider extends BaseProvider {
         // Consecutive tool results collapse into one user turn; Anthropic
         // requires alternating roles and rejects two user turns in a row.
         const last = out[out.length - 1];
-        if (last && last.role === 'user' && Array.isArray(last.content) && last.content[0]?.type === 'tool_result') {
+        if (
+          last &&
+          last.role === 'user' &&
+          Array.isArray(last.content) &&
+          last.content[0]?.type === 'tool_result'
+        ) {
           last.content.push(block);
         } else {
           out.push({ role: 'user', content: [block] });
@@ -177,7 +185,9 @@ export class AnthropicProvider extends BaseProvider {
   }
 
   private toTools(tools: unknown[]): unknown[] {
-    return (tools as Array<{ function?: { name: string; description?: string; parameters?: unknown } }>)
+    return (
+      tools as Array<{ function?: { name: string; description?: string; parameters?: unknown } }>
+    )
       .filter((t) => t?.function?.name)
       .map((t) => ({
         name: t.function!.name,
@@ -193,7 +203,11 @@ export class AnthropicProvider extends BaseProvider {
    * parts that never change (tools, then system) and on the tail of the
    * conversation so the next turn can reuse this turn's prefix.
    */
-  private withCacheBreakpoints(system: AnthropicContentBlock[], messages: AnthropicMessage[], tools: unknown[]): void {
+  private withCacheBreakpoints(
+    system: AnthropicContentBlock[],
+    messages: AnthropicMessage[],
+    tools: unknown[],
+  ): void {
     if (tools.length) {
       const lastTool = tools[tools.length - 1] as { cache_control?: unknown };
       lastTool.cache_control = { type: 'ephemeral' };
@@ -212,7 +226,12 @@ export class AnthropicProvider extends BaseProvider {
     }
   }
 
-  private buildBody(messages: unknown[], tools: unknown[], options: any, stream: boolean): Record<string, unknown> {
+  private buildBody(
+    messages: unknown[],
+    tools: unknown[],
+    options: any,
+    stream: boolean,
+  ): Record<string, unknown> {
     const { system, messages: anthMessages } = this.toAnthropic(messages);
     const anthTools = this.toTools(tools ?? []);
 
@@ -220,8 +239,12 @@ export class AnthropicProvider extends BaseProvider {
 
     // Extended thinking is opt-in per request, and incompatible with
     // temperature/top_p overrides — Anthropic rejects the combination.
-    const thinkingEnabled = options.thinking !== false && /claude-(3-7|4|opus-4|sonnet-4|haiku-4)/.test(this.model);
-    const thinkingBudget = Math.min(options.thinking_budget ?? DEFAULT_THINKING_BUDGET, Math.max(1_024, maxTokens - 1_024));
+    const thinkingEnabled =
+      options.thinking !== false && /claude-(3-7|4|opus-4|sonnet-4|haiku-4)/.test(this.model);
+    const thinkingBudget = Math.min(
+      options.thinking_budget ?? DEFAULT_THINKING_BUDGET,
+      Math.max(1_024, maxTokens - 1_024),
+    );
 
     const body: Record<string, unknown> = {
       model: this.model,
@@ -248,7 +271,11 @@ export class AnthropicProvider extends BaseProvider {
     content: string;
     reasoning: string;
     thinkingSignature?: string;
-    toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
+    toolCalls: Array<{
+      id: string;
+      type: 'function';
+      function: { name: string; arguments: string };
+    }>;
     usage: unknown;
     finish_reason?: string;
   } {
@@ -256,7 +283,11 @@ export class AnthropicProvider extends BaseProvider {
     let content = '';
     let reasoning = '';
     let thinkingSignature: string | undefined;
-    const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
+    const toolCalls: Array<{
+      id: string;
+      type: 'function';
+      function: { name: string; arguments: string };
+    }> = [];
 
     for (const b of blocks) {
       if (b.type === 'text') content += b.text ?? '';
@@ -274,14 +305,24 @@ export class AnthropicProvider extends BaseProvider {
 
     const usage = data?.usage
       ? {
-          prompt_tokens: (data.usage.input_tokens ?? 0) + (data.usage.cache_read_input_tokens ?? 0) + (data.usage.cache_creation_input_tokens ?? 0),
+          prompt_tokens:
+            (data.usage.input_tokens ?? 0) +
+            (data.usage.cache_read_input_tokens ?? 0) +
+            (data.usage.cache_creation_input_tokens ?? 0),
           completion_tokens: data.usage.output_tokens ?? 0,
           cache_read_input_tokens: data.usage.cache_read_input_tokens,
           cache_creation_input_tokens: data.usage.cache_creation_input_tokens,
         }
       : {};
 
-    return { content, reasoning, thinkingSignature, toolCalls, usage, finish_reason: data?.stop_reason };
+    return {
+      content,
+      reasoning,
+      thinkingSignature,
+      toolCalls,
+      usage,
+      finish_reason: data?.stop_reason,
+    };
   }
 
   async chat(messages: unknown[], tools: unknown[] = [], options: any = {}): Promise<any> {
@@ -291,7 +332,11 @@ export class AnthropicProvider extends BaseProvider {
 
     try {
       const body = this.buildBody(messages, tools, options, false);
-      const res = await this.fetchWithTimeout(`${this.baseUrl}/v1/messages`, body, options.abortSignal);
+      const res = await this.fetchWithTimeout(
+        `${this.baseUrl}/v1/messages`,
+        body,
+        options.abortSignal,
+      );
       if (!res.ok) throw await this.errorFrom(res);
       const data = await res.json();
       this.recordSuccess();
@@ -306,7 +351,11 @@ export class AnthropicProvider extends BaseProvider {
   private async chatStreaming(messages: unknown[], tools: unknown[], options: any): Promise<any> {
     try {
       const body = this.buildBody(messages, tools, options, true);
-      const res = await this.fetchWithTimeout(`${this.baseUrl}/v1/messages`, body, options.abortSignal);
+      const res = await this.fetchWithTimeout(
+        `${this.baseUrl}/v1/messages`,
+        body,
+        options.abortSignal,
+      );
       if (!res.ok) throw await this.errorFrom(res);
 
       if (!res.body) throw new Error('Anthropic stream had no body');
@@ -344,7 +393,11 @@ export class AnthropicProvider extends BaseProvider {
           switch (ev.type) {
             case 'content_block_start':
               if (ev.content_block?.type === 'tool_use') {
-                toolBuffers.set(ev.index, { id: ev.content_block.id, name: ev.content_block.name, json: '' });
+                toolBuffers.set(ev.index, {
+                  id: ev.content_block.id,
+                  name: ev.content_block.name,
+                  json: '',
+                });
               } else if (ev.content_block?.type === 'thinking') {
                 thinkingSignature = ev.content_block.signature ?? thinkingSignature;
               }
@@ -395,7 +448,10 @@ export class AnthropicProvider extends BaseProvider {
         thinkingSignature,
         toolCalls,
         usage: {
-          prompt_tokens: (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0),
+          prompt_tokens:
+            (usage.input_tokens ?? 0) +
+            (usage.cache_read_input_tokens ?? 0) +
+            (usage.cache_creation_input_tokens ?? 0),
           completion_tokens: usage.output_tokens ?? 0,
           cache_read_input_tokens: usage.cache_read_input_tokens,
           cache_creation_input_tokens: usage.cache_creation_input_tokens,
@@ -410,15 +466,27 @@ export class AnthropicProvider extends BaseProvider {
   }
 
   /** Anthropic has no /chat/completions; streaming shares the same endpoint. */
-  async *stream(messages: unknown[], tools: unknown[] = [], options: any = {}): AsyncGenerator<any> {
-    const result = await this.chatStreaming(messages, tools, { ...options, onStream: undefined, onReasoning: undefined });
+  async *stream(
+    messages: unknown[],
+    tools: unknown[] = [],
+    options: any = {},
+  ): AsyncGenerator<any> {
+    const result = await this.chatStreaming(messages, tools, {
+      ...options,
+      onStream: undefined,
+      onReasoning: undefined,
+    });
     if (result.reasoning) yield { type: 'reasoning', text: result.reasoning };
     if (result.content) yield { type: 'text', text: result.content };
     for (const tc of result.toolCalls) yield { type: 'tool_call', toolCall: tc };
     yield { type: 'finish', usage: result.usage, finish_reason: result.finish_reason };
   }
 
-  private async fetchWithTimeout(url: string, body: unknown, abortSignal?: AbortSignal): Promise<Response> {
+  private async fetchWithTimeout(
+    url: string,
+    body: unknown,
+    abortSignal?: AbortSignal,
+  ): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     timer.unref?.();
@@ -445,7 +513,9 @@ export class AnthropicProvider extends BaseProvider {
     } catch {
       detail = await res.text().catch(() => '');
     }
-    const err = new Error(`Anthropic (${this.model}) HTTP ${res.status}: ${detail}`) as Error & { status?: number };
+    const err = new Error(`Anthropic (${this.model}) HTTP ${res.status}: ${detail}`) as Error & {
+      status?: number;
+    };
     err.status = res.status;
     err.name = 'ProviderError';
     return err;

@@ -91,7 +91,8 @@ describe('renderDiff', () => {
   });
 
   it('bounds the number of lines in static mode', () => {
-    const huge = `diff --git a/big.ts b/big.ts\n--- a/big.ts\n+++ b/big.ts\n@@ -1,0 +1,500 @@\n` +
+    const huge =
+      `diff --git a/big.ts b/big.ts\n--- a/big.ts\n+++ b/big.ts\n@@ -1,0 +1,500 @@\n` +
       Array.from({ length: 500 }, (_, i) => `+line ${i}`).join('\n');
     const out = strip(renderDiff(huge, { maxLines: 50 }));
     expect(out.split('\n').length).toBeLessThanOrEqual(52);

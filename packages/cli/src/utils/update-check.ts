@@ -18,8 +18,12 @@ const FETCH_TIMEOUT_MS = 3000;
  */
 export function isNewerVersion(v1: string, v2: string): boolean {
   const clean = (v: string) => v.replace(/^v/, '').split('-')[0];
-  const p1 = clean(v1).split('.').map(n => parseInt(n, 10) || 0);
-  const p2 = clean(v2).split('.').map(n => parseInt(n, 10) || 0);
+  const p1 = clean(v1)
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
+  const p2 = clean(v2)
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
 
   for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
     const n1 = p1[i] || 0;
@@ -51,7 +55,10 @@ export function getLocalPackageInfo(): { name: string; version: string } {
     for (const p of candidates) {
       if (existsSync(p)) {
         const pkg = JSON.parse(readFileSync(p, 'utf-8'));
-        if (pkg.version && (pkg.name === PUBLISHED_PACKAGE_NAME || pkg.name === '@ankitkumar131/mycode-ai')) {
+        if (
+          pkg.version &&
+          (pkg.name === PUBLISHED_PACKAGE_NAME || pkg.name === '@ankitkumar131/mycode-ai')
+        ) {
           return {
             name: PUBLISHED_PACKAGE_NAME,
             version: pkg.version,
@@ -94,7 +101,7 @@ export async function checkForUpdate(): Promise<void> {
 
     const response = await fetch(`https://registry.npmjs.org/${pkgName}/latest`, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      headers: { 'Accept': 'application/json' },
+      headers: { Accept: 'application/json' },
     });
 
     if (!response.ok) return;

@@ -1,4 +1,8 @@
-import { NoProvidersConfiguredError, AllProvidersExhaustedError, NoProvidersConfiguredError } from '../errors.js';
+import {
+  NoProvidersConfiguredError,
+  AllProvidersExhaustedError,
+  NoProvidersConfiguredError,
+} from '../errors.js';
 
 const mockCreate = vi.fn();
 const mockStream = vi.fn();
@@ -77,7 +81,13 @@ describe('ProviderRouter', () => {
 
   it('routes to openai_compatible for unknown apiProvider', () => {
     const router = new ProviderRouter([
-      { name: 'custom', apiProvider: 'custom', model: 'custom-model', apiKey: 'k1', baseUrl: 'http://localhost:8080' },
+      {
+        name: 'custom',
+        apiProvider: 'custom',
+        model: 'custom-model',
+        apiKey: 'k1',
+        baseUrl: 'http://localhost:8080',
+      },
     ]);
     expect(router.getCurrentProvider()!.name).toBe('custom');
   });
@@ -123,7 +133,9 @@ describe('ProviderRouter', () => {
       { name: 'p2', apiProvider: 'openai', model: 'gpt-4', apiKey: 'k2', priority: 2 },
     ]);
 
-    await expect(router.chat([{ role: 'user', content: 'Hi' }])).rejects.toThrow(AllProvidersExhaustedError);
+    await expect(router.chat([{ role: 'user', content: 'Hi' }])).rejects.toThrow(
+      AllProvidersExhaustedError,
+    );
   });
 
   it('setActiveProvider switches by name', () => {

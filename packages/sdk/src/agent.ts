@@ -70,10 +70,18 @@ export class MyCodeAgent {
       providerRouter: this.router,
       cwd,
       maxIterations: options?.maxIterations ?? this.config.maxIterations ?? 25,
-      onText(text) { ev?.onText?.(text); },
-      onToolCall(name, args) { ev?.onToolCall?.({ name, args }); },
-      onToolResult(name, result) { ev?.onToolResult?.({ toolName: name, result }); },
-      onError(message) { ev?.onError?.(new Error(message)); },
+      onText(text) {
+        ev?.onText?.(text);
+      },
+      onToolCall(name, args) {
+        ev?.onToolCall?.({ name, args });
+      },
+      onToolResult(name, result) {
+        ev?.onToolResult?.({ toolName: name, result });
+      },
+      onError(message) {
+        ev?.onError?.(new Error(message));
+      },
     });
 
     this.session = session;
@@ -87,15 +95,22 @@ export class MyCodeAgent {
     if (this.config.provider && typeof this.config.provider === 'object') {
       return [this.config.provider as ProviderConfig];
     }
-    const providerName = typeof this.config.provider === 'string'
-      ? this.config.provider
-      : process.env.MYCODE_PROVIDER || 'openai';
-    const apiKey = process.env.MYCODE_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || '';
-    return [{
-      name: providerName,
-      apiProvider: providerName,
-      model: this.config.model || process.env.MYCODE_MODEL || 'gpt-4o',
-      apiKey,
-    }];
+    const providerName =
+      typeof this.config.provider === 'string'
+        ? this.config.provider
+        : process.env.MYCODE_PROVIDER || 'openai';
+    const apiKey =
+      process.env.MYCODE_API_KEY ||
+      process.env.OPENAI_API_KEY ||
+      process.env.ANTHROPIC_API_KEY ||
+      '';
+    return [
+      {
+        name: providerName,
+        apiProvider: providerName,
+        model: this.config.model || process.env.MYCODE_MODEL || 'gpt-4o',
+        apiKey,
+      },
+    ];
   }
 }

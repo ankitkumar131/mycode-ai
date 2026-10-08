@@ -118,13 +118,19 @@ export class SessionApprovals {
 /** Parse `/allow-all` arguments into an action. Unknown input is reported, not guessed. */
 export function parseAllowAllArgs(
   args: string,
-): { action: 'status' } | { action: 'on'; scope?: ApprovalScope } | { action: 'off' } | { action: 'invalid'; input: string } {
+):
+  | { action: 'status' }
+  | { action: 'on'; scope?: ApprovalScope }
+  | { action: 'off' }
+  | { action: 'invalid'; input: string } {
   const a = args.trim().toLowerCase();
   if (!a || a === 'all' || a === 'on' || a === 'everything') return { action: 'on' };
   if (a === 'off' || a === 'revoke' || a === 'reset' || a === 'none') return { action: 'off' };
   if (a === 'status' || a === 'show') return { action: 'status' };
-  if (a === 'writes' || a === 'write' || a === 'edits' || a === 'edit' || a === 'files') return { action: 'on', scope: 'writes' };
-  if (a === 'commands' || a === 'command' || a === 'shell' || a === 'exec') return { action: 'on', scope: 'commands' };
+  if (a === 'writes' || a === 'write' || a === 'edits' || a === 'edit' || a === 'files')
+    return { action: 'on', scope: 'writes' };
+  if (a === 'commands' || a === 'command' || a === 'shell' || a === 'exec')
+    return { action: 'on', scope: 'commands' };
   return { action: 'invalid', input: args.trim() };
 }
 

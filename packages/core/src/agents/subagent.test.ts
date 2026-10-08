@@ -34,11 +34,15 @@ describe('extractReport', () => {
   const m = (role: Message['role'], content: string): Message => ({ role, content });
 
   it('takes the last assistant message', () => {
-    expect(extractReport([m('user', 'q'), m('assistant', 'first'), m('assistant', 'final')])).toBe('final');
+    expect(extractReport([m('user', 'q'), m('assistant', 'first'), m('assistant', 'final')])).toBe(
+      'final',
+    );
   });
 
   it('skips empty assistant turns (tool-call-only turns)', () => {
-    expect(extractReport([m('assistant', 'real answer'), m('assistant', '   ')])).toBe('real answer');
+    expect(extractReport([m('assistant', 'real answer'), m('assistant', '   ')])).toBe(
+      'real answer',
+    );
   });
 
   it('returns empty when the child said nothing', () => {

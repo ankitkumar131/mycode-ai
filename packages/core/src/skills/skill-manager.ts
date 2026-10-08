@@ -12,11 +12,24 @@
  *   Level 2  view(name, file)   → a reference file inside the skill
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, statSync, readdirSync } from 'fs';
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  statSync,
+  readdirSync,
+} from 'fs';
 import { join, resolve, relative, isAbsolute, dirname, delimiter } from 'path';
 import { homedir } from 'os';
 import { createHash } from 'crypto';
-import { SkillLoader, stripFrontmatter, isPlatformCompatible, listSkillFiles } from './skill-loader.js';
+import {
+  SkillLoader,
+  stripFrontmatter,
+  isPlatformCompatible,
+  listSkillFiles,
+} from './skill-loader.js';
 import { BUNDLED_SKILLS, type BundledSkill } from './bundled-skills.js';
 import type { InstalledSkill, SkillDefinition, SkillsLockFile, SkillIndexEntry } from './types.js';
 
@@ -91,7 +104,9 @@ export class SkillManager {
 
   getExternalDirs(): string[] {
     const fromEnv = (process.env.MYCODE_SKILL_DIRS ?? '').split(delimiter).filter(Boolean);
-    return [...(this.opts.externalDirs ?? []), ...fromEnv].map(d => resolve(d.replace(/^~(?=$|[\\/])/, homedir())));
+    return [...(this.opts.externalDirs ?? []), ...fromEnv].map((d) =>
+      resolve(d.replace(/^~(?=$|[\\/])/, homedir())),
+    );
   }
 
   // ─── Lock file ────────────────────────────────────────────────────────────
@@ -155,11 +170,15 @@ export class SkillManager {
 
   /** Restore a bundled skill to its shipped content. */
   resetBundledSkill(name: string): boolean {
-    const b = BUNDLED_SKILLS.find(s => s.name === name);
+    const b = BUNDLED_SKILLS.find((s) => s.name === name);
     if (!b) return false;
     const target = join(this.getSkillsDir(), b.name);
     rmSync(target, { recursive: true, force: true });
-    writeFileSync((mkdirSync(target, { recursive: true }), join(target, '.bundled.json')), JSON.stringify(bundledManifest(b), null, 2), 'utf-8');
+    writeFileSync(
+      (mkdirSync(target, { recursive: true }), join(target, '.bundled.json')),
+      JSON.stringify(bundledManifest(b), null, 2),
+      'utf-8',
+    );
     for (const [rel, content] of Object.entries(b.files)) {
       const p = join(target, rel);
       mkdirSync(dirname(p), { recursive: true });
@@ -170,7 +189,7 @@ export class SkillManager {
   }
 
   getBundledNames(): string[] {
-    return BUNDLED_SKILLS.map(b => b.name);
+    return BUNDLED_SKILLS.map((b) => b.name);
   }
 
   // ─── Discovery ────────────────────────────────────────────────────────────
@@ -214,7 +233,7 @@ export class SkillManager {
 
   /** Level 0: compact index for the system prompt / skills_list tool. */
   index(workspaceRoot?: string): SkillIndexEntry[] {
-    return this.list(workspaceRoot).map(s => ({
+    return this.list(workspaceRoot).map((s) => ({
       name: s.name,
       description: s.description,
       category: s.category,
@@ -225,7 +244,7 @@ export class SkillManager {
 
   find(name: string, workspaceRoot?: string): InstalledSkill | undefined {
     const n = name.trim().replace(/^\//, '').toLowerCase();
-    return this.list(workspaceRoot).find(s => s.name.toLowerCase() === n);
+    return this.list(workspaceRoot).find((s) => s.name.toLowerCase() === n);
   }
 
   /** Fuzzy match used by the slash-command menu. */
@@ -233,7 +252,10 @@ export class SkillManager {
     const p = prefix.trim().replace(/^\//, '').toLowerCase();
     if (!p) return this.list(workspaceRoot);
     return this.list(workspaceRoot).filter(
-      s => s.name.toLowerCase().startsWith(p) || s.name.toLowerCase().includes(p) || s.tags.some(t => t.toLowerCase().startsWith(p))
+      (s) =>
+        s.name.toLowerCase().startsWith(p) ||
+        s.name.toLowerCase().includes(p) ||
+        s.tags.some((t) => t.toLowerCase().startsWith(p)),
     );
   }
 
@@ -257,15 +279,24 @@ export class SkillManager {
   view(name: string, filePath?: string, workspaceRoot?: string): string {
     const skill = this.find(name, workspaceRoot);
     if (!skill) {
-      const suggestions = this.match(name, workspaceRoot).slice(0, 5).map(s => s.name);
-      throw new Error(`Skill "${name}" not found.${suggestions.length ? ` Did you mean: ${suggestions.join(', ')}?` : ''}`);
+      const suggestions = this.match(name, workspaceRoot)
+        .slice(0, 5)
+        .map((s) => s.name);
+      throw new Error(
+        `Skill "${name}" not found.${suggestions.length ? ` Did you mean: ${suggestions.join(', ')}?` : ''}`,
+      );
     }
     if (filePath) {
       const target = this.safeJoin(skill.dir, filePath);
-      if (!existsSync(target)) throw new Error(`File "${filePath}" not found in skill "${skill.name}". Available: ${skill.files.join(', ') || '(none)'}`);
+      if (!existsSync(target))
+        throw new Error(
+          `File "${filePath}" not found in skill "${skill.name}". Available: ${skill.files.join(', ') || '(none)'}`,
+        );
       const st = statSync(target);
       if (st.isDirectory()) {
-        return readdirSync(target).map(f => join(filePath, f)).join('\n');
+        return readdirSync(target)
+          .map((f) => join(filePath, f))
+          .join('\n');
       }
       if (st.size > 500_000) throw new Error(`File too large (${(st.size / 1024).toFixed(0)} KB).`);
       return readFileSync(target, 'utf-8');
@@ -301,13 +332,22 @@ export class SkillManager {
 
   // ─── Management (create / edit / delete) ─────────────────────────────────
 
-  createSkill(name: string, content: string, opts: { overwrite?: boolean; workspaceRoot?: string; scope?: 'user' | 'workspace' } = {}): string {
+  createSkill(
+    name: string,
+    content: string,
+    opts: { overwrite?: boolean; workspaceRoot?: string; scope?: 'user' | 'workspace' } = {},
+  ): string {
     const safe = this.validateName(name);
-    const base = opts.scope === 'workspace' && opts.workspaceRoot ? join(opts.workspaceRoot, '.mycode', 'skills') : this.getSkillsDir();
+    const base =
+      opts.scope === 'workspace' && opts.workspaceRoot
+        ? join(opts.workspaceRoot, '.mycode', 'skills')
+        : this.getSkillsDir();
     const dir = join(base, safe);
     const file = join(dir, 'SKILL.md');
     if (existsSync(file) && !opts.overwrite) {
-      throw new Error(`Skill "${safe}" already exists at ${file}. Use action=edit or overwrite=true.`);
+      throw new Error(
+        `Skill "${safe}" already exists at ${file}. Use action=edit or overwrite=true.`,
+      );
     }
     mkdirSync(dir, { recursive: true });
     writeFileSync(file, this.ensureFrontmatter(safe, content), 'utf-8');
@@ -347,7 +387,8 @@ export class SkillManager {
     const skill = this.find(name, workspaceRoot);
     if (!skill) throw new Error(`Skill "${name}" not found.`);
     const target = this.safeJoin(skill.dir, filePath);
-    if (relative(skill.dir, target) === 'SKILL.md') throw new Error('Use action=delete to remove the whole skill.');
+    if (relative(skill.dir, target) === 'SKILL.md')
+      throw new Error('Use action=delete to remove the whole skill.');
     rmSync(target, { force: true, recursive: true });
     this.invalidate();
   }
@@ -375,7 +416,11 @@ export class SkillManager {
    *   https://github.com/owner/repo/tree/<ref>/path/to/skill
    *   https://raw.githubusercontent.com/.../SKILL.md
    */
-  async addSkill(nameOrSpec: string, source?: string, skillPath?: string): Promise<{ name: string; path: string; files: string[] }> {
+  async addSkill(
+    nameOrSpec: string,
+    source?: string,
+    skillPath?: string,
+  ): Promise<{ name: string; path: string; files: string[] }> {
     const spec = this.parseSource(nameOrSpec, source, skillPath);
     const name = this.validateName(spec.name);
     const targetDir = join(this.getSkillsDir(), name);
@@ -388,7 +433,7 @@ export class SkillManager {
       const listing = await fetchJson(apiUrl);
       if (Array.isArray(listing)) {
         await this.downloadTree(spec.repo, spec.ref, spec.path, targetDir, written);
-        installedViaApi = written.some(f => f.endsWith('SKILL.md'));
+        installedViaApi = written.some((f) => f.endsWith('SKILL.md'));
       }
     } catch {
       /* fall through to raw */
@@ -404,10 +449,15 @@ export class SkillManager {
         /* fall back to API */
       }
       if (content === null) {
-        const buf = await fetchFileContent({ url: `https://api.github.com/repos/${spec.repo}/contents/${spec.path}/SKILL.md?ref=${spec.ref}` });
+        const buf = await fetchFileContent({
+          url: `https://api.github.com/repos/${spec.repo}/contents/${spec.path}/SKILL.md?ref=${spec.ref}`,
+        });
         if (buf) content = buf.toString('utf-8');
       }
-      if (content === null) throw new Error(`Failed to download ${spec.repo}/${spec.path}/SKILL.md — check the URL (and network/GitHub access).`);
+      if (content === null)
+        throw new Error(
+          `Failed to download ${spec.repo}/${spec.path}/SKILL.md — check the URL (and network/GitHub access).`,
+        );
       mkdirSync(targetDir, { recursive: true });
       const f = join(targetDir, 'SKILL.md');
       writeFileSync(f, content, 'utf-8');
@@ -418,17 +468,33 @@ export class SkillManager {
     lock.skills[name] = { name, source: spec.repo, sourceType: 'github', skillPath: spec.path };
     this.writeLockFile(lock);
     this.invalidate();
-    return { name, path: targetDir, files: written.map(f => relative(targetDir, f)) };
+    return { name, path: targetDir, files: written.map((f) => relative(targetDir, f)) };
   }
 
-  private async downloadTree(repo: string, ref: string, path: string, targetDir: string, written: string[], depth = 0): Promise<void> {
+  private async downloadTree(
+    repo: string,
+    ref: string,
+    path: string,
+    targetDir: string,
+    written: string[],
+    depth = 0,
+  ): Promise<void> {
     if (depth > 4) return;
-    const listing = await fetchJson(`https://api.github.com/repos/${repo}/contents/${path}?ref=${ref}`);
+    const listing = await fetchJson(
+      `https://api.github.com/repos/${repo}/contents/${path}?ref=${ref}`,
+    );
     if (!Array.isArray(listing)) return;
     mkdirSync(targetDir, { recursive: true });
     for (const item of listing) {
       if (item.type === 'dir') {
-        await this.downloadTree(repo, ref, `${path}/${item.name}`, join(targetDir, item.name), written, depth + 1);
+        await this.downloadTree(
+          repo,
+          ref,
+          `${path}/${item.name}`,
+          join(targetDir, item.name),
+          written,
+          depth + 1,
+        );
       } else if (item.type === 'file' && item.size < 2_000_000) {
         const buf = await fetchFileContent(item);
         if (!buf) continue;
@@ -439,13 +505,19 @@ export class SkillManager {
     }
   }
 
-  private parseSource(nameOrSpec: string, source?: string, skillPath?: string): { name: string; repo: string; ref: string; path: string } {
+  private parseSource(
+    nameOrSpec: string,
+    source?: string,
+    skillPath?: string,
+  ): { name: string; repo: string; ref: string; path: string } {
     const s = (source ?? nameOrSpec).trim();
     let name = source ? nameOrSpec.trim() : '';
     let ref = 'main';
 
     // Full GitHub URL
-    let m = s.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?(?:\/(?:tree|blob)\/([^/]+)\/(.+?))?\/?$/);
+    let m = s.match(
+      /^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?(?:\/(?:tree|blob)\/([^/]+)\/(.+?))?\/?$/,
+    );
     if (m) {
       const repo = m[1];
       ref = m[2] ?? 'main';
@@ -455,7 +527,9 @@ export class SkillManager {
       return { name, repo, ref, path: p };
     }
     // Raw URL
-    m = s.match(/^https?:\/\/raw\.githubusercontent\.com\/([^/]+\/[^/]+)\/([^/]+)\/(.+?)\/SKILL\.md$/i);
+    m = s.match(
+      /^https?:\/\/raw\.githubusercontent\.com\/([^/]+\/[^/]+)\/([^/]+)\/(.+?)\/SKILL\.md$/i,
+    );
     if (m) {
       const p = m[3];
       return { name: name || p.split('/').pop()!, repo: m[1], ref: m[2], path: p };
@@ -483,7 +557,9 @@ export class SkillManager {
     // GitHub code search requires auth; use repo tree listing of known hubs instead.
     for (const hub of HUB_REPOS) {
       try {
-        const tree = await fetchJson(`https://api.github.com/repos/${hub.repo}/git/trees/main?recursive=1`);
+        const tree = await fetchJson(
+          `https://api.github.com/repos/${hub.repo}/git/trees/main?recursive=1`,
+        );
         const items: Array<{ path: string; type: string }> = tree?.tree ?? [];
         for (const it of items) {
           if (it.type !== 'blob' || !it.path.endsWith('/SKILL.md')) continue;
@@ -512,14 +588,20 @@ export class SkillManager {
   validateName(name: string): string {
     const n = name.trim().replace(/^\//, '');
     if (!/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(n)) {
-      throw new Error(`Invalid skill name "${name}". Use letters, digits, dots, dashes, underscores.`);
+      throw new Error(
+        `Invalid skill name "${name}". Use letters, digits, dots, dashes, underscores.`,
+      );
     }
     return n;
   }
 
   private ensureFrontmatter(name: string, content: string): string {
     if (/^---\r?\n/.test(content)) return content.endsWith('\n') ? content : content + '\n';
-    const desc = content.split('\n').map(l => l.trim()).find(l => l && !l.startsWith('#')) ?? `${name} skill`;
+    const desc =
+      content
+        .split('\n')
+        .map((l) => l.trim())
+        .find((l) => l && !l.startsWith('#')) ?? `${name} skill`;
     return `---\nname: ${name}\ndescription: ${desc.slice(0, 120)}\nversion: 1.0.0\n---\n\n${content.trim()}\n`;
   }
 
@@ -541,7 +623,12 @@ export class SkillManager {
 }
 
 /** Download a file listed by the GitHub contents API: raw CDN first, API (base64) fallback. */
-async function fetchFileContent(item: { download_url?: string; url?: string; content?: string; encoding?: string }): Promise<Buffer | null> {
+async function fetchFileContent(item: {
+  download_url?: string;
+  url?: string;
+  content?: string;
+  encoding?: string;
+}): Promise<Buffer | null> {
   if (item.download_url) {
     try {
       const r = await fetch(item.download_url, { headers: { 'User-Agent': 'mycode-cli' } });
@@ -553,7 +640,8 @@ async function fetchFileContent(item: { download_url?: string; url?: string; con
   if (item.url) {
     try {
       const j = await fetchJson(item.url);
-      if (j?.content && j.encoding === 'base64') return Buffer.from(j.content.replace(/\n/g, ''), 'base64');
+      if (j?.content && j.encoding === 'base64')
+        return Buffer.from(j.content.replace(/\n/g, ''), 'base64');
     } catch {
       /* ignore */
     }
@@ -562,7 +650,10 @@ async function fetchFileContent(item: { download_url?: string; url?: string; con
 }
 
 async function fetchJson(url: string): Promise<any> {
-  const headers: Record<string, string> = { 'User-Agent': 'mycode-cli', Accept: 'application/vnd.github+json' };
+  const headers: Record<string, string> = {
+    'User-Agent': 'mycode-cli',
+    Accept: 'application/vnd.github+json',
+  };
   if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   const r = await fetch(url, { headers });
   if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);

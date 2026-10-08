@@ -19,7 +19,11 @@ export interface ExecutorOptions {
  * the command is escaped as \" and cmd.exe receives a mangled command line.
  * `cmd /d /s /c "<command>"` strips exactly the outer quotes we add.
  */
-export function buildShellInvocation(command: string): { file: string; args: string[]; verbatim: boolean } {
+export function buildShellInvocation(command: string): {
+  file: string;
+  args: string[];
+  verbatim: boolean;
+} {
   if (platform() === 'win32') {
     const file = process.env.COMSPEC || 'cmd.exe';
     return { file, args: ['/d', '/s', '/c', `"${command}"`], verbatim: true };
@@ -30,9 +34,9 @@ export function buildShellInvocation(command: string): { file: string; args: str
 export function executeCommand(
   command: string,
   cwd: string,
-  options: ExecutorOptions = {}
+  options: ExecutorOptions = {},
 ): Promise<ExecutionResult> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const startTime = Date.now();
     const inv = buildShellInvocation(command);
     const timeout = options.timeout ?? 30_000;
@@ -62,7 +66,7 @@ export function executeCommand(
     const handleAbort = () => {
       killed = true;
       cleanup();
-      treeKill(proc.pid!, 'SIGTERM', err => {
+      treeKill(proc.pid!, 'SIGTERM', (err) => {
         if (err && (err as NodeJS.ErrnoException).code !== 'ESRCH') {
           proc.kill('SIGKILL');
         }
@@ -142,7 +146,7 @@ export function executeCommand(
       });
     });
 
-    proc.on('error', err => {
+    proc.on('error', (err) => {
       cleanup();
       const durationMs = Date.now() - startTime;
       resolve({

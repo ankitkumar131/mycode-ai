@@ -16,7 +16,7 @@ export const delegateTool: ToolModule = {
     function: {
       name: 'delegate',
       description:
-        "Delegate a self-contained subtask to a sub-agent with its own isolated context. " +
+        'Delegate a self-contained subtask to a sub-agent with its own isolated context. ' +
         "Use 'explore' to search and read without polluting your context (it cannot write files). " +
         "Use 'general' for an independent multi-step task that needs write access. " +
         "Only the sub-agent's written report comes back to you — its file reads do not.",
@@ -42,7 +42,9 @@ export const delegateTool: ToolModule = {
   execute: (async (
     args: Record<string, unknown>,
     _cwd: string,
-    options?: { delegate?: (req: { kind: 'explore' | 'general'; task: string }) => Promise<string> }
+    options?: {
+      delegate?: (req: { kind: 'explore' | 'general'; task: string }) => Promise<string>;
+    },
   ) => {
     const kind = args.agent === 'general' ? 'general' : 'explore';
     const task = typeof args.task === 'string' ? args.task.trim() : '';

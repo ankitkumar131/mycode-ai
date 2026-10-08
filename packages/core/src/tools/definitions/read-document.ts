@@ -23,8 +23,14 @@ export const readDocumentTool: ToolModule = {
         properties: {
           path: { type: 'string', description: 'Path to the document file' },
           page: { type: 'number', description: 'Return only this 1-based page/slide/sheet' },
-          offset: { type: 'number', description: 'Character offset to start from (for long documents)' },
-          maxChars: { type: 'number', description: 'Maximum characters to return (default 100000)' },
+          offset: {
+            type: 'number',
+            description: 'Character offset to start from (for long documents)',
+          },
+          maxChars: {
+            type: 'number',
+            description: 'Maximum characters to return (default 100000)',
+          },
         },
         required: ['path'],
       },

@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { todoStore, normalizeTodos, countTodos, hasOpenWork, type Todo } from './todo-store.js';
 
-const todo = (content: string, status: Todo['status'] = 'pending', priority?: Todo['priority']): Todo => ({
+const todo = (
+  content: string,
+  status: Todo['status'] = 'pending',
+  priority?: Todo['priority'],
+): Todo => ({
   content,
   status,
   ...(priority ? { priority } : {}),
@@ -47,7 +51,12 @@ describe('normalizeTodos', () => {
 });
 
 describe('countTodos / hasOpenWork', () => {
-  const list = [todo('a', 'completed'), todo('b', 'in_progress'), todo('c'), todo('d', 'cancelled')];
+  const list = [
+    todo('a', 'completed'),
+    todo('b', 'in_progress'),
+    todo('c'),
+    todo('d', 'cancelled'),
+  ];
 
   it('counts by status', () => {
     expect(countTodos(list)).toEqual({

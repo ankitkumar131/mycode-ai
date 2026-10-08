@@ -20,23 +20,23 @@ const MAGIC_SIGNATURES: Array<{ bytes: number[]; category: FileCategory; mime: s
   // PDF
   { bytes: [0x25, 0x50, 0x44, 0x46], category: 'pdf', mime: 'application/pdf' },
   // PNG
-  { bytes: [0x89, 0x50, 0x4E, 0x47], category: 'image', mime: 'image/png' },
+  { bytes: [0x89, 0x50, 0x4e, 0x47], category: 'image', mime: 'image/png' },
   // JPEG
-  { bytes: [0xFF, 0xD8, 0xFF], category: 'image', mime: 'image/jpeg' },
+  { bytes: [0xff, 0xd8, 0xff], category: 'image', mime: 'image/jpeg' },
   // GIF87a / GIF89a
   { bytes: [0x47, 0x49, 0x46, 0x38], category: 'image', mime: 'image/gif' },
   // WebP (RIFF...WEBP)
   { bytes: [0x52, 0x49, 0x46, 0x46], category: 'image', mime: 'image/webp' },
   // BMP
-  { bytes: [0x42, 0x4D], category: 'image', mime: 'image/bmp' },
+  { bytes: [0x42, 0x4d], category: 'image', mime: 'image/bmp' },
   // TIFF (little-endian)
-  { bytes: [0x49, 0x49, 0x2A, 0x00], category: 'image', mime: 'image/tiff' },
+  { bytes: [0x49, 0x49, 0x2a, 0x00], category: 'image', mime: 'image/tiff' },
   // TIFF (big-endian)
-  { bytes: [0x4D, 0x4D, 0x00, 0x2A], category: 'image', mime: 'image/tiff' },
+  { bytes: [0x4d, 0x4d, 0x00, 0x2a], category: 'image', mime: 'image/tiff' },
   // ZIP / DOCX / XLSX / JAR
-  { bytes: [0x50, 0x4B, 0x03, 0x04], category: 'binary', mime: 'application/zip' },
+  { bytes: [0x50, 0x4b, 0x03, 0x04], category: 'binary', mime: 'application/zip' },
   // EXE / DLL
-  { bytes: [0x4D, 0x5A], category: 'binary', mime: 'application/x-executable' },
+  { bytes: [0x4d, 0x5a], category: 'binary', mime: 'application/x-executable' },
   // MP3 (ID3)
   { bytes: [0x49, 0x44, 0x33], category: 'audio', mime: 'audio/mpeg' },
   // MP4 (ftyp)
@@ -74,9 +74,18 @@ const EXTENSION_MAP: Record<string, { category: FileCategory; mime: string }> = 
   '.wasm': { category: 'binary', mime: 'application/wasm' },
   '.bin': { category: 'binary', mime: 'application/octet-stream' },
   '.dat': { category: 'binary', mime: 'application/octet-stream' },
-  '.docx': { category: 'binary', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
-  '.xlsx': { category: 'binary', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
-  '.pptx': { category: 'binary', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' },
+  '.docx': {
+    category: 'binary',
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  },
+  '.xlsx': {
+    category: 'binary',
+    mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  },
+  '.pptx': {
+    category: 'binary',
+    mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  },
 };
 
 /**

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { renderStatusLine, compactStatus, fmtTokens, fmtDuration, fmtCost, estimateCost } from '../status-line.js';
+import {
+  renderStatusLine,
+  compactStatus,
+  fmtTokens,
+  fmtDuration,
+  fmtCost,
+  estimateCost,
+} from '../status-line.js';
 
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 
@@ -52,7 +59,7 @@ describe('renderStatusLine', () => {
         elapsedMs: 12_000,
         toolCalls: 7,
         filesTouched: 3,
-      })
+      }),
     );
     expect(out).toContain('anthropic/claude-sonnet-4');
     expect(out).toContain('40.0k/200.0k');
@@ -79,7 +86,9 @@ describe('renderStatusLine', () => {
   });
 
   it('never reports more than 100% context', () => {
-    expect(strip(renderStatusLine({ usedTokens: 500_000, contextWindow: 100_000 }))).toContain('100%');
+    expect(strip(renderStatusLine({ usedTokens: 500_000, contextWindow: 100_000 }))).toContain(
+      '100%',
+    );
   });
 
   it('omits the provider prefix when it equals the model', () => {
@@ -91,7 +100,13 @@ describe('renderStatusLine', () => {
 describe('compactStatus', () => {
   it('is a single line with the essentials', () => {
     const out = strip(
-      compactStatus({ model: 'm', usedTokens: 90_000, contextWindow: 100_000, toolCalls: 3, failover: 'x' })
+      compactStatus({
+        model: 'm',
+        usedTokens: 90_000,
+        contextWindow: 100_000,
+        toolCalls: 3,
+        failover: 'x',
+      }),
     );
     expect(out).toContain('90% ctx');
     expect(out).toContain('3 tools');
@@ -110,7 +125,9 @@ describe('approval bypass badge', () => {
   });
 
   it('renders a scoped badge verbatim', () => {
-    expect(stripAnsi(renderStatusLine({ ...base, bypass: 'ALLOW-ALL:writes' }))).toContain('ALLOW-ALL:writes');
+    expect(stripAnsi(renderStatusLine({ ...base, bypass: 'ALLOW-ALL:writes' }))).toContain(
+      'ALLOW-ALL:writes',
+    );
   });
 
   it('is absent when no bypass is active', () => {

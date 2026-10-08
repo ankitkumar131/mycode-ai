@@ -25,7 +25,9 @@ export class ContextLengthError extends Error {
   maxTokens?: number;
 
   constructor(providerName: string, maxTokens?: number) {
-    super(`Context length exceeded for provider: ${providerName}${maxTokens ? ` (max: ${maxTokens})` : ''}`);
+    super(
+      `Context length exceeded for provider: ${providerName}${maxTokens ? ` (max: ${maxTokens})` : ''}`,
+    );
     this.name = 'ContextLengthError';
     this.providerName = providerName;
     this.maxTokens = maxTokens;
@@ -85,7 +87,12 @@ export function classifyError(err: any, providerName: string): Error {
     return new RateLimitError(providerName, retryAfter);
   }
 
-  if (status === 401 || status === 403 || message.includes('auth') || message.includes('Unauthorized')) {
+  if (
+    status === 401 ||
+    status === 403 ||
+    message.includes('auth') ||
+    message.includes('Unauthorized')
+  ) {
     return new AuthError(providerName);
   }
 

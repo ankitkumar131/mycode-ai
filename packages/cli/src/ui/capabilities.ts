@@ -67,11 +67,11 @@ export function supportsCursorControl(): boolean {
     // These hosts enable VT processing for their children without us asking.
     const program = process.env.TERM_PROGRAM ?? '';
     const known =
-      !!process.env.WT_SESSION ||            // Windows Terminal
-      !!process.env.ConEmuANSI ||            // ConEmu / Cmder
-      !!process.env.ANSICON ||               // ANSICON shim
+      !!process.env.WT_SESSION || // Windows Terminal
+      !!process.env.ConEmuANSI || // ConEmu / Cmder
+      !!process.env.ANSICON || // ANSICON shim
       /vscode|hyper|alacritty|wezterm|mintty|windows terminal/i.test(program) ||
-      /xterm|cygwin|msys/i.test(term);       // Git Bash / MSYS / Cygwin
+      /xterm|cygwin|msys/i.test(term); // Git Bash / MSYS / Cygwin
 
     if (known) {
       cached = true;

@@ -28,7 +28,11 @@ describe('renderTodoPanel', () => {
 
   it('shows a progress bar and counts', () => {
     const out = strip(
-      renderTodoPanel([todo('one', 'completed'), todo('two', 'in_progress'), todo('three', 'pending')])
+      renderTodoPanel([
+        todo('one', 'completed'),
+        todo('two', 'in_progress'),
+        todo('three', 'pending'),
+      ]),
     );
     expect(out).toContain('Plan');
     expect(out).toContain('1/3');
@@ -42,7 +46,7 @@ describe('renderTodoPanel', () => {
         todo('doing', 'in_progress'),
         todo('todo', 'pending'),
         todo('nope', 'cancelled'),
-      ])
+      ]),
     );
     expect(out).toContain('✔');
     expect(out).toContain('•');
@@ -56,7 +60,7 @@ describe('renderTodoPanel', () => {
         todo('urgent', 'in_progress', 'high'),
         todo('later', 'pending', 'low'),
         todo('normal', 'pending', 'medium'),
-      ])
+      ]),
     );
     expect(out).toContain('!urgent');
     expect(out).toContain('·later');

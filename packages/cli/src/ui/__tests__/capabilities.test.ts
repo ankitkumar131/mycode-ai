@@ -3,8 +3,16 @@ import { supportsCursorControl, supportsColour, resetCapabilityCache } from '../
 
 /** Save and clear the environment variables the detector reads. */
 const KEYS = [
-  'TERM', 'TERM_PROGRAM', 'WT_SESSION', 'ConEmuANSI', 'ANSICON',
-  'MYCODE_NO_CURSOR', 'MYCODE_PLAIN', 'MYCODE_FORCE_CURSOR', 'NO_COLOR', 'FORCE_COLOR',
+  'TERM',
+  'TERM_PROGRAM',
+  'WT_SESSION',
+  'ConEmuANSI',
+  'ANSICON',
+  'MYCODE_NO_CURSOR',
+  'MYCODE_PLAIN',
+  'MYCODE_FORCE_CURSOR',
+  'NO_COLOR',
+  'FORCE_COLOR',
 ];
 
 describe('supportsCursorControl', () => {

@@ -113,7 +113,10 @@ function safeWindowFor(cfg: MyCodeConfig): number {
 }
 
 /** Resolve @path references, extracting PDFs/Office docs as text. */
-async function resolveFileReferences(input: string, cwd: string): Promise<{ text: string; files: string[] }> {
+async function resolveFileReferences(
+  input: string,
+  cwd: string,
+): Promise<{ text: string; files: string[] }> {
   const files: string[] = [];
   const re = /(^|\s)@([\w./\\~-]+)/g;
   let out = '';
@@ -147,7 +150,11 @@ async function resolveFileReferences(input: string, cwd: string): Promise<{ text
   return { text: out, files };
 }
 
-function getToolDetail(name: string, args: Record<string, unknown> | undefined, result: string): string {
+function getToolDetail(
+  name: string,
+  args: Record<string, unknown> | undefined,
+  result: string,
+): string {
   const arg = (k: string) => (args?.[k] !== undefined ? String(args[k]) : '');
   const short = (s: string, n = 60) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
   switch (name) {
@@ -162,7 +169,9 @@ function getToolDetail(name: string, args: Record<string, unknown> | undefined, 
     }
     case 'read_document':
     case 'read_pdf': {
-      const match = result.match(/(\d+) (?:pages|slides|sheets|paragraphs)/i) || result.match(/Length: (\d+) characters/);
+      const match =
+        result.match(/(\d+) (?:pages|slides|sheets|paragraphs)/i) ||
+        result.match(/Length: (\d+) characters/);
       return `${arg('path')}${match ? ` (${match[0]})` : ''}`;
     }
     case 'write_file':
@@ -172,7 +181,7 @@ function getToolDetail(name: string, args: Record<string, unknown> | undefined, 
     case 'glob':
       return arg('path') || arg('pattern');
     case 'search_files': {
-      const matches = result.split('\n').filter(l => /^\s*\d+\s*[│:]/.test(l)).length;
+      const matches = result.split('\n').filter((l) => /^\s*\d+\s*[│:]/.test(l)).length;
       return `${short(arg('pattern') || arg('query'), 40)}${matches ? ` — ${matches} matches` : ''}`;
     }
     case 'terminal':
@@ -214,7 +223,9 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
   const cfg = configManager.configExists() ? await configManager.load() : configManager.get();
 
   if (cfg.providers.length === 0) {
-    console.log(S.error(`\n  ${ICONS.cross} No providers configured. Run ${S.brand('mycode init')} first.\n`));
+    console.log(
+      S.error(`\n  ${ICONS.cross} No providers configured. Run ${S.brand('mycode init')} first.\n`),
+    );
     return;
   }
 
@@ -224,7 +235,8 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
   else if (prefersLightTheme()) setTheme('light');
 
   const router = new ProviderRouter(cfg.providers);
-  if (options.model || options.provider) router.setActiveProvider(options.model ?? options.provider!);
+  if (options.model || options.provider)
+    router.setActiveProvider(options.model ?? options.provider!);
   const version = getVersion();
   const cwd = process.cwd();
   const normalPrompt = `${S.brand(ICONS.sparkle)} ${S.brand('❯')} `;
@@ -285,7 +297,8 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       currentSpinner = null;
     }
   };
-  const stamp = () => (ui.timestamps ? chalk.hex(theme.dim)(`[${new Date().toTimeString().slice(0, 5)}] `) : '');
+  const stamp = () =>
+    ui.timestamps ? chalk.hex(theme.dim)(`[${new Date().toTimeString().slice(0, 5)}] `) : '';
 
   // ─── Failover coordination ──────────────────────────────────────────────
   //
@@ -304,11 +317,11 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       console.log(
         `  ${chalk.hex(theme.switch)('↻')} ${chalk.hex(theme.warning).bold('Provider failover')}  ` +
           `${chalk.hex(theme.textSecondary)(event.from)} ${chalk.hex(theme.textDim)('→')} ` +
-          `${chalk.hex(theme.brand).bold(event.to)}`
+          `${chalk.hex(theme.brand).bold(event.to)}`,
       );
       console.log(`    ${chalk.hex(theme.textDim)(event.reason)}`);
       console.log(
-        `    ${chalk.hex(theme.textDim)('Context preserved and checkpointed; the agent will continue where it left off.')}`
+        `    ${chalk.hex(theme.textDim)('Context preserved and checkpointed; the agent will continue where it left off.')}`,
       );
       console.log();
     },
@@ -340,11 +353,14 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
   // only its report returns. This is what keeps forty file reads out of the
   // parent's context.
 
-  const delegateFn = async (req: { kind: 'explore' | 'general'; task: string }): Promise<string> => {
+  const delegateFn = async (req: {
+    kind: 'explore' | 'general';
+    task: string;
+  }): Promise<string> => {
     stopSpinner();
     console.log(
       `  ${chalk.hex(theme.tool)('◆')} ${chalk.hex(theme.tool).bold(`sub-agent ${req.kind}`)} ` +
-        chalk.hex(theme.textDim)(truncate(req.task, 60))
+        chalk.hex(theme.textDim)(truncate(req.task, 60)),
     );
     try {
       const runner = new SubAgentRunner({
@@ -428,8 +444,14 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         isStreaming = false;
       }
       if (ui.focus || ui.verbose === 'off') return;
-      const meta = TOOL_ICONS[toolName] || { icon: ICONS.hexEmpty, verb: toolName, color: COLORS.accent };
-      currentSpinner = createToolSpinner(`${meta.verb} ${chalk.hex(theme.dim)(getToolDetail(toolName, args, ''))}`);
+      const meta = TOOL_ICONS[toolName] || {
+        icon: ICONS.hexEmpty,
+        verb: toolName,
+        color: COLORS.accent,
+      };
+      currentSpinner = createToolSpinner(
+        `${meta.verb} ${chalk.hex(theme.dim)(getToolDetail(toolName, args, ''))}`,
+      );
       currentSpinner.start();
       (currentSpinner as any).__args = args;
     },
@@ -437,7 +459,10 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       const args = (currentSpinner as any)?.__args as Record<string, unknown> | undefined;
       const icon = TOOL_ICONS[name] || { icon: ICONS.hexEmpty, verb: name, color: COLORS.accent };
       const detail = getToolDetail(name, args, result);
-      const dur = meta.durationMs > 1500 ? chalk.hex(theme.dim)(` ${(meta.durationMs / 1000).toFixed(1)}s`) : '';
+      const dur =
+        meta.durationMs > 1500
+          ? chalk.hex(theme.dim)(` ${(meta.durationMs / 1000).toFixed(1)}s`)
+          : '';
       if (currentSpinner) {
         const line = `${chalk.hex(icon.color)(icon.icon)} ${chalk.hex(meta.error ? theme.error : icon.color).bold(icon.verb)} ${S.dim(detail)}${dur}`;
         if (meta.error) currentSpinner.fail(line);
@@ -461,8 +486,18 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       }
       if ((ui.verbose === 'all' || ui.verbose === 'verbose') && !ui.focus && result) {
         const max = ui.verbose === 'verbose' ? 4000 : 600;
-        const body = result.length > max ? result.slice(0, max) + `\n… (${result.length - max} more chars)` : result;
-        console.log(chalk.hex(theme.dim)(body.split('\n').map(l => '      ' + l).join('\n')));
+        const body =
+          result.length > max
+            ? result.slice(0, max) + `\n… (${result.length - max} more chars)`
+            : result;
+        console.log(
+          chalk.hex(theme.dim)(
+            body
+              .split('\n')
+              .map((l) => '      ' + l)
+              .join('\n'),
+          ),
+        );
       }
     },
     onError(message: string) {
@@ -478,18 +513,17 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       console.log(
         `  ${chalk.hex(theme.accent)('⟲')} ${chalk.hex(theme.textDim)(
           `context compacted ${fmtTokens(before)} → ${fmtTokens(after)} tokens (−${pctSaved}%)` +
-            (pruned ? ` · ${pruned} stale tool output pruned` : '')
-        )}`
+            (pruned ? ` · ${pruned} stale tool output pruned` : ''),
+        )}`,
       );
     },
     onFinish() {
       stopSpinner();
     },
-
-
   });
   sessionRef = session;
-  if (cfg.disabledTools?.length) for (const t of cfg.disabledTools) session.getRegistry().disable(t);
+  if (cfg.disabledTools?.length)
+    for (const t of cfg.disabledTools) session.getRegistry().disable(t);
 
   // ─── MCP servers ────────────────────────────────────────────────────────
   //
@@ -502,11 +536,13 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         .then(({ servers, tools, failed }) => {
           if (tools > 0) {
             console.log(
-              `  ${chalk.hex(theme.tool)('⚙')} ${chalk.hex(theme.textDim)(`MCP: ${servers} server${servers === 1 ? '' : 's'}, ${tools} tool${tools === 1 ? '' : 's'} available`)}`
+              `  ${chalk.hex(theme.tool)('⚙')} ${chalk.hex(theme.textDim)(`MCP: ${servers} server${servers === 1 ? '' : 's'}, ${tools} tool${tools === 1 ? '' : 's'} available`)}`,
             );
           }
           for (const f of failed) {
-            console.log(`  ${chalk.hex(theme.warning)(ICONS.warning)} ${chalk.hex(theme.textDim)(`MCP ${f}`)}`);
+            console.log(
+              `  ${chalk.hex(theme.warning)(ICONS.warning)} ${chalk.hex(theme.textDim)(`MCP ${f}`)}`,
+            );
           }
         })
         .catch(() => {
@@ -521,15 +557,33 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
   if (options.continue || options.resume) {
     const saved = options.resume ? sessionStore.load(options.resume) : sessionStore.latestFor(cwd);
     if (saved) {
-      session.load({ id: saved.id, title: saved.title, messages: saved.messages, usage: saved.usage as any });
-      console.log(`  ${chalk.hex(theme.green)(ICONS.check)} Resumed session ${chalk.bold(saved.title ?? saved.id)} ${chalk.hex(theme.dim)(`(${saved.messages.filter(m => m.role === 'user').length} turns)`)}\n`);
-    } else console.log(`  ${chalk.hex(theme.amber)(ICONS.warning)} No saved session to resume — starting fresh.\n`);
+      session.load({
+        id: saved.id,
+        title: saved.title,
+        messages: saved.messages,
+        usage: saved.usage as any,
+      });
+      console.log(
+        `  ${chalk.hex(theme.green)(ICONS.check)} Resumed session ${chalk.bold(saved.title ?? saved.id)} ${chalk.hex(theme.dim)(`(${saved.messages.filter((m) => m.role === 'user').length} turns)`)}\n`,
+      );
+    } else
+      console.log(
+        `  ${chalk.hex(theme.amber)(ICONS.warning)} No saved session to resume — starting fresh.\n`,
+      );
   }
 
   const autosave = () => {
     try {
-      if (session.getContext().getMessages().some(m => m.role === 'user')) {
-        sessionStore.save({ ...session.toJSON(), model: formatProviderLabel(router.getCurrentProvider()) });
+      if (
+        session
+          .getContext()
+          .getMessages()
+          .some((m) => m.role === 'user')
+      ) {
+        sessionStore.save({
+          ...session.toJSON(),
+          model: formatProviderLabel(router.getCurrentProvider()),
+        });
       }
     } catch {
       /* ignore */
@@ -546,17 +600,20 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     const st = session.getState();
     const w = process.stdout.columns ?? 80;
     const pct = Math.min(100, (st.estimatedTokens / st.contextWindow) * 100);
-    const color = pct < 50 ? theme.success : pct < 80 ? theme.warning : pct < 95 ? '#fb923c' : theme.error;
+    const color =
+      pct < 50 ? theme.success : pct < 80 ? theme.warning : pct < 95 ? '#fb923c' : theme.error;
     const barW = 10;
     const filled = Math.round((pct / 100) * barW);
-    const bar = chalk.hex(color)('█'.repeat(filled)) + chalk.hex(theme.dim)('░'.repeat(barW - filled));
+    const bar =
+      chalk.hex(color)('█'.repeat(filled)) + chalk.hex(theme.dim)('░'.repeat(barW - filled));
     const sep = chalk.hex(theme.dim)(' │ ');
     // An active approval bypass leads the line: it is the one piece of state
     // that must never be hidden by width truncation below.
     const bypassBadge = ui.yolo ? 'YOLO' : approvals.badge();
     const parts = [
       ...(bypassBadge ? [chalk.hex(theme.error).bold(`⚡ ${bypassBadge}`)] : []),
-      chalk.hex(theme.green)('⚕ ') + chalk.hex(theme.greenGlow)(formatProviderLabel(router.getCurrentProvider())),
+      chalk.hex(theme.green)('⚕ ') +
+        chalk.hex(theme.greenGlow)(formatProviderLabel(router.getCurrentProvider())),
       chalk.hex(color)(`${fmtTokens(st.estimatedTokens)}/${fmtTokens(st.contextWindow)}`),
       `${bar} ${chalk.hex(color)(pct.toFixed(0) + '%')}`,
       chalk.hex(theme.dim)(fmtDuration(st.elapsedMs)),
@@ -596,11 +653,15 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       if (!t) return;
       if (t.startsWith('/steer ')) {
         session.steer(t.slice(7));
-        console.log(`  ${chalk.hex(theme.amber)('↪')} ${chalk.hex(theme.dim)('steering note queued')}`);
+        console.log(
+          `  ${chalk.hex(theme.amber)('↪')} ${chalk.hex(theme.dim)('steering note queued')}`,
+        );
         return;
       }
       session.queuePrompt(t);
-      console.log(`  ${chalk.hex(theme.amber)('⏳')} ${chalk.hex(theme.dim)(`queued for next turn (${session.queuedCount} pending) — Ctrl+C to interrupt now`)}`);
+      console.log(
+        `  ${chalk.hex(theme.amber)('⏳')} ${chalk.hex(theme.dim)(`queued for next turn (${session.queuedCount} pending) — Ctrl+C to interrupt now`)}`,
+      );
     },
   });
 
@@ -650,8 +711,10 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     turnStart = Date.now();
 
     const { text: resolvedInput, files } = await resolveFileReferences(prompt, cwd);
-    if (files.length > 0) console.log(`  ${S.dim(`Injected ${files.length} file(s): ${files.join(', ')}`)}`);
-    if (opts.display && ui.timestamps) console.log(`  ${stamp()}${chalk.hex(theme.dim)(opts.display.slice(0, 80))}`);
+    if (files.length > 0)
+      console.log(`  ${S.dim(`Injected ${files.length} file(s): ${files.join(', ')}`)}`);
+    if (opts.display && ui.timestamps)
+      console.log(`  ${stamp()}${chalk.hex(theme.dim)(opts.display.slice(0, 80))}`);
 
     const providerLabel = formatProviderLabel(router.getCurrentProvider());
     currentSpinner = createSpinner(providerLabel);
@@ -685,9 +748,12 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
           queued: st.queued,
           failover: st.failover?.summary ?? null,
           costUsd: cost ?? undefined,
-        })
+        }),
       );
-      if (st.aborted) console.log(`  ${chalk.hex(theme.warning)(ICONS.warning)} ${chalk.hex(theme.dim)('interrupted')}`);
+      if (st.aborted)
+        console.log(
+          `  ${chalk.hex(theme.warning)(ICONS.warning)} ${chalk.hex(theme.dim)('interrupted')}`,
+        );
       console.log();
       if (!supportsCursorControl() && ui.statusBar) {
         // No live region on this terminal, so report once per turn instead.
@@ -710,7 +776,9 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     // Drain queued prompts
     const next = session.dequeuePrompt();
     if (next) {
-      console.log(`  ${chalk.hex(theme.amber)('▶')} ${chalk.hex(theme.dim)('queued:')} ${next.slice(0, 100)}`);
+      console.log(
+        `  ${chalk.hex(theme.amber)('▶')} ${chalk.hex(theme.dim)('queued:')} ${next.slice(0, 100)}`,
+      );
       await dispatch(next);
     }
   };
@@ -719,7 +787,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     session,
     router,
     config: cfg,
-    saveConfig: c => configManager.save(c),
+    saveConfig: (c) => configManager.save(c),
     cwd,
     version,
     executeCommand: async (cmd, opts) => {
@@ -758,7 +826,10 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
 
     // Plain-language ponytail switch, checked before anything that would spend
     // a request on it.
-    const phrase = input.trim().toLowerCase().replace(/[.!]+$/, '');
+    const phrase = input
+      .trim()
+      .toLowerCase()
+      .replace(/[.!]+$/, '');
     const wantsMode = PONYTAIL_PHRASES[phrase];
     if (wantsMode && !input.startsWith('/')) {
       setPonytailMode(wantsMode);
@@ -768,9 +839,13 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         /* applies on the next turn regardless */
       }
       if (wantsMode === 'off') {
-        console.log(`  ${chalk.hex(theme.amber)('🐴')} ${chalk.bold('ponytail off')} ${chalk.hex(theme.dim)('— back to normal mode. /ponytail to resume.')}`);
+        console.log(
+          `  ${chalk.hex(theme.amber)('🐴')} ${chalk.bold('ponytail off')} ${chalk.hex(theme.dim)('— back to normal mode. /ponytail to resume.')}`,
+        );
       } else {
-        console.log(`  ${chalk.hex(theme.amber)('🐴')} ${chalk.bold('ponytail on')} ${chalk.hex(theme.dim)('— lazy senior dev mode. /ponytail off to stop.')}`);
+        console.log(
+          `  ${chalk.hex(theme.amber)('🐴')} ${chalk.bold('ponytail on')} ${chalk.hex(theme.dim)('— lazy senior dev mode. /ponytail off to stop.')}`,
+        );
       }
       return;
     }
@@ -785,7 +860,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         if (res?.type === 'model_change') {
           session.getContext().maxTokens = Math.min(
             contextWindowFor(cfg, router.getCurrentProvider()),
-            safeWindowFor(cfg)
+            safeWindowFor(cfg),
           );
         }
       } catch (err: any) {
@@ -844,8 +919,8 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     if (u.turns > 0) {
       console.log(
         chalk.hex(theme.dim)(
-          `\n  Session ${session.id} saved · ${u.turns} turn(s) · ${fmtTokens(u.totalTokens)} tokens · resume with: mycode --continue\n`
-        )
+          `\n  Session ${session.id} saved · ${u.turns} turn(s) · ${fmtTokens(u.totalTokens)} tokens · resume with: mycode --continue\n`,
+        ),
       );
     }
   }

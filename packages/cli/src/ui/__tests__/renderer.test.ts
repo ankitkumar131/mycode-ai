@@ -100,8 +100,8 @@ describe('renderBox', () => {
     renderBox('Test Title', 'Content line');
     spy.mockRestore();
     expect(log.length).toBeGreaterThan(0);
-    expect(log.some(l => l.includes('Test Title'))).toBe(true);
-    expect(log.some(l => l.includes('Content line'))).toBe(true);
+    expect(log.some((l) => l.includes('Test Title'))).toBe(true);
+    expect(log.some((l) => l.includes('Content line'))).toBe(true);
   });
 });
 
@@ -112,6 +112,6 @@ describe('renderCodeBlock', () => {
     renderCodeBlock('const x = 1;', 'js');
     spy.mockRestore();
     expect(log.length).toBeGreaterThan(0);
-    expect(log.some(l => l.includes('js'))).toBe(true);
+    expect(log.some((l) => l.includes('js'))).toBe(true);
   });
 });

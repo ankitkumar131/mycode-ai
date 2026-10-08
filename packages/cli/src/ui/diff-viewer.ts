@@ -52,7 +52,12 @@ export function parseUnifiedDiff(raw: string): ParsedFile[] {
       }
       continue;
     }
-    if (line.startsWith('+++ ') || line.startsWith('index ') || line.startsWith('new file') || line.startsWith('deleted file')) {
+    if (
+      line.startsWith('+++ ') ||
+      line.startsWith('index ') ||
+      line.startsWith('new file') ||
+      line.startsWith('deleted file')
+    ) {
       if (line.startsWith('new file')) {
         // keep going
       }
@@ -108,7 +113,7 @@ export function buildDiffLines(files: ParsedFile[], width: number): string[] {
       `  ${chalk.hex(theme.brand).bold(cleanPath(file.path))}  ` +
         chalk.hex(theme.diffAdd)(`+${file.additions}`) +
         ' ' +
-        chalk.hex(theme.diffDel)(`-${file.deletions}`)
+        chalk.hex(theme.diffDel)(`-${file.deletions}`),
     );
     out.push(`  ${bar}`);
     for (const hunk of file.hunks) {
@@ -128,7 +133,11 @@ export function renderDiff(raw: string, opts: DiffViewerOptions = {}): string {
   const max = opts.maxLines ?? lines.length;
   if (lines.length > max) {
     const shown = lines.slice(0, max);
-    shown.push(chalk.hex(theme.textDim)(`  … ${lines.length - max} more lines ( /diff --view for the pager )`));
+    shown.push(
+      chalk.hex(theme.textDim)(
+        `  … ${lines.length - max} more lines ( /diff --view for the pager )`,
+      ),
+    );
     return shown.join('\n');
   }
   return lines.join('\n');
@@ -154,7 +163,8 @@ export async function openDiffViewer(raw: string): Promise<void> {
   // File boundary indices for n/p navigation.
   const fileStarts: number[] = [];
   lines.forEach((l, i) => {
-    if (/^\s{2}\S/.test(l) && !l.includes('─') && (lines[i + 1] ?? '').includes('─')) fileStarts.push(i);
+    if (/^\s{2}\S/.test(l) && !l.includes('─') && (lines[i + 1] ?? '').includes('─'))
+      fileStarts.push(i);
   });
 
   let offset = 0;
@@ -169,13 +179,17 @@ export async function openDiffViewer(raw: string): Promise<void> {
       ' ' +
       chalk.hex(theme.diffDel)(`-${files.reduce((a, f) => a + f.deletions, 0)}`);
     process.stdout.write(header + '\n');
-    process.stdout.write(chalk.hex(theme.textDim)(`  j/k scroll  space/b page  n/p file  g/G ends  q quit`) + '\n');
+    process.stdout.write(
+      chalk.hex(theme.textDim)(`  j/k scroll  space/b page  n/p file  g/G ends  q quit`) + '\n',
+    );
 
     for (let i = offset; i < Math.min(lines.length, offset + rows); i++) {
       process.stdout.write(lines[i] + '\n');
     }
     const pct = maxOffset === 0 ? 100 : Math.round((offset / maxOffset) * 100);
-    process.stdout.write(chalk.hex(theme.textDim)(`\n  ${pct}%  line ${offset + 1}/${lines.length}`));
+    process.stdout.write(
+      chalk.hex(theme.textDim)(`\n  ${pct}%  line ${offset + 1}/${lines.length}`),
+    );
   };
 
   return new Promise<void>((resolve) => {
@@ -201,12 +215,27 @@ export async function openDiffViewer(raw: string): Promise<void> {
         return;
       }
       switch (name) {
-        case 'j': case 'down': offset = Math.min(maxOffset, offset + 1); break;
-        case 'k': case 'up': offset = Math.max(0, offset - 1); break;
-        case 'space': case 'f': offset = Math.min(maxOffset, offset + rows); break;
-        case 'b': offset = Math.max(0, offset - rows); break;
-        case 'g': offset = 0; break;
-        case 'G': offset = maxOffset; break;
+        case 'j':
+        case 'down':
+          offset = Math.min(maxOffset, offset + 1);
+          break;
+        case 'k':
+        case 'up':
+          offset = Math.max(0, offset - 1);
+          break;
+        case 'space':
+        case 'f':
+          offset = Math.min(maxOffset, offset + rows);
+          break;
+        case 'b':
+          offset = Math.max(0, offset - rows);
+          break;
+        case 'g':
+          offset = 0;
+          break;
+        case 'G':
+          offset = maxOffset;
+          break;
         case 'n': {
           const next = fileStarts.find((i) => i > offset);
           offset = Math.min(maxOffset, next ?? maxOffset);
@@ -217,7 +246,8 @@ export async function openDiffViewer(raw: string): Promise<void> {
           offset = Math.max(0, prev ?? 0);
           break;
         }
-        default: return;
+        default:
+          return;
       }
       draw();
     };

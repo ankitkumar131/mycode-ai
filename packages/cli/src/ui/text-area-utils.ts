@@ -21,13 +21,19 @@ export function charWidth(ch: string): number {
   const c = ch.codePointAt(0);
   if (c === undefined || c < 32) return 0;
   if (
-    c >= 0x1100 && (c <= 0x115f || c === 0x2329 || c === 0x232a ||
-    (c >= 0x2e80 && c <= 0xa4cf && c !== 0x303f) ||
-    (c >= 0xac00 && c <= 0xd7a3) ||
-    (c >= 0xf900 && c <= 0xfaff) ||
-    (c >= 0xfe10 && c <= 0xfe19) || (c >= 0xfe30 && c <= 0xfe6f) ||
-    (c >= 0xff00 && c <= 0xff60) || (c >= 0xffe0 && c <= 0xffe6) ||
-    (c >= 0x1f300 && c <= 0x1faff) || (c >= 0x20000 && c <= 0x3fffd))
+    c >= 0x1100 &&
+    (c <= 0x115f ||
+      c === 0x2329 ||
+      c === 0x232a ||
+      (c >= 0x2e80 && c <= 0xa4cf && c !== 0x303f) ||
+      (c >= 0xac00 && c <= 0xd7a3) ||
+      (c >= 0xf900 && c <= 0xfaff) ||
+      (c >= 0xfe10 && c <= 0xfe19) ||
+      (c >= 0xfe30 && c <= 0xfe6f) ||
+      (c >= 0xff00 && c <= 0xff60) ||
+      (c >= 0xffe0 && c <= 0xffe6) ||
+      (c >= 0x1f300 && c <= 0x1faff) ||
+      (c >= 0x20000 && c <= 0x3fffd))
   ) {
     return 2;
   }
@@ -116,7 +122,12 @@ export function indexAtVisual(text: string, row: number, col: number, W: number)
  * Same as buildRows but the first row is prefixed by a fixed visible-width
  * prompt (so it only has `W - promptWidth` columns available).
  */
-export function buildInputRows(promptWidth: number, text: string, W: number, gutterWidth = 0): RowSpan[] {
+export function buildInputRows(
+  promptWidth: number,
+  text: string,
+  W: number,
+  gutterWidth = 0,
+): RowSpan[] {
   const rows: RowSpan[] = [];
   const parts = text.split('\n');
   let idx = 0;
@@ -153,7 +164,7 @@ export function buildInputRows(promptWidth: number, text: string, W: number, gut
 export function posOfIndexInput(
   rows: RowSpan[],
   index: number,
-  text: string
+  text: string,
 ): { row: number; col: number } {
   if (rows.length === 0) return { row: 0, col: 0 };
   if (index >= text.length) {
@@ -168,11 +179,7 @@ export function posOfIndexInput(
 }
 
 /** Map a visual position to an index within prompt-prefixed input rows. */
-export function indexAtVisualInput(
-  rows: RowSpan[],
-  row: number,
-  col: number
-): number {
+export function indexAtVisualInput(rows: RowSpan[], row: number, col: number): number {
   if (rows.length === 0) return 0;
   const r = Math.min(Math.max(row, 0), rows.length - 1);
   return rows[r].start + Math.min(Math.max(col, 0), rows[r].len);

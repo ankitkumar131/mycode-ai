@@ -5,7 +5,17 @@ import { detectFileType } from '../file-detector.js';
 import { readDocumentTool } from './read-document.js';
 
 const DOC_EXTENSIONS = new Set([
-  '.pdf', '.docx', '.xlsx', '.pptx', '.odt', '.rtf', '.csv', '.tsv', '.epub', '.html', '.htm',
+  '.pdf',
+  '.docx',
+  '.xlsx',
+  '.pptx',
+  '.odt',
+  '.rtf',
+  '.csv',
+  '.tsv',
+  '.epub',
+  '.html',
+  '.htm',
 ]);
 
 const DEFAULT_LINE_LIMIT = 500;
@@ -25,7 +35,8 @@ export const readFileTool: ToolModule = {
     type: 'function',
     function: {
       name: 'read_file',
-      description: 'Read the contents of a file at the given path with line numbers. Efficiently reads text files, code, PDFs, Word docs (.docx), Excel spreadsheets (.xlsx, .csv), and presentations (.pptx).',
+      description:
+        'Read the contents of a file at the given path with line numbers. Efficiently reads text files, code, PDFs, Word docs (.docx), Excel spreadsheets (.xlsx, .csv), and presentations (.pptx).',
       parameters: {
         type: 'object',
         properties: {
@@ -50,7 +61,8 @@ export const readFileTool: ToolModule = {
   async execute(args, cwd, options) {
     const filePath = typeof args.path === 'string' ? args.path : '';
     const offset = typeof args.offset === 'number' ? Math.max(1, args.offset) : 1;
-    const limit = typeof args.limit === 'number' ? Math.min(2000, Math.max(1, args.limit)) : DEFAULT_LINE_LIMIT;
+    const limit =
+      typeof args.limit === 'number' ? Math.min(2000, Math.max(1, args.limit)) : DEFAULT_LINE_LIMIT;
 
     if (!filePath) {
       throw new Error('Path is required');
@@ -94,9 +106,10 @@ export const readFileTool: ToolModule = {
       const sliced = lines.slice(startIndex, endIndex);
 
       const hasMore = endIndex < totalLines;
-      const header = (hasMore || offset > 1)
-        ? `[File: ${filePath} | Showing lines ${offset}–${endIndex} of ${totalLines}${hasMore ? ' (Use offset=' + (endIndex + 1) + ' to read further)' : ''}]\n`
-        : `[File: ${filePath} | Total lines: ${totalLines}]\n`;
+      const header =
+        hasMore || offset > 1
+          ? `[File: ${filePath} | Showing lines ${offset}–${endIndex} of ${totalLines}${hasMore ? ' (Use offset=' + (endIndex + 1) + ' to read further)' : ''}]\n`
+          : `[File: ${filePath} | Total lines: ${totalLines}]\n`;
 
       return header + formatLineNumbered(sliced, offset);
     } catch (err) {

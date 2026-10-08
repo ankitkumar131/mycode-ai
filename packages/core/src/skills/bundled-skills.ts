@@ -9,7 +9,11 @@ export interface BundledSkill {
   files: Record<string, string>; // relative path -> content (always includes SKILL.md)
 }
 
-const skill = (name: string, skillMd: string, extra: Record<string, string> = {}): BundledSkill => ({
+const skill = (
+  name: string,
+  skillMd: string,
+  extra: Record<string, string> = {},
+): BundledSkill => ({
   name,
   files: { 'SKILL.md': skillMd.trim() + '\n', ...extra },
 });
@@ -141,7 +145,7 @@ The user wants a plan first — no code changes. Triggered via \`/plan [task]\`.
 ## Pitfalls
 - Don't start implementing "just a little". Plan only.
 - Keep steps small enough to be individually verifiable.
-`
+`,
   ),
 
   skill(
@@ -171,7 +175,7 @@ User asks to review code, a PR, or the current git diff.
 ## Pitfalls
 - Don't nitpick formatting if a formatter is configured.
 - Flag missing tests for new behaviour.
-`
+`,
   ),
 
   skill(
@@ -196,7 +200,7 @@ tags: [testing, tdd]
 ## Pitfalls
 - Never mark a task done without actually running the tests.
 - If the runner isn't installed, say so and show the install command instead of guessing.
-`
+`,
   ),
 
   skill(
@@ -223,7 +227,7 @@ argument-hint: "<error or description>"
 ## Pitfalls
 - Don't shotgun multiple changes at once.
 - If you can't reproduce, say so and ask for more detail.
-`
+`,
   ),
 
   skill(
@@ -251,7 +255,7 @@ argument-hint: "[message hint]"
 ## Pitfalls
 - Never commit .env files or credentials.
 - Never amend or force-push unless the user explicitly asks.
-`
+`,
   ),
 
   skill(
@@ -279,7 +283,7 @@ The user points at a .pdf, .docx, .xlsx, .pptx, .odt, .rtf, .csv, .epub or .html
 ## Pitfalls
 - Scanned PDFs may have no text layer — say so instead of hallucinating.
 - Spreadsheets: mention sheet names and header rows.
-`
+`,
   ),
 
   skill(
@@ -307,6 +311,6 @@ argument-hint: "<what the skill should teach>"
 ## Pitfalls
 - No invented commands. Every command must exist on the user's system or be installable.
 - Do not paste large source passages — distil.
-`
+`,
   ),
 ];

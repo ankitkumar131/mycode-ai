@@ -24,7 +24,13 @@ function parseChatFlags(args: string[]): { opts: ChatOptions; rest: string[] } {
     else if (a === '--query' || a === '-q' || a === '-Q') opts.query = next();
     else if (a === '--model' || a === '-m') opts.model = next();
     else if (a.startsWith('--model=')) opts.model = a.slice(8);
-    else if (a === '--yolo' || a === '--dangerously-skip-permissions' || a === '--allow-all' || a === '--dangerously-allow-all') opts.yolo = true;
+    else if (
+      a === '--yolo' ||
+      a === '--dangerously-skip-permissions' ||
+      a === '--allow-all' ||
+      a === '--dangerously-allow-all'
+    )
+      opts.yolo = true;
     else rest.push(a);
   }
   if (!opts.query && rest.length && !opts.continue) {
@@ -34,9 +40,28 @@ function parseChatFlags(args: string[]): { opts: ChatOptions; rest: string[] } {
   return { opts, rest };
 }
 
-const CHAT_FLAGS = new Set(['--continue', '-c', '--resume', '-r', '--query', '-q', '-Q', '--model', '-m', '--yolo', '--allow-all', '--dangerously-skip-permissions']);
+const CHAT_FLAGS = new Set([
+  '--continue',
+  '-c',
+  '--resume',
+  '-r',
+  '--query',
+  '-q',
+  '-Q',
+  '--model',
+  '-m',
+  '--yolo',
+  '--allow-all',
+  '--dangerously-skip-permissions',
+]);
 const first = argv[0];
-const cmd = first === undefined || CHAT_FLAGS.has(first) || first.startsWith('--resume=') || first.startsWith('--model=') ? 'chat' : first;
+const cmd =
+  first === undefined ||
+  CHAT_FLAGS.has(first) ||
+  first.startsWith('--resume=') ||
+  first.startsWith('--model=')
+    ? 'chat'
+    : first;
 const args = cmd === 'chat' && first !== 'chat' ? argv : argv.slice(1);
 
 async function main() {
@@ -90,7 +115,10 @@ async function main() {
       const { sessionStore } = await import('@mycode/core');
       const list = sessionStore.list(30);
       if (!list.length) console.log('\n  No saved sessions.\n');
-      for (const s of list) console.log(`  ${s.id}  ${s.updatedAt.slice(0, 16).replace('T', ' ')}  ${(s.title ?? '').padEnd(24)} ${s.firstPrompt.slice(0, 60)}`);
+      for (const s of list)
+        console.log(
+          `  ${s.id}  ${s.updatedAt.slice(0, 16).replace('T', ' ')}  ${(s.title ?? '').padEnd(24)} ${s.firstPrompt.slice(0, 60)}`,
+        );
       console.log();
       break;
     }
@@ -99,10 +127,18 @@ async function main() {
       const cm = new ConfigManager();
       const cfg = cm.configExists() ? await cm.load() : cm.get();
       console.log(`\n  Node:      ${process.version}`);
-      console.log(`  Config:    ${cm.getConfigPath()} ${cm.configExists() ? '✓' : '✗ (run mycode init)'}`);
-      console.log(`  Providers: ${cfg.providers.length ? cfg.providers.map(p => p.name).join(', ') : 'none'}`);
-      console.log(`  Skills:    ${skillManager.list(process.cwd()).length} in ${skillManager.getSkillsDir()}`);
-      console.log(`  Editor:    ${process.env.VISUAL || process.env.EDITOR || '(unset — Ctrl+G uses vi/notepad)'}`);
+      console.log(
+        `  Config:    ${cm.getConfigPath()} ${cm.configExists() ? '✓' : '✗ (run mycode init)'}`,
+      );
+      console.log(
+        `  Providers: ${cfg.providers.length ? cfg.providers.map((p) => p.name).join(', ') : 'none'}`,
+      );
+      console.log(
+        `  Skills:    ${skillManager.list(process.cwd()).length} in ${skillManager.getSkillsDir()}`,
+      );
+      console.log(
+        `  Editor:    ${process.env.VISUAL || process.env.EDITOR || '(unset — Ctrl+G uses vi/notepad)'}`,
+      );
       const { describeTerminal } = await import('./ui/capabilities.js');
       console.log(`  Terminal:  ${describeTerminal()}\n`);
       break;

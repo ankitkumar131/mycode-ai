@@ -72,31 +72,58 @@ export const S = new Proxy({} as Record<string, (s: string) => string>, {
   get: (_t, prop: string) => {
     const t = getTokens();
     switch (prop) {
-      case 'brand': return chalk.hex(t.brand);
-      case 'brandBold': return chalk.hex(t.brand).bold;
-      case 'accent': return chalk.hex(t.accent);
-      case 'accentBold': return chalk.hex(t.accent).bold;
-      case 'cyan': return chalk.hex(t.brandGlow);
-      case 'cyanBold': return chalk.hex(t.brandGlow).bold;
-      case 'gold': return chalk.hex(t.accentGold);
-      case 'success': return chalk.hex(t.success);
-      case 'successBold': return chalk.hex(t.success).bold;
-      case 'warning': return chalk.hex(t.warning);
-      case 'warningBold': return chalk.hex(t.warning).bold;
-      case 'error': return chalk.hex(t.error);
-      case 'errorBold': return chalk.hex(t.error).bold;
-      case 'text': return chalk.hex(t.text);
-      case 'muted': return chalk.hex(t.textMuted);
-      case 'dim': return chalk.hex(t.textDim);
-      case 'dimmer': return chalk.hex(t.brandDim);
-      case 'code': return (s: string) => chalk.hex(t.text).bgHex(t.codeBg)(s);
-      case 'codespan': return (s: string) => chalk.hex(t.brandGlow).bgHex(t.codeBgDark)(s);
-      default: return (s: string) => s;
+      case 'brand':
+        return chalk.hex(t.brand);
+      case 'brandBold':
+        return chalk.hex(t.brand).bold;
+      case 'accent':
+        return chalk.hex(t.accent);
+      case 'accentBold':
+        return chalk.hex(t.accent).bold;
+      case 'cyan':
+        return chalk.hex(t.brandGlow);
+      case 'cyanBold':
+        return chalk.hex(t.brandGlow).bold;
+      case 'gold':
+        return chalk.hex(t.accentGold);
+      case 'success':
+        return chalk.hex(t.success);
+      case 'successBold':
+        return chalk.hex(t.success).bold;
+      case 'warning':
+        return chalk.hex(t.warning);
+      case 'warningBold':
+        return chalk.hex(t.warning).bold;
+      case 'error':
+        return chalk.hex(t.error);
+      case 'errorBold':
+        return chalk.hex(t.error).bold;
+      case 'text':
+        return chalk.hex(t.text);
+      case 'muted':
+        return chalk.hex(t.textMuted);
+      case 'dim':
+        return chalk.hex(t.textDim);
+      case 'dimmer':
+        return chalk.hex(t.brandDim);
+      case 'code':
+        return (s: string) => chalk.hex(t.text).bgHex(t.codeBg)(s);
+      case 'codespan':
+        return (s: string) => chalk.hex(t.brandGlow).bgHex(t.codeBgDark)(s);
+      default:
+        return (s: string) => s;
     }
   },
 });
 
-export { getThemeName, setTheme, listThemes, themeNames, getTokens, DEFAULT_THEME } from './registry.js';
+export {
+  getThemeName,
+  setTheme,
+  listThemes,
+  themeNames,
+  getTokens,
+  DEFAULT_THEME,
+} from './registry.js';
 export type { ThemeTokens, Theme } from './registry.js';
 
 export const ICONS = {
@@ -170,7 +197,7 @@ export function heavyDivider(): string {
 
 export function sectionHeader(
   label: string,
-  opts?: { accent?: 'amber' | 'green'; width?: number }
+  opts?: { accent?: 'amber' | 'green'; width?: number },
 ): string {
   const w = opts?.width ?? Math.min(process.stdout.columns ?? 80, 80);
   const accentColor = opts?.accent === 'amber' ? theme.amber : theme.green;
@@ -188,7 +215,7 @@ export function frame(
     width?: number;
     padding?: number;
     titleColor?: string;
-  }
+  },
 ): string {
   const bc = opts?.borderColor ?? theme.green;
   const tc = opts?.titleColor ?? theme.green;
@@ -202,19 +229,14 @@ export function frame(
     const titlePart = `┌─ ${chalk.hex(tc).bold(opts.title)} `;
     const titlePartVisible = stripAnsi(titlePart).length;
     const topFill = Math.max(0, boxW - titlePartVisible - 1);
-    topBorder =
-      chalk.hex(bc)(titlePart) + chalk.hex(bc)('─'.repeat(topFill)) + chalk.hex(bc)('┐');
+    topBorder = chalk.hex(bc)(titlePart) + chalk.hex(bc)('─'.repeat(topFill)) + chalk.hex(bc)('┐');
   } else {
     topBorder = chalk.hex(bc)('┌' + '─'.repeat(boxW - 2) + '┐');
   }
 
   const bottomBorder = chalk.hex(bc)('└' + '─'.repeat(boxW - 2) + '┘');
   const contentLines = content.split('\n');
-  const padded = [
-    ...Array(pad).fill(''),
-    ...contentLines,
-    ...Array(pad).fill(''),
-  ];
+  const padded = [...Array(pad).fill(''), ...contentLines, ...Array(pad).fill('')];
   const framed = padded
     .map((line) => {
       const visible = stripAnsi(line).length;
@@ -277,5 +299,8 @@ export function hr(width?: number): string {
 
 export function indent(text: string, spaces = 2): string {
   const pad = ' '.repeat(spaces);
-  return text.split('\n').map(l => l ? `${pad}${l}` : l).join('\n');
+  return text
+    .split('\n')
+    .map((l) => (l ? `${pad}${l}` : l))
+    .join('\n');
 }

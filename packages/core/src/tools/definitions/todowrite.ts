@@ -59,7 +59,11 @@ export const todoWriteTool: ToolModule = {
       },
     },
   },
-  execute: (async (args: Record<string, unknown>, _cwd: string, options?: { sessionId?: string }) => {
+  execute: (async (
+    args: Record<string, unknown>,
+    _cwd: string,
+    options?: { sessionId?: string },
+  ) => {
     const sessionId = options?.sessionId ?? 'default';
     const raw = args.todos ?? args.items;
     const merge = args.merge === true;
@@ -77,7 +81,12 @@ export const todoWriteTool: ToolModule = {
     // Return a rendered checklist rather than JSON: the model re-reads its own
     // plan every turn, and a rendered list costs fewer tokens than the object
     // while being easier to follow.
-    const glyph = { completed: '[x]', in_progress: '[>]', cancelled: '[-]', pending: '[ ]' } as const;
+    const glyph = {
+      completed: '[x]',
+      in_progress: '[>]',
+      cancelled: '[-]',
+      pending: '[ ]',
+    } as const;
     const counts = { completed: 0, in_progress: 0, pending: 0, cancelled: 0 };
     for (const t of todos) counts[t.status]++;
 

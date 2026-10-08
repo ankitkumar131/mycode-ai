@@ -83,7 +83,7 @@ export const listDirTool: ToolModule = {
 
         if (isDir && depth < maxDepth) {
           const sub = await list(fullPath, depth + 1);
-          entries.push(...sub.map(e => `  ${e}`));
+          entries.push(...sub.map((e) => `  ${e}`));
         }
       }
 

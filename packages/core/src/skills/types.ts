@@ -54,4 +54,5 @@ export interface SkillIndexEntry {
   origin: InstalledSkill['origin'];
 }
 
-export type SkillManageAction = 'create' | 'edit' | 'delete' | 'patch' | 'write_file' | 'delete_file';
+export type SkillManageAction =
+  'create' | 'edit' | 'delete' | 'patch' | 'write_file' | 'delete_file';

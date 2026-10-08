@@ -1,5 +1,14 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { THEMES, DEFAULT_THEME, listThemes, themeNames, getTheme, getTokens, getThemeName, setTheme } from '../themes/registry.js';
+import {
+  THEMES,
+  DEFAULT_THEME,
+  listThemes,
+  themeNames,
+  getTheme,
+  getTokens,
+  getThemeName,
+  setTheme,
+} from '../themes/registry.js';
 import { theme as legacyTheme } from '../themes/theme.js';
 
 afterEach(() => setTheme(DEFAULT_THEME));

@@ -6,7 +6,9 @@ import { resetCapabilityCache } from '../capabilities.js';
 const STATUS = ' ⚕ provider/model-name │ 0/128.0k │ ██████████ 0% │ 2s';
 
 /** Install a fake terminal in front of process.stdout. */
-function installTerminal(opts: { width?: number; height?: number; ansi?: boolean; startRow?: number } = {}) {
+function installTerminal(
+  opts: { width?: number; height?: number; ansi?: boolean; startRow?: number } = {},
+) {
   const term = new FakeTerminal(opts);
   const original = {
     write: process.stdout.write.bind(process.stdout),
@@ -35,10 +37,19 @@ function installTerminal(opts: { width?: number; height?: number; ansi?: boolean
     term,
     restore() {
       (process.stdout as unknown as { write: unknown }).write = original.write;
-      Object.defineProperty(process.stdout, 'columns', { value: original.columns, configurable: true });
+      Object.defineProperty(process.stdout, 'columns', {
+        value: original.columns,
+        configurable: true,
+      });
       Object.defineProperty(process.stdout, 'rows', { value: original.rows, configurable: true });
-      Object.defineProperty(process.stdout, 'isTTY', { value: original.stdoutIsTTY, configurable: true });
-      Object.defineProperty(process.stdin, 'isTTY', { value: original.stdinIsTTY, configurable: true });
+      Object.defineProperty(process.stdout, 'isTTY', {
+        value: original.stdoutIsTTY,
+        configurable: true,
+      });
+      Object.defineProperty(process.stdin, 'isTTY', {
+        value: original.stdinIsTTY,
+        configurable: true,
+      });
       (process.stdin as unknown as { setRawMode: unknown }).setRawMode = original.setRawMode;
       (process.stdin as unknown as { resume: unknown }).resume = original.resume;
       (process.stdin as unknown as { pause: unknown }).pause = original.pause;
@@ -56,7 +67,13 @@ async function settle(area: TextArea, times = 6): Promise<void> {
 
 function type(area: TextArea, str: string): void {
   for (const ch of str) {
-    process.stdin.emit('keypress', ch, { name: ch, sequence: ch, ctrl: false, meta: false, shift: false });
+    process.stdin.emit('keypress', ch, {
+      name: ch,
+      sequence: ch,
+      ctrl: false,
+      meta: false,
+      shift: false,
+    });
   }
 }
 
@@ -64,7 +81,11 @@ describe('composer redraw', () => {
   let harness: ReturnType<typeof installTerminal> | null = null;
   let live: TextArea[] = [];
 
-  const open = (opts: { prompt: string; placeholder?: string; statusLine?: () => string | null }) => {
+  const open = (opts: {
+    prompt: string;
+    placeholder?: string;
+    statusLine?: () => string | null;
+  }) => {
     const area = new TextArea(opts);
     live.push(area);
     return area;

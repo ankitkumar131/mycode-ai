@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { FailoverCoordinator, effectiveWindowFor, safeContextWindow, describeFailoverReason } from './failover.js';
+import {
+  FailoverCoordinator,
+  effectiveWindowFor,
+  safeContextWindow,
+  describeFailoverReason,
+} from './failover.js';
 import type { ProviderConfig } from './types.js';
 
 const provider = (name: string, model: string, contextWindow?: number): ProviderConfig => ({
@@ -16,7 +21,9 @@ describe('effectiveWindowFor', () => {
   });
 
   it('consults a caller-supplied table before its built-in hints', () => {
-    expect(effectiveWindowFor(provider('p', 'my-finetune-v2'), { 'finetune-v2': 64_000 })).toBe(64_000);
+    expect(effectiveWindowFor(provider('p', 'my-finetune-v2'), { 'finetune-v2': 64_000 })).toBe(
+      64_000,
+    );
   });
 
   it('infers a large window for known long-context models', () => {
@@ -40,9 +47,9 @@ describe('safeContextWindow', () => {
     // Compacting against the strongest provider is how a failover to the
     // weakest one overflows the moment it takes over.
     const chain = [
-      provider('a', 'gemini-2.5-pro'),      // 1M
-      provider('b', 'gpt-4o'),              // 128k
-      provider('c', 'local', 8_000),        // explicit
+      provider('a', 'gemini-2.5-pro'), // 1M
+      provider('b', 'gpt-4o'), // 128k
+      provider('c', 'local', 8_000), // explicit
     ];
     expect(safeContextWindow(chain)).toBe(8_000);
   });
@@ -72,13 +79,18 @@ describe('describeFailoverReason', () => {
   it('recognises typed provider errors by name, not instanceof', () => {
     // A duplicated module instance would break instanceof; the name check is
     // what keeps the user-visible reason accurate.
-    const rate = Object.assign(new Error('Rate limit exceeded for provider: primary'), { name: 'RateLimitError' });
+    const rate = Object.assign(new Error('Rate limit exceeded for provider: primary'), {
+      name: 'RateLimitError',
+    });
     expect(describeFailoverReason(rate)).toBe('rate limited');
     const auth = Object.assign(new Error('Authentication failed'), { name: 'AuthError' });
     expect(describeFailoverReason(auth)).toBe('authentication failed');
     const ctx = Object.assign(new Error('Context length exceeded'), { name: 'ContextLengthError' });
     expect(describeFailoverReason(ctx)).toBe('context window exceeded');
-    const server = Object.assign(new Error('Server error'), { name: 'ProviderServerError', statusCode: 502 });
+    const server = Object.assign(new Error('Server error'), {
+      name: 'ProviderServerError',
+      statusCode: 502,
+    });
     expect(describeFailoverReason(server)).toBe('provider server error (502)');
   });
 

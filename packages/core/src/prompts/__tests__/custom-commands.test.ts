@@ -33,7 +33,11 @@ describe('loadCustomCommands', () => {
   });
 
   it('loads a command from .mycode/commands', () => {
-    write(join(cwd, '.mycode/commands'), 'review.md', cmd('review', 'Review $1', 'description: Review a file\nargument-hint: <path>'));
+    write(
+      join(cwd, '.mycode/commands'),
+      'review.md',
+      cmd('review', 'Review $1', 'description: Review a file\nargument-hint: <path>'),
+    );
     const [c] = loadCustomCommands(cwd);
     expect(c.name).toBe('/review');
     expect(c.description).toBe('Review a file');
@@ -85,7 +89,9 @@ describe('loadCustomCommands', () => {
 
 describe('expandCustomCommand', () => {
   it('substitutes $ARGUMENTS with the whole argument string', () => {
-    expect(expandCustomCommand('Check $ARGUMENTS now', 'src/a.ts and src/b.ts')).toBe('Check src/a.ts and src/b.ts now');
+    expect(expandCustomCommand('Check $ARGUMENTS now', 'src/a.ts and src/b.ts')).toBe(
+      'Check src/a.ts and src/b.ts now',
+    );
   });
 
   it('substitutes positional arguments', () => {
@@ -94,7 +100,9 @@ describe('expandCustomCommand', () => {
   });
 
   it('treats quoted runs as one argument', () => {
-    expect(expandCustomCommand('file=$1 all=$@', '"my file.txt" b')).toBe('file=my file.txt all=my file.txt b');
+    expect(expandCustomCommand('file=$1 all=$@', '"my file.txt" b')).toBe(
+      'file=my file.txt all=my file.txt b',
+    );
   });
 
   it('leaves a template with no placeholders untouched', () => {

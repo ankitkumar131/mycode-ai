@@ -13,7 +13,7 @@ const SNAKE_TO_CAMEL = new Map<string, string>([
 
 export function adjustProviderPriorities<T extends { priority?: number }>(
   providers: T[],
-  targetIndex: number
+  targetIndex: number,
 ): T[] {
   if (targetIndex < 0 || targetIndex >= providers.length) {
     return providers;
@@ -169,9 +169,7 @@ export class ConfigManager {
   async removeProvider(name: string): Promise<boolean> {
     const config = await this.load();
     const before = config.providers.length;
-    config.providers = config.providers.filter(
-      (p) => p.name.toLowerCase() !== name.toLowerCase()
-    );
+    config.providers = config.providers.filter((p) => p.name.toLowerCase() !== name.toLowerCase());
     if (config.providers.length < before) {
       config.providers.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
       config.providers.forEach((p, idx) => {

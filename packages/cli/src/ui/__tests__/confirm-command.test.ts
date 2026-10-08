@@ -92,7 +92,9 @@ describe('confirmCommand', () => {
   it('auto-confirms when not attached to a terminal', async () => {
     Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
     const onAllowAll = vi.fn();
-    await expect(confirmCommand('/tmp/x.ts', '/tmp', null, null, { onAllowAll })).resolves.toBe(true);
+    await expect(confirmCommand('/tmp/x.ts', '/tmp', null, null, { onAllowAll })).resolves.toBe(
+      true,
+    );
     expect(onAllowAll).not.toHaveBeenCalled();
   });
 });

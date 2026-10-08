@@ -79,7 +79,11 @@ export function estimateTokens(messages: readonly Message[]): number {
 }
 
 /** Should compaction run? */
-export function shouldCompact(currentTokens: number, contextWindow: number, s: CompactionSettings = {}): boolean {
+export function shouldCompact(
+  currentTokens: number,
+  contextWindow: number,
+  s: CompactionSettings = {},
+): boolean {
   const { auto, buffer } = resolveSettings(s);
   if (!auto) return false;
   return currentTokens > Math.max(1_000, contextWindow - buffer);
@@ -90,7 +94,11 @@ export function shouldCompact(currentTokens: number, contextWindow: number, s: C
  * Anything the model still needs can be re-read from disk; keeping 60k of
  * file contents in context "just in case" is what causes premature compaction.
  */
-export function pruneStaleToolOutput(messages: readonly Message[], keepFromIndex: number, maxChars: number): {
+export function pruneStaleToolOutput(
+  messages: readonly Message[],
+  keepFromIndex: number,
+  maxChars: number,
+): {
   messages: Message[];
   pruned: number;
 } {
@@ -115,7 +123,7 @@ export function pruneStaleToolOutput(messages: readonly Message[], keepFromIndex
  */
 export function planCompaction(
   messages: readonly Message[],
-  opts: { keepTokens?: number; reason?: 'threshold' | 'forced' } & CompactionSettings = {}
+  opts: { keepTokens?: number; reason?: 'threshold' | 'forced' } & CompactionSettings = {},
 ): CompactionPlan {
   const s = resolveSettings(opts);
   const keepTokens = opts.keepTokens ?? s.keepTokens;
@@ -161,7 +169,7 @@ export function planCompaction(
     tokensBefore,
     tokensKept: estimateTokens(recent),
     pruned,
-    reason: older.length < 2 ? 'no-op' : opts.reason ?? 'threshold',
+    reason: older.length < 2 ? 'no-op' : (opts.reason ?? 'threshold'),
   };
 }
 
@@ -254,7 +262,7 @@ export function buildSummaryPrompt(input: {
       .join('\n');
     parts.push(
       `<active-todo-list>\n${rendered}\n</active-todo-list>\n` +
-        'Preserve every unfinished todo item verbatim in the "Next Move" or "Active" sections.'
+        'Preserve every unfinished todo item verbatim in the "Next Move" or "Active" sections.',
     );
   }
 
@@ -272,21 +280,25 @@ export function applySummary(
   messages: readonly Message[],
   summary: string,
   recent: readonly Message[],
-  summaryMarker: string = SUMMARY_MARKER
+  summaryMarker: string = SUMMARY_MARKER,
 ): Message[] {
   const system = messages.filter((m) => m.role === 'system');
   const synthetic: Message[] = [
     { role: 'user', content: `${summaryMarker}\n${summary}` },
     {
       role: 'assistant',
-      content: 'Understood. I have the summary of our earlier work and will continue from the current state.',
+      content:
+        'Understood. I have the summary of our earlier work and will continue from the current state.',
     },
   ];
   return [...system, ...synthetic, ...recent];
 }
 
 /** Extract a previous summary from history so it can be rolled forward. */
-export function findPreviousSummary(messages: readonly Message[], marker: string = SUMMARY_MARKER): string | undefined {
+export function findPreviousSummary(
+  messages: readonly Message[],
+  marker: string = SUMMARY_MARKER,
+): string | undefined {
   for (const m of messages) {
     if (m.role === 'user' && m.content.startsWith(marker)) {
       return m.content.slice(marker.length).trim();

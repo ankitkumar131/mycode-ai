@@ -14,7 +14,9 @@ export async function initCommand(): Promise<void> {
       console.log(chalk.cyan('\nExisting Providers:'));
       cfg.providers.forEach((p, idx) => {
         const priorityStr = p.priority !== undefined ? `[Priority ${p.priority}]` : '[No Priority]';
-        console.log(`  ${idx + 1}. ${chalk.bold(p.name)} (${p.apiProvider}) — Model: ${p.model} ${priorityStr}`);
+        console.log(
+          `  ${idx + 1}. ${chalk.bold(p.name)} (${p.apiProvider}) — Model: ${p.model} ${priorityStr}`,
+        );
       });
       console.log();
 
@@ -33,9 +35,13 @@ export async function initCommand(): Promise<void> {
         for (let i = 0; i < cfg.providers.length; i++) {
           const p = cfg.providers[i];
           const currentPriority = p.priority !== undefined ? String(p.priority) : String(i + 1);
-          const newPriorityStr = await input(rl, `Priority for ${chalk.bold(p.name)}`, currentPriority);
+          const newPriorityStr = await input(
+            rl,
+            `Priority for ${chalk.bold(p.name)}`,
+            currentPriority,
+          );
           const parsed = parseInt(newPriorityStr, 10);
-          p.priority = isNaN(parsed) ? (i + 1) : parsed;
+          p.priority = isNaN(parsed) ? i + 1 : parsed;
           adjustProviderPriorities(cfg.providers, i);
         }
         await config.save(cfg);
@@ -52,23 +58,22 @@ export async function initCommand(): Promise<void> {
     const defaultPriority = defaultConfig.providers.length + 1;
 
     // 1. priority
-    const priorityStr = await rl.question(
-      chalk.dim('Priority') + ` (${defaultPriority}): `
-    );
+    const priorityStr = await rl.question(chalk.dim('Priority') + ` (${defaultPriority}): `);
     const parsedPriority = parseInt(priorityStr.trim(), 10);
     const priority = isNaN(parsedPriority) ? defaultPriority : parsedPriority;
 
     // 2. name
     const defaultNamePlaceholder = `provider-${priority}`;
     const nameStr = await rl.question(
-      chalk.dim('Provider name') + ` (${defaultNamePlaceholder}): `
+      chalk.dim('Provider name') + ` (${defaultNamePlaceholder}): `,
     );
     let name = nameStr.trim();
 
     // 3. apiProvider
     const apiProviderStr = await rl.question(
-      chalk.dim('API provider') + ' (openai/anthropic/openrouter/ollama/custom): ' +
-        chalk.dim('\n  anthropic uses the native Messages API (thinking + prompt caching)')
+      chalk.dim('API provider') +
+        ' (openai/anthropic/openrouter/ollama/custom): ' +
+        chalk.dim('\n  anthropic uses the native Messages API (thinking + prompt caching)'),
     );
     const provider = apiProviderStr.trim().toLowerCase() || 'openai';
 
@@ -78,9 +83,11 @@ export async function initCommand(): Promise<void> {
 
     // 4. model
     const defaultModel =
-      provider === 'ollama' ? 'llama3.1:8b'
-      : provider === 'anthropic' ? 'claude-sonnet-4-5'
-      : 'gpt-4o';
+      provider === 'ollama'
+        ? 'llama3.1:8b'
+        : provider === 'anthropic'
+          ? 'claude-sonnet-4-5'
+          : 'gpt-4o';
     const modelStr = await rl.question(chalk.dim('Model') + ` (${defaultModel}): `);
     const model = modelStr.trim() || defaultModel;
 
@@ -93,24 +100,33 @@ export async function initCommand(): Promise<void> {
 
     // 6. baseUrl
     const defaultUrl =
-      provider === 'ollama' ? 'http://localhost:11434'
-      : provider === 'openrouter' ? 'https://openrouter.ai/api/v1'
-      : provider === 'anthropic' ? 'https://api.anthropic.com'
-      : '';
+      provider === 'ollama'
+        ? 'http://localhost:11434'
+        : provider === 'openrouter'
+          ? 'https://openrouter.ai/api/v1'
+          : provider === 'anthropic'
+            ? 'https://api.anthropic.com'
+            : '';
     const baseUrlStr = await rl.question(
-      chalk.dim('Base URL') + (defaultUrl ? ` (${defaultUrl}): ` : ': ')
+      chalk.dim('Base URL') + (defaultUrl ? ` (${defaultUrl}): ` : ': '),
     );
     const baseUrl = baseUrlStr.trim() || defaultUrl || undefined;
 
     // 7. read
     const readStr = await rl.question(chalk.dim('Read permission') + ' (true/false) [true]: ');
     const readTrim = readStr.trim().toLowerCase();
-    const read = readTrim === '' ? true : !(readTrim === 'false' || readTrim === 'f' || readTrim === 'no' || readTrim === 'n');
+    const read =
+      readTrim === ''
+        ? true
+        : !(readTrim === 'false' || readTrim === 'f' || readTrim === 'no' || readTrim === 'n');
 
     // 8. write
     const writeStr = await rl.question(chalk.dim('Write permission') + ' (true/false) [true]: ');
     const writeTrim = writeStr.trim().toLowerCase();
-    const write = writeTrim === '' ? true : !(writeTrim === 'false' || writeTrim === 'f' || writeTrim === 'no' || writeTrim === 'n');
+    const write =
+      writeTrim === ''
+        ? true
+        : !(writeTrim === 'false' || writeTrim === 'f' || writeTrim === 'no' || writeTrim === 'n');
 
     // 9. maxRetries
     const maxRetriesStr = await rl.question(chalk.dim('Max retries') + ' (3): ');

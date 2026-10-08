@@ -33,11 +33,7 @@ export interface CustomCommand {
 }
 
 /** Directories searched, in increasing order of precedence. */
-const PROJECT_DIRS = [
-  '.mycode/commands',
-  '.opencode/command',
-  '.claude/commands',
-];
+const PROJECT_DIRS = ['.mycode/commands', '.opencode/command', '.claude/commands'];
 const USER_DIRS = [
   '.mycode/commands',
   join('.config', 'opencode', 'command'),
@@ -127,12 +123,14 @@ export function loadCustomCommands(cwd: string): CustomCommand[] {
  */
 export function expandCustomCommand(template: string, argumentString: string): string {
   const args = splitArgs(argumentString);
-  return template
-    // (?!\w) rather than \b: `$@` ends with a non-word character, so a word
-    // boundary can never follow it.
-    .replace(/\$ARGUMENTS(?!\w)/g, argumentString)
-    .replace(/\$@(?!\w)/g, args.join(' '))
-    .replace(/\$([1-9])(?!\d)/g, (_m, d: string) => args[Number(d) - 1] ?? '');
+  return (
+    template
+      // (?!\w) rather than \b: `$@` ends with a non-word character, so a word
+      // boundary can never follow it.
+      .replace(/\$ARGUMENTS(?!\w)/g, argumentString)
+      .replace(/\$@(?!\w)/g, args.join(' '))
+      .replace(/\$([1-9])(?!\d)/g, (_m, d: string) => args[Number(d) - 1] ?? '')
+  );
 }
 
 /** Shell-ish splitting: respects single and double quotes. */

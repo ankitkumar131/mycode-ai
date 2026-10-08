@@ -120,7 +120,7 @@ export class MCPClient {
         capabilities: { tools: {} },
         clientInfo: { name: 'mycode', version: '1.0.0' },
       },
-      DEFAULT_STARTUP_TIMEOUT_MS
+      DEFAULT_STARTUP_TIMEOUT_MS,
     )) as { protocolVersion?: string; serverInfo?: { name?: string; version?: string } };
 
     // Per spec the client acknowledges with a notification.
@@ -175,7 +175,11 @@ export class MCPClient {
     }
   }
 
-  private request(method: string, params: unknown, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS): Promise<unknown> {
+  private request(
+    method: string,
+    params: unknown,
+    timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+  ): Promise<unknown> {
     const child = this.child;
     if (!child || child.killed || !child.stdin.writable) {
       return Promise.reject(new Error(`MCP server "${this.config.name}" is not running`));
@@ -332,7 +336,7 @@ export class MCPClientManager {
             stderr: client.stderrTail,
           };
         }
-      })
+      }),
     );
     return results;
   }
@@ -341,10 +345,16 @@ export class MCPClientManager {
    * Status view for the `/mcp` command. Reports real connection state — the
    * previous stub reported servers that had never been contacted.
    */
-  listServers(): Array<{ name: string; status: string; connected: boolean; tools: number; error?: string }> {
+  listServers(): Array<{
+    name: string;
+    status: string;
+    connected: boolean;
+    tools: number;
+    error?: string;
+  }> {
     return this.list().map((c) => ({
       name: c.config.name,
-      status: c.connected ? 'connected' : c.config.status ?? 'disconnected',
+      status: c.connected ? 'connected' : (c.config.status ?? 'disconnected'),
       connected: c.connected,
       tools: c.tools.length,
     }));
@@ -357,7 +367,8 @@ export class MCPClientManager {
       if (client.config.enabled === false) continue;
       try {
         const tools = await client.listTools();
-        for (const t of tools) out.push({ ...t, qualifiedName: `${client.config.name}__${t.name}` });
+        for (const t of tools)
+          out.push({ ...t, qualifiedName: `${client.config.name}__${t.name}` });
       } catch {
         /* a broken server contributes no tools */
       }

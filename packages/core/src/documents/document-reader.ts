@@ -38,8 +38,28 @@ export interface ExtractedDocument {
 }
 
 export const DOCUMENT_EXTENSIONS = new Set([
-  '.pdf', '.docx', '.docm', '.dotx', '.doc', '.xlsx', '.xlsm', '.xls', '.pptx', '.ppsx', '.ppt',
-  '.odt', '.ods', '.odp', '.epub', '.rtf', '.html', '.htm', '.xhtml', '.csv', '.tsv', '.ipynb',
+  '.pdf',
+  '.docx',
+  '.docm',
+  '.dotx',
+  '.doc',
+  '.xlsx',
+  '.xlsm',
+  '.xls',
+  '.pptx',
+  '.ppsx',
+  '.ppt',
+  '.odt',
+  '.ods',
+  '.odp',
+  '.epub',
+  '.rtf',
+  '.html',
+  '.htm',
+  '.xhtml',
+  '.csv',
+  '.tsv',
+  '.ipynb',
 ]);
 
 export function isDocumentFile(path: string): boolean {
@@ -48,7 +68,14 @@ export function isDocumentFile(path: string): boolean {
 
 // ─── XML helpers ─────────────────────────────────────────────────────────────
 
-const ENTITY_MAP: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const ENTITY_MAP: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+};
 
 export function decodeXmlEntities(s: string): string {
   return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e: string) => {
@@ -89,7 +116,7 @@ function extractDocx(zip: ZipReader): { sections: DocumentSection[]; warnings: s
     .replace(/<\/w:p>/g, '\n');
 
   // Headings → markdown-ish
-  const paras = body.split('\n').map(p => {
+  const paras = body.split('\n').map((p) => {
     const style = p.match(/<w:pStyle w:val="([^"]+)"/)?.[1] ?? '';
     const text = stripTags(p.replace(/<w:t[^>]*>/g, '').replace(/<\/w:t>/g, ''));
     const isList = /<w:numPr>/.test(p);
@@ -122,8 +149,17 @@ function extractCoreProps(zip: ZipReader): Record<string, string> {
   const meta: Record<string, string> = {};
   const props = zip.readText('docProps/core.xml') || zip.readText('meta.xml');
   if (!props) return meta;
-  const grab = (tag: string) => stripTags(props.match(new RegExp(`<[a-z]*:?${tag}[^>]*>([\\s\\S]*?)</[a-z]*:?${tag}>`, 'i'))?.[1] ?? '');
-  for (const [k, tag] of [['title', 'title'], ['author', 'creator'], ['created', 'created'], ['modified', 'modified'], ['subject', 'subject']]) {
+  const grab = (tag: string) =>
+    stripTags(
+      props.match(new RegExp(`<[a-z]*:?${tag}[^>]*>([\\s\\S]*?)</[a-z]*:?${tag}>`, 'i'))?.[1] ?? '',
+    );
+  for (const [k, tag] of [
+    ['title', 'title'],
+    ['author', 'creator'],
+    ['created', 'created'],
+    ['modified', 'modified'],
+    ['subject', 'subject'],
+  ]) {
     const v = grab(tag);
     if (v) meta[k] = v;
   }
@@ -152,8 +188,10 @@ function extractXlsx(zip: ZipReader): { sections: DocumentSection[]; warnings: s
   const wb = zip.readText('xl/workbook.xml') ?? '';
   const rels = zip.readText('xl/_rels/workbook.xml.rels') ?? '';
   const relMap = new Map<string, string>();
-  for (const m of rels.matchAll(/<Relationship[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g)) relMap.set(m[1], m[2]);
-  for (const m of rels.matchAll(/<Relationship[^>]*Target="([^"]+)"[^>]*Id="([^"]+)"/g)) relMap.set(m[2], m[1]);
+  for (const m of rels.matchAll(/<Relationship[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g))
+    relMap.set(m[1], m[2]);
+  for (const m of rels.matchAll(/<Relationship[^>]*Target="([^"]+)"[^>]*Id="([^"]+)"/g))
+    relMap.set(m[2], m[1]);
 
   const sheets: Array<{ name: string; path: string }> = [];
   for (const m of wb.matchAll(/<sheet\b[^>]*>/g)) {
@@ -161,16 +199,17 @@ function extractXlsx(zip: ZipReader): { sections: DocumentSection[]; warnings: s
     const name = decodeXmlEntities(tag.match(/name="([^"]*)"/)?.[1] ?? 'Sheet');
     const rid = tag.match(/r:id="([^"]+)"/)?.[1] ?? '';
     let target = relMap.get(rid) ?? '';
-    if (target && !target.startsWith('xl/')) target = target.startsWith('/') ? target.slice(1) : `xl/${target}`;
+    if (target && !target.startsWith('xl/'))
+      target = target.startsWith('/') ? target.slice(1) : `xl/${target}`;
     if (target) sheets.push({ name, path: target });
   }
   if (sheets.length === 0) {
     sheets.push(
       ...zip
         .names()
-        .filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
+        .filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
         .sort()
-        .map((p, i) => ({ name: `Sheet${i + 1}`, path: p }))
+        .map((p, i) => ({ name: `Sheet${i + 1}`, path: p })),
     );
   }
 
@@ -203,18 +242,18 @@ function extractXlsx(zip: ZipReader): { sections: DocumentSection[]; warnings: s
           cells[idx] = val;
         } else cells.push(val);
       }
-      if (cells.some(c => c !== '')) rows.push(cells);
+      if (cells.some((c) => c !== '')) rows.push(cells);
       if (rows.length > 5000) {
         warnings.push(`${sh.name}: truncated at 5000 rows`);
         break;
       }
     }
     if (rows.length === 0) continue;
-    const width = Math.max(...rows.map(r => r.length));
-    const table = rows.map(r => {
+    const width = Math.max(...rows.map((r) => r.length));
+    const table = rows.map((r) => {
       const padded = [...r];
       while (padded.length < width) padded.push('');
-      return padded.map(c => c.replace(/\|/g, '\\|')).join(' | ');
+      return padded.map((c) => c.replace(/\|/g, '\\|')).join(' | ');
     });
     // Markdown table header separator after first row
     if (table.length > 1) table.splice(1, 0, Array(width).fill('---').join(' | '));
@@ -228,7 +267,7 @@ function extractXlsx(zip: ZipReader): { sections: DocumentSection[]; warnings: s
 function extractPptx(zip: ZipReader): { sections: DocumentSection[]; warnings: string[] } {
   const slides = zip
     .names()
-    .filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+    .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
     .sort((a, b) => Number(a.match(/\d+/)![0]) - Number(b.match(/\d+/)![0]));
   const sections: DocumentSection[] = [];
   for (const path of slides) {
@@ -236,14 +275,19 @@ function extractPptx(zip: ZipReader): { sections: DocumentSection[]; warnings: s
     const xml = zip.readText(path) ?? '';
     const paras: string[] = [];
     for (const pm of xml.matchAll(/<a:p>([\s\S]*?)<\/a:p>/g)) {
-      const runs = Array.from(pm[1].matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)).map(r => decodeXmlEntities(r[1]));
+      const runs = Array.from(pm[1].matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)).map((r) =>
+        decodeXmlEntities(r[1]),
+      );
       const t = runs.join('').trim();
       if (t) paras.push(t);
     }
     let text = paras.join('\n');
     const notes = zip.readText(`ppt/notesSlides/notesSlide${n}.xml`);
     if (notes) {
-      const nt = Array.from(notes.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)).map(r => decodeXmlEntities(r[1])).join(' ').trim();
+      const nt = Array.from(notes.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g))
+        .map((r) => decodeXmlEntities(r[1]))
+        .join(' ')
+        .trim();
       if (nt) text += `\n\n[Speaker notes] ${nt}`;
     }
     if (text.trim()) sections.push({ label: `Slide ${n}`, text: collapse(text) });
@@ -253,7 +297,10 @@ function extractPptx(zip: ZipReader): { sections: DocumentSection[]; warnings: s
 
 // ─── OpenDocument ────────────────────────────────────────────────────────────
 
-function extractOdf(zip: ZipReader, kind: 'odt' | 'ods' | 'odp'): { sections: DocumentSection[]; warnings: string[] } {
+function extractOdf(
+  zip: ZipReader,
+  kind: 'odt' | 'ods' | 'odp',
+): { sections: DocumentSection[]; warnings: string[] } {
   const xml = zip.readText('content.xml');
   if (!xml) return { sections: [], warnings: ['content.xml missing'] };
   if (kind === 'ods') {
@@ -262,10 +309,9 @@ function extractOdf(zip: ZipReader, kind: 'odt' | 'ods' | 'odp'): { sections: Do
       const name = decodeXmlEntities(tm[1].match(/table:name="([^"]*)"/)?.[1] ?? 'Sheet');
       const rows: string[] = [];
       for (const rm of tm[2].matchAll(/<table:table-row\b[^>]*>([\s\S]*?)<\/table:table-row>/g)) {
-        const cells = Array.from(rm[1].matchAll(/<table:table-cell\b[^>]*?(?:\/>|>([\s\S]*?)<\/table:table-cell>)/g)).map(c =>
-          stripTags((c[1] ?? '').replace(/<\/text:p>/g, ' '))
-            .trim()
-        );
+        const cells = Array.from(
+          rm[1].matchAll(/<table:table-cell\b[^>]*?(?:\/>|>([\s\S]*?)<\/table:table-cell>)/g),
+        ).map((c) => stripTags((c[1] ?? '').replace(/<\/text:p>/g, ' ')).trim());
         if (cells.some(Boolean)) rows.push(cells.join(' | '));
       }
       if (rows.length) sections.push({ label: `Sheet: ${name}`, text: rows.join('\n') });
@@ -277,7 +323,9 @@ function extractOdf(zip: ZipReader, kind: 'odt' | 'ods' | 'odp'): { sections: Do
     let i = 0;
     for (const pm of xml.matchAll(/<draw:page\b[^>]*>([\s\S]*?)<\/draw:page>/g)) {
       i++;
-      const t = collapse(stripTags(pm[1].replace(/<\/text:p>/g, '\n').replace(/<text:line-break\/>/g, '\n')));
+      const t = collapse(
+        stripTags(pm[1].replace(/<\/text:p>/g, '\n').replace(/<text:line-break\/>/g, '\n')),
+      );
       if (t) sections.push({ label: `Slide ${i}`, text: t });
     }
     return { sections, warnings: [] };
@@ -289,8 +337,8 @@ function extractOdf(zip: ZipReader, kind: 'odt' | 'ods' | 'odp'): { sections: Do
         .replace(/<\/text:(p|h)>/g, '\n')
         .replace(/<text:tab\/>/g, '\t')
         .replace(/<text:line-break\/>/g, '\n')
-        .replace(/<text:s(?:\s+text:c="(\d+)")?\/>/g, (_m, c) => ' '.repeat(Number(c || 1)))
-    )
+        .replace(/<text:s(?:\s+text:c="(\d+)")?\/>/g, (_m, c) => ' '.repeat(Number(c || 1))),
+    ),
   );
   return { sections: [{ label: 'Document', text }], warnings: [] };
 }
@@ -310,7 +358,7 @@ function extractEpub(zip: ZipReader): { sections: DocumentSection[]; warnings: s
     const href = m[0].match(/\bhref="([^"]+)"/)?.[1];
     if (id && href) manifest.set(id, decodeXmlEntities(href));
   }
-  const spine = Array.from(opf.matchAll(/<itemref\b[^>]*idref="([^"]+)"/g)).map(m => m[1]);
+  const spine = Array.from(opf.matchAll(/<itemref\b[^>]*idref="([^"]+)"/g)).map((m) => m[1]);
   let i = 0;
   for (const id of spine) {
     const href = manifest.get(id);
@@ -363,9 +411,10 @@ export function rtfToText(rtf: string): string {
 }
 
 function csvToText(content: string, ext: string): string {
-  const lines = content.split(/\r?\n/).filter(l => l.trim());
+  const lines = content.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length === 0) return '';
-  const delim = ext === '.tsv' ? '\t' : lines[0].includes(';') && !lines[0].includes(',') ? ';' : ',';
+  const delim =
+    ext === '.tsv' ? '\t' : lines[0].includes(';') && !lines[0].includes(',') ? ';' : ',';
   const parse = (line: string): string[] => {
     const out: string[] = [];
     let cur = '';
@@ -388,11 +437,11 @@ function csvToText(content: string, ext: string): string {
     return out;
   };
   const rows = lines.slice(0, 5000).map(parse);
-  const width = Math.max(...rows.map(r => r.length));
-  const md = rows.map(r => {
+  const width = Math.max(...rows.map((r) => r.length));
+  const md = rows.map((r) => {
     const p = [...r];
     while (p.length < width) p.push('');
-    return p.map(c => c.trim().replace(/\|/g, '\\|')).join(' | ');
+    return p.map((c) => c.trim().replace(/\|/g, '\\|')).join(' | ');
   });
   if (md.length > 1) md.splice(1, 0, Array(width).fill('---').join(' | '));
   return `${lines.length} rows × ${width} columns\n\n${md.join('\n')}`;
@@ -410,7 +459,10 @@ function ipynbToText(content: string): string {
         const outs = (c.outputs ?? [])
           .map((o: any) => {
             if (o.text) return Array.isArray(o.text) ? o.text.join('') : o.text;
-            if (o.data?.['text/plain']) return Array.isArray(o.data['text/plain']) ? o.data['text/plain'].join('') : o.data['text/plain'];
+            if (o.data?.['text/plain'])
+              return Array.isArray(o.data['text/plain'])
+                ? o.data['text/plain'].join('')
+                : o.data['text/plain'];
             if (o.ename) return `${o.ename}: ${o.evalue}`;
             return '';
           })
@@ -446,12 +498,14 @@ function scrapeStrings(buf: Buffer, min = 4): string {
       cur = '';
     }
   }
-  return collapse(out.filter(s => /[a-z]{3,}/i.test(s)).join('\n'));
+  return collapse(out.filter((s) => /[a-z]{3,}/i.test(s)).join('\n'));
 }
 
 // ─── PDF ─────────────────────────────────────────────────────────────────────
 
-async function extractPdf(buf: Buffer): Promise<{ sections: DocumentSection[]; metadata: Record<string, string>; warnings: string[] }> {
+async function extractPdf(
+  buf: Buffer,
+): Promise<{ sections: DocumentSection[]; metadata: Record<string, string>; warnings: string[] }> {
   const warnings: string[] = [];
   const origWarn = console.warn;
   const origErr = console.error;
@@ -469,29 +523,36 @@ async function extractPdf(buf: Buffer): Promise<{ sections: DocumentSection[]; m
     const pages: string[] = [];
     const data = await pdfParse(buf, {
       pagerender: (pageData: any) =>
-        pageData.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false }).then((tc: any) => {
-          let lastY: number | null = null;
-          let text = '';
-          for (const item of tc.items) {
-            const y = item.transform?.[5];
-            if (lastY !== null && y !== undefined && Math.abs(y - lastY) > 2) text += '\n';
-            else if (text && !text.endsWith(' ') && !text.endsWith('\n')) text += ' ';
-            text += item.str;
-            if (y !== undefined) lastY = y;
-          }
-          pages.push(text);
-          return text;
-        }),
+        pageData
+          .getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false })
+          .then((tc: any) => {
+            let lastY: number | null = null;
+            let text = '';
+            for (const item of tc.items) {
+              const y = item.transform?.[5];
+              if (lastY !== null && y !== undefined && Math.abs(y - lastY) > 2) text += '\n';
+              else if (text && !text.endsWith(' ') && !text.endsWith('\n')) text += ' ';
+              text += item.str;
+              if (y !== undefined) lastY = y;
+            }
+            pages.push(text);
+            return text;
+          }),
     });
     const metadata: Record<string, string> = { pages: String(data.numpages ?? pages.length) };
     if (data.info?.Title) metadata.title = String(data.info.Title);
     if (data.info?.Author) metadata.author = String(data.info.Author);
     if (data.info?.CreationDate) metadata.created = String(data.info.CreationDate);
 
-    const sections = (pages.length ? pages : [data.text ?? '']).map((t, i) => ({ label: `Page ${i + 1}`, text: collapse(t) }));
+    const sections = (pages.length ? pages : [data.text ?? '']).map((t, i) => ({
+      label: `Page ${i + 1}`,
+      text: collapse(t),
+    }));
     const totalChars = sections.reduce((n, s) => n + s.text.length, 0);
     if (totalChars < 20 && (data.numpages ?? 0) > 0) {
-      warnings.push('PDF has no extractable text layer — it is probably scanned. OCR is required to read it.');
+      warnings.push(
+        'PDF has no extractable text layer — it is probably scanned. OCR is required to read it.',
+      );
     }
     return { sections, metadata, warnings };
   } catch (err: any) {
@@ -512,7 +573,14 @@ export async function extractDocument(filePath: string): Promise<ExtractedDocume
   const st = statSync(filePath);
   const ext = extname(filePath).toLowerCase();
   const buf = readFileSync(filePath);
-  const base: ExtractedDocument = { format: ext.slice(1).toUpperCase() || 'TEXT', file: basename(filePath), sizeBytes: st.size, sections: [], metadata: {}, warnings: [] };
+  const base: ExtractedDocument = {
+    format: ext.slice(1).toUpperCase() || 'TEXT',
+    file: basename(filePath),
+    sizeBytes: st.size,
+    sections: [],
+    metadata: {},
+    warnings: [],
+  };
 
   const isZip = buf.length > 4 && buf.readUInt32LE(0) === 0x04034b50;
   const isPdf = buf.subarray(0, 5).toString('latin1') === '%PDF-';
@@ -533,7 +601,7 @@ export async function extractDocument(filePath: string): Promise<ExtractedDocume
     } else if (names.includes('xl/workbook.xml')) {
       r = extractXlsx(zip);
       format = 'Excel (XLSX)';
-    } else if (names.some(n => n.startsWith('ppt/slides/'))) {
+    } else if (names.some((n) => n.startsWith('ppt/slides/'))) {
       r = extractPptx(zip);
       format = 'PowerPoint (PPTX)';
     } else if (names.includes('META-INF/container.xml')) {
@@ -541,13 +609,29 @@ export async function extractDocument(filePath: string): Promise<ExtractedDocume
       format = 'EPUB';
     } else if (names.includes('content.xml')) {
       const mime = zip.readText('mimetype') ?? '';
-      const kind = mime.includes('spreadsheet') || ext === '.ods' ? 'ods' : mime.includes('presentation') || ext === '.odp' ? 'odp' : 'odt';
+      const kind =
+        mime.includes('spreadsheet') || ext === '.ods'
+          ? 'ods'
+          : mime.includes('presentation') || ext === '.odp'
+            ? 'odp'
+            : 'odt';
       r = extractOdf(zip, kind);
       format = `OpenDocument (${kind.toUpperCase()})`;
     } else {
-      return { ...base, format: 'ZIP', sections: [{ label: 'Archive listing', text: names.join('\n') }], warnings: ['ZIP archive — not a recognised document; listing entries'] };
+      return {
+        ...base,
+        format: 'ZIP',
+        sections: [{ label: 'Archive listing', text: names.join('\n') }],
+        warnings: ['ZIP archive — not a recognised document; listing entries'],
+      };
     }
-    return { ...base, format, sections: r.sections, warnings: r.warnings, metadata: extractCoreProps(zip) };
+    return {
+      ...base,
+      format,
+      sections: r.sections,
+      warnings: r.warnings,
+      metadata: extractCoreProps(zip),
+    };
   }
 
   // OLE compound (legacy .doc/.xls/.ppt)
@@ -556,30 +640,58 @@ export async function extractDocument(filePath: string): Promise<ExtractedDocume
       ...base,
       format: `Legacy Office (${ext.slice(1).toUpperCase() || 'OLE'})`,
       sections: [{ label: 'Extracted strings', text: scrapeStrings(buf) }],
-      warnings: ['Legacy binary Office format — text extracted heuristically; convert to .docx/.xlsx/.pptx for full fidelity.'],
+      warnings: [
+        'Legacy binary Office format — text extracted heuristically; convert to .docx/.xlsx/.pptx for full fidelity.',
+      ],
     };
   }
 
   const text = buf.toString('utf8');
   switch (ext) {
     case '.rtf':
-      return { ...base, format: 'Rich Text (RTF)', sections: [{ label: 'Document', text: rtfToText(text) }] };
+      return {
+        ...base,
+        format: 'Rich Text (RTF)',
+        sections: [{ label: 'Document', text: rtfToText(text) }],
+      };
     case '.html':
     case '.htm':
     case '.xhtml': {
       const title = stripTags(text.match(/<title>([\s\S]*?)<\/title>/i)?.[1] ?? '').trim();
-      return { ...base, format: 'HTML', metadata: title ? { title } : {}, sections: [{ label: 'Document', text: htmlToText(text) }] };
+      return {
+        ...base,
+        format: 'HTML',
+        metadata: title ? { title } : {},
+        sections: [{ label: 'Document', text: htmlToText(text) }],
+      };
     }
     case '.csv':
     case '.tsv':
-      return { ...base, format: ext.slice(1).toUpperCase(), sections: [{ label: 'Table', text: csvToText(text, ext) }] };
+      return {
+        ...base,
+        format: ext.slice(1).toUpperCase(),
+        sections: [{ label: 'Table', text: csvToText(text, ext) }],
+      };
     case '.ipynb':
-      return { ...base, format: 'Jupyter Notebook', sections: [{ label: 'Notebook', text: ipynbToText(text) }] };
+      return {
+        ...base,
+        format: 'Jupyter Notebook',
+        sections: [{ label: 'Notebook', text: ipynbToText(text) }],
+      };
     default:
       if (text.includes('\uFFFD') && buf.subarray(0, 8000).includes(0)) {
-        return { ...base, format: 'Binary', sections: [{ label: 'Extracted strings', text: scrapeStrings(buf) }], warnings: ['Binary file — showing printable strings only'] };
+        return {
+          ...base,
+          format: 'Binary',
+          sections: [{ label: 'Extracted strings', text: scrapeStrings(buf) }],
+          warnings: ['Binary file — showing printable strings only'],
+        };
       }
-      return { ...base, format: ext ? `${ext} text` : 'Plain text', sections: [{ label: 'Document', text }] };
+      return {
+        ...base,
+        format: ext ? `${ext} text` : 'Plain text',
+        sections: [{ label: 'Document', text }],
+      };
   }
 }
 
@@ -591,22 +703,27 @@ export async function extractDocument(filePath: string): Promise<ExtractedDocume
  */
 export function renderDocument(
   doc: ExtractedDocument,
-  opts: { page?: number; offset?: number; maxChars?: number } = {}
+  opts: { page?: number; offset?: number; maxChars?: number } = {},
 ): string {
   const maxChars = opts.maxChars ?? 100_000;
-  const head: string[] = [`File: ${doc.file} (${doc.format}, ${(doc.sizeBytes / 1024).toFixed(1)} KB)`];
-  for (const [k, v] of Object.entries(doc.metadata)) head.push(`${k[0].toUpperCase()}${k.slice(1)}: ${v}`);
-  if (doc.sections.length > 1) head.push(`Sections: ${doc.sections.length} (${doc.sections[0].label.split(/[\s:]/)[0]}s)`);
+  const head: string[] = [
+    `File: ${doc.file} (${doc.format}, ${(doc.sizeBytes / 1024).toFixed(1)} KB)`,
+  ];
+  for (const [k, v] of Object.entries(doc.metadata))
+    head.push(`${k[0].toUpperCase()}${k.slice(1)}: ${v}`);
+  if (doc.sections.length > 1)
+    head.push(`Sections: ${doc.sections.length} (${doc.sections[0].label.split(/[\s:]/)[0]}s)`);
   for (const w of doc.warnings) head.push(`Warning: ${w}`);
 
   let sections = doc.sections;
   if (opts.page && opts.page >= 1) {
-    if (opts.page > sections.length) return `${head.join('\n')}\n\nError: page ${opts.page} out of range (1-${sections.length}).`;
+    if (opts.page > sections.length)
+      return `${head.join('\n')}\n\nError: page ${opts.page} out of range (1-${sections.length}).`;
     sections = [sections[opts.page - 1]];
   }
 
   const body = sections
-    .map(s => (doc.sections.length > 1 ? `--- ${s.label} ---\n${s.text}` : s.text))
+    .map((s) => (doc.sections.length > 1 ? `--- ${s.label} ---\n${s.text}` : s.text))
     .join('\n\n');
   const totalChars = body.length;
   head.push(`Length: ${totalChars} characters`);

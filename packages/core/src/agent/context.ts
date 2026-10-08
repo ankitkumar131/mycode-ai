@@ -55,7 +55,7 @@ export class ConversationContext {
 
   /** Replace the primary (first) system message, or insert one. */
   setSystem(content: string): void {
-    const idx = this.messages.findIndex(m => m.role === 'system');
+    const idx = this.messages.findIndex((m) => m.role === 'system');
     if (idx === -1) this.messages.unshift({ role: 'system', content });
     else this.messages[idx] = { role: 'system', content };
   }
@@ -97,15 +97,18 @@ export class ConversationContext {
         arguments: string;
       };
     }>,
-    thinking?: { text?: string; signature?: string }
+    thinking?: { text?: string; signature?: string },
   ): void {
-    const sanitized = toolCalls.map(tc => {
+    const sanitized = toolCalls.map((tc) => {
       let argsStr = tc.function.arguments;
       if (argsStr.length > MAX_TOOL_ARG_CHARS) {
         try {
           const parsed = JSON.parse(argsStr);
           if (typeof parsed.content === 'string' && parsed.content.length > 1000) {
-            parsed.content = parsed.content.slice(0, 500) + `\n... [${parsed.content.length - 1000} chars truncated for history efficiency] ...\n` + parsed.content.slice(-500);
+            parsed.content =
+              parsed.content.slice(0, 500) +
+              `\n... [${parsed.content.length - 1000} chars truncated for history efficiency] ...\n` +
+              parsed.content.slice(-500);
             argsStr = JSON.stringify(parsed);
           }
         } catch {
@@ -193,8 +196,10 @@ export class ConversationContext {
 
   getHistory(limit?: number): Message[] {
     if (limit && this.messages.length > limit) {
-      const systemMsgs = this.messages.filter(m => m.role === 'system');
-      const rest = this.messages.filter(m => m.role !== 'system').slice(-(limit - systemMsgs.length));
+      const systemMsgs = this.messages.filter((m) => m.role === 'system');
+      const rest = this.messages
+        .filter((m) => m.role !== 'system')
+        .slice(-(limit - systemMsgs.length));
       return [...systemMsgs, ...rest];
     }
     return [...this.messages];

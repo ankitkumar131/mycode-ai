@@ -38,10 +38,19 @@ function install(opts: ConstructorParameters<typeof FakeTerminal>[0] = {}) {
     term,
     restore() {
       process.stdout.write = saved.write;
-      Object.defineProperty(process.stdout, 'columns', { value: saved.columns, configurable: true });
+      Object.defineProperty(process.stdout, 'columns', {
+        value: saved.columns,
+        configurable: true,
+      });
       Object.defineProperty(process.stdout, 'rows', { value: saved.rows, configurable: true });
-      Object.defineProperty(process.stdout, 'isTTY', { value: saved.stdoutIsTTY, configurable: true });
-      Object.defineProperty(process.stdin, 'isTTY', { value: saved.stdinIsTTY, configurable: true });
+      Object.defineProperty(process.stdout, 'isTTY', {
+        value: saved.stdoutIsTTY,
+        configurable: true,
+      });
+      Object.defineProperty(process.stdin, 'isTTY', {
+        value: saved.stdinIsTTY,
+        configurable: true,
+      });
       (process.stdin as any).setRawMode = saved.setRawMode;
       process.stdin.resume = saved.resume;
       process.stdin.pause = saved.pause;
@@ -102,7 +111,9 @@ describe('composer, multiple turns', () => {
     const second = await p2;
 
     expect(second).toEqual({ kind: 'text', text: 'second query' });
-    expect(harness.term.nonEmptyLines().filter((l) => l.includes('second query')).length).toBeGreaterThan(0);
+    expect(
+      harness.term.nonEmptyLines().filter((l) => l.includes('second query')).length,
+    ).toBeGreaterThan(0);
   });
 
   it('does not resubmit the previous prompt when Enter is pressed on an empty line', async () => {

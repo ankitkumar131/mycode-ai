@@ -58,7 +58,7 @@ export interface FailoverCoordinatorOptions {
  */
 const WINDOW_HINTS: Record<string, number> = {
   gemini: 1_000_000,
-  'claude': 200_000,
+  claude: 200_000,
   'gpt-4.1': 200_000,
   'gpt-5': 200_000,
   o3: 200_000,
@@ -77,7 +77,7 @@ const WINDOW_HINTS: Record<string, number> = {
 export function effectiveWindowFor(
   cfg: ProviderConfig,
   table: Record<string, number> = {},
-  fallback = 128_000
+  fallback = 128_000,
 ): number {
   if (typeof cfg.contextWindow === 'number' && cfg.contextWindow > 0) return cfg.contextWindow;
   const model = (cfg.model ?? '').toLowerCase();
@@ -97,7 +97,7 @@ export function effectiveWindowFor(
  */
 export function safeContextWindow(
   providers: readonly ProviderConfig[],
-  table: Record<string, number> = {}
+  table: Record<string, number> = {},
 ): number {
   if (!providers.length) return 128_000;
   return Math.min(...providers.map((p) => effectiveWindowFor(p, table)));
@@ -124,10 +124,13 @@ export function describeFailoverReason(err: unknown): string {
   }
 
   if (status === 429 || /rate.?limit/.test(msg)) return 'rate limited';
-  if (status === 401 || status === 403 || /auth|api key|unauthor/.test(msg)) return 'authentication failed';
-  if (/context length|too long|maximum context|token limit/.test(msg)) return 'context window exceeded';
+  if (status === 401 || status === 403 || /auth|api key|unauthor/.test(msg))
+    return 'authentication failed';
+  if (/context length|too long|maximum context|token limit/.test(msg))
+    return 'context window exceeded';
   if (typeof status === 'number' && status >= 500) return `provider server error (${status})`;
-  if (/econnrefused|enotfound|etimedout|network|fetch failed|socket/.test(msg)) return 'connection failed';
+  if (/econnrefused|enotfound|etimedout|network|fetch failed|socket/.test(msg))
+    return 'connection failed';
   if (/model not found|no such model|invalid model/.test(msg)) return 'model unavailable';
   if (/overloaded|capacity/.test(msg)) return 'provider overloaded';
   return e?.message ? e.message.slice(0, 80) : 'unknown error';
@@ -183,7 +186,13 @@ export class FailoverCoordinator {
    */
   async observe(
     providerName: string,
-    ctx: { reason?: string; sessionId?: string; messages?: unknown; todos?: unknown; usage?: unknown } = {}
+    ctx: {
+      reason?: string;
+      sessionId?: string;
+      messages?: unknown;
+      todos?: unknown;
+      usage?: unknown;
+    } = {},
   ): Promise<FailoverEvent | null> {
     const previous = this.currentName;
     this.currentName = providerName;

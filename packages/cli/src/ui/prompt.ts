@@ -36,7 +36,11 @@ function addAlwaysAllow(command: string): void {
   ALWAYS_ALLOW.add(normalizeCommand(command));
 }
 
-async function askYesNo(rl: readlinePromises.Interface, question: string, defaultYes = true): Promise<boolean> {
+async function askYesNo(
+  rl: readlinePromises.Interface,
+  question: string,
+  defaultYes = true,
+): Promise<boolean> {
   const hint = defaultYes ? 'Y/n' : 'y/N';
   rl.resume();
   const answer = (await rl.question(`${question} (${hint}) `)).trim().toLowerCase();
@@ -45,9 +49,15 @@ async function askYesNo(rl: readlinePromises.Interface, question: string, defaul
   return answer === 'y' || answer === 'yes';
 }
 
-export async function confirmFileWrite(rl: readlinePromises.Interface, filePath: string): Promise<boolean> {
+export async function confirmFileWrite(
+  rl: readlinePromises.Interface,
+  filePath: string,
+): Promise<boolean> {
   console.log();
-  console.log(chalk.hex('#FBBF24')(`\uD83D\uDCDD File write requested: `) + chalk.hex('#E2E8F0').bold(filePath));
+  console.log(
+    chalk.hex('#FBBF24')(`\uD83D\uDCDD File write requested: `) +
+      chalk.hex('#E2E8F0').bold(filePath),
+  );
   console.log();
   return askYesNo(rl, chalk.hex('#FBBF24')('Apply this change?'), true);
 }
@@ -58,7 +68,7 @@ export async function confirmFileWrite(rl: readlinePromises.Interface, filePath:
  */
 export function pickChoiceArrowKeys(
   title: string,
-  choices: Array<{ name: string; value: string }>
+  choices: Array<{ name: string; value: string }>,
 ): Promise<string> {
   if (!process.stdin.isTTY) {
     return Promise.resolve(choices[0].value);
@@ -93,7 +103,9 @@ export function pickChoiceArrowKeys(
       choices.forEach((choice, idx) => {
         const isSelected = idx === selectedIndex;
         if (isSelected) {
-          lines.push(`  ${chalk.hex('#34D399').bold('❯')} ${chalk.bgHex('#34D399').hex('#0F172A').bold(` ${choice.name} `)}`);
+          lines.push(
+            `  ${chalk.hex('#34D399').bold('❯')} ${chalk.bgHex('#34D399').hex('#0F172A').bold(` ${choice.name} `)}`,
+          );
         } else {
           lines.push(`    ${chalk.hex('#94A3B8')(choice.name)}`);
         }
@@ -120,7 +132,9 @@ export function pickChoiceArrowKeys(
         clearRendered();
         // Show the chosen option inline
         const chosen = choices[selectedIndex];
-        process.stdout.write(`  ${chalk.hex('#34D399').bold('✔')} ${chalk.hex('#E2E8F0')(chosen.name)}\n`);
+        process.stdout.write(
+          `  ${chalk.hex('#34D399').bold('✔')} ${chalk.hex('#E2E8F0')(chosen.name)}\n`,
+        );
         cleanup();
         resolve(chosen.value);
       } else if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
@@ -173,18 +187,25 @@ export async function confirmCommand(
 
   // Header chip
   if (safety) {
-    console.log(`  ${chalk.hex(colors.fg)(`${colors.icon} ${colors.label}`)} ${chalk.hex('#94A3B8')(safety.reason ?? '')}`);
+    console.log(
+      `  ${chalk.hex(colors.fg)(`${colors.icon} ${colors.label}`)} ${chalk.hex('#94A3B8')(safety.reason ?? '')}`,
+    );
     if (level === 'dangerous') {
       console.log(chalk.hex('#F87171')('  This command may cause irreversible changes.'));
     }
   } else {
-    console.log(`  ${chalk.hex(colors.fg)(`${colors.icon} ${colors.label}`)} ${chalk.hex('#94A3B8')('File write requested')}`);
+    console.log(
+      `  ${chalk.hex(colors.fg)(`${colors.icon} ${colors.label}`)} ${chalk.hex('#94A3B8')('File write requested')}`,
+    );
   }
 
   // Command / target box
   console.log();
   const isCommand = !!safety;
-  console.log(chalk.hex('#475569')('  ┌─ ') + chalk.hex('#E2E8F0').bold(`${isCommand ? '$ ' : '✍ '}${command}`));
+  console.log(
+    chalk.hex('#475569')('  ┌─ ') +
+      chalk.hex('#E2E8F0').bold(`${isCommand ? '$ ' : '✍ '}${command}`),
+  );
   console.log(chalk.hex('#475569')('  └─ ') + chalk.dim(`cwd: ${cwd}`));
   if (description) {
     console.log(chalk.hex('#94A3B8')(`     ${description}`));
@@ -204,7 +225,12 @@ export async function confirmCommand(
     { name: 'Yes — execute once', value: 'yes' },
     { name: 'Always allow this command for current session', value: 'always' },
     ...(options?.onAllowAll
-      ? [{ name: options.allowAllLabel ?? 'Always allow everything for this session', value: 'allow-all' }]
+      ? [
+          {
+            name: options.allowAllLabel ?? 'Always allow everything for this session',
+            value: 'allow-all',
+          },
+        ]
       : []),
     { name: 'No — skip', value: 'no' },
   ];
@@ -223,7 +249,11 @@ export async function confirmCommand(
   return selectedValue === 'yes';
 }
 
-export async function confirm(rl: readlinePromises.Interface, message: string, defaultYes = true): Promise<boolean> {
+export async function confirm(
+  rl: readlinePromises.Interface,
+  message: string,
+  defaultYes = true,
+): Promise<boolean> {
   return askYesNo(rl, message, defaultYes);
 }
 
@@ -244,7 +274,11 @@ export async function select(
   return choices[0].value;
 }
 
-export async function input(rl: readlinePromises.Interface, message: string, defaultValue = ''): Promise<string> {
+export async function input(
+  rl: readlinePromises.Interface,
+  message: string,
+  defaultValue = '',
+): Promise<string> {
   const prompt = defaultValue ? `${message} (${defaultValue})` : message;
   rl.resume();
   const answer = (await rl.question(`${prompt}: `)).trim();
@@ -266,7 +300,7 @@ export async function askQuestions(
     header?: string;
     options?: Array<{ label: string; description?: string }>;
     multiple?: boolean;
-  }>
+  }>,
 ): Promise<Record<string, string>> {
   const answers: Record<string, string> = {};
   const rl = readlinePromises.createInterface({ input: process.stdin, output: process.stdout });
@@ -280,9 +314,13 @@ export async function askQuestions(
       if (q.options?.length) {
         for (let i = 0; i < q.options.length; i++) {
           const opt = q.options[i];
-          console.log(`    ${chalk.hex('#38BDF8')(`${i + 1}.`)} ${opt.label}${opt.description ? chalk.hex('#94A3B8')(` — ${opt.description}`) : ''}`);
+          console.log(
+            `    ${chalk.hex('#38BDF8')(`${i + 1}.`)} ${opt.label}${opt.description ? chalk.hex('#94A3B8')(` — ${opt.description}`) : ''}`,
+          );
         }
-        const hint = q.multiple ? 'Enter numbers separated by commas (or free text)' : 'Enter a number (or free text)';
+        const hint = q.multiple
+          ? 'Enter numbers separated by commas (or free text)'
+          : 'Enter a number (or free text)';
         const raw = (await rl.question(`  ${chalk.hex('#94A3B8')(hint + ': ')}`)).trim();
 
         if (q.multiple) {
@@ -295,7 +333,8 @@ export async function askQuestions(
             : raw || q.options[0].label;
         } else {
           const idx = parseInt(raw, 10) - 1;
-          answers[key] = idx >= 0 && idx < q.options.length ? q.options[idx].label : raw || q.options[0].label;
+          answers[key] =
+            idx >= 0 && idx < q.options.length ? q.options[idx].label : raw || q.options[0].label;
         }
       } else {
         const raw = (await rl.question(`  ${chalk.hex('#94A3B8')('Answer: ')}`)).trim();

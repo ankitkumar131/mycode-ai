@@ -1,10 +1,4 @@
-import type {
-  ProviderConfig,
-  MyCodeConfig,
-  SafetyLevel,
-  ToolCall,
-  ToolResult,
-} from '@mycode/core';
+import type { ProviderConfig, MyCodeConfig, SafetyLevel, ToolCall, ToolResult } from '@mycode/core';
 
 export interface AgentConfig {
   model?: string;

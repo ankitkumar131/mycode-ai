@@ -13,7 +13,14 @@
  * prompts, tests and third-party plugins keep working.
  */
 
-import type { ToolModule, ToolFunctionDefinition, ToolDefinition, ToolHandler, SafetyResult, CommandRecord } from './types.js';
+import type {
+  ToolModule,
+  ToolFunctionDefinition,
+  ToolDefinition,
+  ToolHandler,
+  SafetyResult,
+  CommandRecord,
+} from './types.js';
 import { readFileTool } from './definitions/read-file.js';
 import { writeFileTool } from './definitions/write-file.js';
 import { editFileTool } from './definitions/edit-file.js';
@@ -36,7 +43,16 @@ import { delegateTool } from './definitions/delegate.js';
 import { questionTool } from './definitions/question.js';
 
 export const TOOLSETS: Record<string, string[]> = {
-  files: ['read_file', 'write_file', 'patch', 'list_dir', 'glob', 'search_files', 'read_document', 'read_pdf'],
+  files: [
+    'read_file',
+    'write_file',
+    'patch',
+    'list_dir',
+    'glob',
+    'search_files',
+    'read_document',
+    'read_pdf',
+  ],
   terminal: ['terminal', 'process', 'execute_code'],
   git: ['git_status'],
   web: ['web_search', 'web_fetch'],
@@ -154,7 +170,7 @@ export class ToolRegistry {
       this.order.push(name);
     }
     if (opts.toolsets && opts.toolsets.length) {
-      const allowed = new Set(opts.toolsets.flatMap(t => TOOLSETS[t] ?? [t]));
+      const allowed = new Set(opts.toolsets.flatMap((t) => TOOLSETS[t] ?? [t]));
       for (const name of this.order) if (!allowed.has(name)) this.disabled.add(name);
     }
     for (const d of opts.disabled ?? []) this.disabled.add(this.canonical(d));
@@ -177,7 +193,7 @@ export class ToolRegistry {
   unregister(name: string): boolean {
     const c = this.canonical(name);
     const had = this.modules.delete(c) || this.tools.delete(c);
-    this.order = this.order.filter(n => n !== c);
+    this.order = this.order.filter((n) => n !== c);
     return had;
   }
 
@@ -209,7 +225,7 @@ export class ToolRegistry {
     return Object.entries(TOOLSETS).map(([name, tools]) => ({
       name,
       tools,
-      enabled: tools.filter(t => this.modules.has(t) && !this.disabled.has(t)).length,
+      enabled: tools.filter((t) => this.modules.has(t) && !this.disabled.has(t)).length,
     }));
   }
 
@@ -221,12 +237,15 @@ export class ToolRegistry {
   // ─── Lookup ───────────────────────────────────────────────────────────────
 
   get(name: string): ToolDefinition | undefined {
-    return this.tools.get(name) ?? (this.modules.get(this.canonical(name)) as unknown as ToolDefinition | undefined);
+    return (
+      this.tools.get(name) ??
+      (this.modules.get(this.canonical(name)) as unknown as ToolDefinition | undefined)
+    );
   }
 
   getAll(): ToolDefinition[] {
     const legacy = Array.from(this.tools.values());
-    const modDefs = Array.from(this.modules.values()).map(m => ({
+    const modDefs = Array.from(this.modules.values()).map((m) => ({
       name: m.definition.function.name,
       description: m.definition.function.description,
       parameters: m.definition.function.parameters,
@@ -235,7 +254,10 @@ export class ToolRegistry {
     return [...legacy, ...modDefs];
   }
 
-  getDefinitions(options?: { filterWriteTools?: boolean; includeDisabled?: boolean }): ToolFunctionDefinition[] {
+  getDefinitions(options?: {
+    filterWriteTools?: boolean;
+    includeDisabled?: boolean;
+  }): ToolFunctionDefinition[] {
     const seen = new Set<string>();
     let defs: ToolFunctionDefinition[] = [];
     for (const name of this.order) {
@@ -247,13 +269,21 @@ export class ToolRegistry {
     }
     for (const [name, legacy] of this.tools) {
       if (seen.has(name) || (!options?.includeDisabled && this.disabled.has(name))) continue;
-      defs.push({ type: 'function', function: { name, description: legacy.description, parameters: legacy.parameters } });
+      defs.push({
+        type: 'function',
+        function: { name, description: legacy.description, parameters: legacy.parameters },
+      });
     }
-    if (options?.filterWriteTools) defs = defs.filter(d => !WRITE_TOOLS.has(d.function.name));
+    if (options?.filterWriteTools) defs = defs.filter((d) => !WRITE_TOOLS.has(d.function.name));
     return defs;
   }
 
-  async executeTool(name: string, args: Record<string, unknown>, cwd: string, execOptions?: ExecuteToolOptions): Promise<string> {
+  async executeTool(
+    name: string,
+    args: Record<string, unknown>,
+    cwd: string,
+    execOptions?: ExecuteToolOptions,
+  ): Promise<string> {
     const canonicalName = this.canonical(name);
     if (this.disabled.has(canonicalName)) {
       throw new Error(`Tool "${canonicalName}" is disabled for this session.`);

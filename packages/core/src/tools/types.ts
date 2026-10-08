@@ -36,7 +36,11 @@ export interface AskUserQuestion {
 
 export interface ToolModule {
   definition: ToolFunctionDefinition;
-  execute: (args: Record<string, unknown>, cwd: string, options?: ToolExecuteOptions) => string | Promise<string>;
+  execute: (
+    args: Record<string, unknown>,
+    cwd: string,
+    options?: ToolExecuteOptions,
+  ) => string | Promise<string>;
 }
 
 export interface ToolDefinition {

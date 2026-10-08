@@ -59,7 +59,11 @@ export interface SessionConfig extends AgentOptions {
   onText?: (text: string) => void;
   onReasoning?: (text: string) => void;
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
-  onToolResult?: (name: string, result: string, meta: { durationMs: number; error: boolean }) => void;
+  onToolResult?: (
+    name: string,
+    result: string,
+    meta: { durationMs: number; error: boolean },
+  ) => void;
   onError?: (message: string) => void;
   onFinish?: (usage: { promptTokens: number; completionTokens: number }) => void;
   onCompress?: (info: { before: number; after: number; pruned?: number }) => void;
@@ -103,7 +107,14 @@ export class AgentSession {
   private _queuedPrompts: string[] = [];
   private _lastUserInput: string | null = null;
   private _startedAt = Date.now();
-  private _usage: SessionUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, turns: 0, toolCalls: 0, compressions: 0 };
+  private _usage: SessionUsage = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    turns: 0,
+    toolCalls: 0,
+    compressions: 0,
+  };
   private _filesTouched: Set<string> = new Set();
   private _toolCounts: Map<string, number> = new Map();
   private _pendingSystemSections: string[] = [];
@@ -187,7 +198,10 @@ export class AgentSession {
           reasoning = result.reasoning ?? '';
           thinkingSignature = result.thinkingSignature;
           if (result.usage) {
-            usage = { promptTokens: result.usage.prompt_tokens ?? 0, completionTokens: result.usage.completion_tokens ?? 0 };
+            usage = {
+              promptTokens: result.usage.prompt_tokens ?? 0,
+              completionTokens: result.usage.completion_tokens ?? 0,
+            };
             this._usage.promptTokens += usage.promptTokens;
             this._usage.completionTokens += usage.completionTokens;
             this._usage.totalTokens = this._usage.promptTokens + this._usage.completionTokens;
@@ -278,7 +292,11 @@ export class AgentSession {
     for (const group of groups) {
       if (this._aborted) {
         for (const call of group) {
-          this.context.addToolResult(call.id, 'Interrupted by user before execution.', call.function.name);
+          this.context.addToolResult(
+            call.id,
+            'Interrupted by user before execution.',
+            call.function.name,
+          );
         }
         continue;
       }
@@ -296,7 +314,9 @@ export class AgentSession {
     }
   }
 
-  private groupToolCalls(toolCalls: RawToolCall[]): Array<Array<RawToolCall> & { parallel?: boolean }> {
+  private groupToolCalls(
+    toolCalls: RawToolCall[],
+  ): Array<Array<RawToolCall> & { parallel?: boolean }> {
     const groups: Array<RawToolCall[] & { parallel?: boolean }> = [];
     let current: (RawToolCall[] & { parallel?: boolean }) | null = null;
 
@@ -331,13 +351,21 @@ export class AgentSession {
     try {
       args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
     } catch {
-      this.context.addToolResult(call.id, `Error: arguments were not valid JSON: ${call.function.arguments.slice(0, 200)}`, toolName);
+      this.context.addToolResult(
+        call.id,
+        `Error: arguments were not valid JSON: ${call.function.arguments.slice(0, 200)}`,
+        toolName,
+      );
       return;
     }
 
     const callKey = `${toolName}:${call.function.arguments}`;
     if (this._executedToolCalls.has(callKey) && !this.toolRegistry.isWriteTool(toolName)) {
-      this.context.addToolResult(call.id, 'Skipped: identical call already executed this turn — use the earlier result.', toolName);
+      this.context.addToolResult(
+        call.id,
+        'Skipped: identical call already executed this turn — use the earlier result.',
+        toolName,
+      );
       return;
     }
     const failures = this._toolFailures.get(toolName) ?? 0;
@@ -345,7 +373,7 @@ export class AgentSession {
       this.context.addToolResult(
         call.id,
         `Error: ${toolName} failed ${failures} times in a row. Stop retrying it and try a different approach or ask the user.`,
-        toolName
+        toolName,
       );
       return;
     }
@@ -361,7 +389,10 @@ export class AgentSession {
       // Record the pre-edit contents so the change can actually be undone. The
       // store keeps only the FIRST capture per file, so /undo restores the state
       // from before the agent started rather than an intermediate one.
-      snapshotStore.capture(this.id, writtenPath.startsWith('/') ? writtenPath : `${cwd}/${writtenPath}`);
+      snapshotStore.capture(
+        this.id,
+        writtenPath.startsWith('/') ? writtenPath : `${cwd}/${writtenPath}`,
+      );
     }
 
     this.emit({ type: 'tool_call', name: toolName, args });
@@ -397,7 +428,10 @@ export class AgentSession {
       const errMsg = err instanceof Error ? err.message : String(err);
       this.context.addToolResult(call.id, `Error: ${errMsg}`, toolName);
       this.emit({ type: 'error', message: `Tool ${toolName} failed: ${errMsg}` });
-      this.config.onToolResult?.(toolName, `Error: ${errMsg}`, { durationMs: Date.now() - t0, error: true });
+      this.config.onToolResult?.(toolName, `Error: ${errMsg}`, {
+        durationMs: Date.now() - t0,
+        error: true,
+      });
       this._toolFailures.set(toolName, failures + 1);
     }
   }
@@ -407,7 +441,8 @@ export class AgentSession {
     if (v.enabled === false) return null;
     if (v.formatter === false && v.diagnostics === false) return null;
 
-    const abs = filePath.startsWith('/') || /^[A-Za-z]:/.test(filePath) ? filePath : `${cwd}/${filePath}`;
+    const abs =
+      filePath.startsWith('/') || /^[A-Za-z]:/.test(filePath) ? filePath : `${cwd}/${filePath}`;
     try {
       let formatted = '';
       if (v.formatter !== false) {
@@ -521,7 +556,14 @@ export class AgentSession {
     todoStore.clear(this.id);
     this.context.clear();
     this._initialized = false;
-    this._usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, turns: 0, toolCalls: 0, compressions: 0 };
+    this._usage = {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      turns: 0,
+      toolCalls: 0,
+      compressions: 0,
+    };
     this._filesTouched.clear();
     this._toolCounts.clear();
     this._startedAt = Date.now();
@@ -543,7 +585,7 @@ export class AgentSession {
   /** Rebuild the system prompt (after skill install, model switch, etc.). */
   async refreshSystemPrompt(): Promise<void> {
     const cwd = this.config.cwd ?? process.cwd();
-    const tools = this.toolRegistry.getDefinitions().map(t => t.function.name);
+    const tools = this.toolRegistry.getDefinitions().map((t) => t.function.name);
     const prompt = await SystemPromptBuilder.buildSystemPrompt(cwd, {
       tools,
       model: this.config.model ?? this.config.providerRouter.getCurrentProvider()?.model,
@@ -556,7 +598,7 @@ export class AgentSession {
 
   private async ensureSystemPrompt(cwd: string): Promise<void> {
     if (this._initialized) return;
-    const tools = this.toolRegistry.getDefinitions().map(t => t.function.name);
+    const tools = this.toolRegistry.getDefinitions().map((t) => t.function.name);
     const systemPrompt = await SystemPromptBuilder.buildSystemPrompt(cwd, {
       tools,
       model: this.config.model ?? this.config.providerRouter.getCurrentProvider()?.model,
@@ -585,7 +627,9 @@ export class AgentSession {
    * previous summary forward so successive compactions accumulate rather than
    * each forgetting the last.
    */
-  async compress(opts: { keepTokens?: number; focus?: string; force?: boolean } = {}): Promise<{ before: number; after: number }> {
+  async compress(
+    opts: { keepTokens?: number; focus?: string; force?: boolean } = {},
+  ): Promise<{ before: number; after: number }> {
     const settings = { ...DEFAULT_COMPACTION, ...(this.config.compaction ?? {}) };
     const before = this.context.estimateTokens();
     const messages = this.context.getMessages();
@@ -621,7 +665,7 @@ export class AgentSession {
           { role: 'user', content: prompt },
         ],
         undefined,
-        { temperature: 0.1, max_tokens: settings.summaryOutputTokens }
+        { temperature: 0.1, max_tokens: settings.summaryOutputTokens },
       );
       summary = (res?.content ?? '').trim();
     } catch {
@@ -699,9 +743,15 @@ export class AgentSession {
   }
 
   /** Restore from a saved session (messages incl. system prompt). */
-  load(data: { id?: string; title?: string | null; messages: Message[]; usage?: Partial<SessionUsage>; todos?: unknown }): void {
+  load(data: {
+    id?: string;
+    title?: string | null;
+    messages: Message[];
+    usage?: Partial<SessionUsage>;
+    todos?: unknown;
+  }): void {
     this.context.replaceMessages(data.messages);
-    this._initialized = data.messages.some(m => m.role === 'system');
+    this._initialized = data.messages.some((m) => m.role === 'system');
     if (data.id) this.id = data.id;
     this.title = data.title ?? null;
     if (data.usage) this._usage = { ...this._usage, ...data.usage };

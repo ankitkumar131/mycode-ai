@@ -33,7 +33,11 @@ export function isPonytailMode(value: string): value is PonytailMode {
 
 /** Parse user input for a mode. Accepts a bare word or a `/ponytail <mode>` line. */
 export function parsePonytailMode(input: string): PonytailMode | null {
-  const word = input.trim().toLowerCase().replace(/^\/ponytail\s*/, '').trim();
+  const word = input
+    .trim()
+    .toLowerCase()
+    .replace(/^\/ponytail\s*/, '')
+    .trim();
   if (!word) return null;
   // Common synonyms people actually type.
   if (word === 'stop' || word === 'none' || word === 'disable' || word === 'disabled') return 'off';

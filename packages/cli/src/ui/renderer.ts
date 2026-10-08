@@ -13,7 +13,7 @@ const INDENT = '  ';
 // ── Inline Token Rendering ─────────────────────────────────────────────────
 
 function renderInline(tokens: Token[]): string {
-  return tokens.map(t => renderInlineToken(t)).join('');
+  return tokens.map((t) => renderInlineToken(t)).join('');
 }
 
 function renderInlineToken(token: Token): string {
@@ -96,10 +96,12 @@ function renderBlock(token: Token): string {
 
       const header = chalk.dim.bgHex(COLORS.codeBg)(label);
       const lines = t.text.split('\n');
-      const numbered = lines.map((line: string, i: number) => {
-        const num = chalk.hex(COLORS.textDim)(`${String(i + 1).padStart(3)} `);
-        return `${num}${chalk.hex(COLORS.text)(line)}`;
-      }).join('\n');
+      const numbered = lines
+        .map((line: string, i: number) => {
+          const num = chalk.hex(COLORS.textDim)(`${String(i + 1).padStart(3)} `);
+          return `${num}${chalk.hex(COLORS.text)(line)}`;
+        })
+        .join('\n');
 
       return `${header}\n${numbered}\n`;
     }
@@ -110,25 +112,36 @@ function renderBlock(token: Token): string {
         ? (i: number) => chalk.hex(COLORS.accent)(`${t.start + i}.`)
         : () => chalk.hex(COLORS.accent)('•');
 
-      return t.items.map((item: any, i: number) => {
-        const content = renderListItem(item);
-        return `${INDENT}${bullet(i)} ${content}`;
-      }).join('\n') + '\n';
+      return (
+        t.items
+          .map((item: any, i: number) => {
+            const content = renderListItem(item);
+            return `${INDENT}${bullet(i)} ${content}`;
+          })
+          .join('\n') + '\n'
+      );
     }
 
     case 'blockquote': {
       const t = token as any;
       const blocks = t.tokens.map((st: Token) => renderBlock(st));
       const content = blocks.join('\n').split('\n');
-      return content.map((line: string) => {
-        const trimmed = line.trim();
-        if (!trimmed) return '';
-        return `${chalk.hex(COLORS.accent)(ICONS.bar)} ${chalk.hex(COLORS.textSecondary).italic(trimmed)}`;
-      }).join('\n') + '\n';
+      return (
+        content
+          .map((line: string) => {
+            const trimmed = line.trim();
+            if (!trimmed) return '';
+            return `${chalk.hex(COLORS.accent)(ICONS.bar)} ${chalk.hex(COLORS.textSecondary).italic(trimmed)}`;
+          })
+          .join('\n') + '\n'
+      );
     }
 
     case 'hr':
-      return chalk.hex(COLORS.textDim)(ICONS.dash.repeat(Math.min(process.stdout.columns || 80, 50))) + '\n';
+      return (
+        chalk.hex(COLORS.textDim)(ICONS.dash.repeat(Math.min(process.stdout.columns || 80, 50))) +
+        '\n'
+      );
 
     case 'space':
       return '';
@@ -163,31 +176,37 @@ function renderTable(t: any): string {
       const plain = text.replace(/\u001b\[.*?m/g, '');
       widths[i] = Math.max(widths[i], plain.length);
       return text;
-    })
+    }),
   );
 
   // Add padding
-  widths.forEach((_, i) => { widths[i] += 2; });
+  widths.forEach((_, i) => {
+    widths[i] += 2;
+  });
 
   const border = chalk.hex(COLORS.textDim);
   const lines: string[] = [];
 
   // Header
-  const headerLine = headerTexts.map((text: string, i: number) => {
-    const plain = text.replace(/\u001b\[.*?m/g, '');
-    return chalk.bold(text) + ' '.repeat(Math.max(0, widths[i] - plain.length));
-  }).join(border(' │ '));
+  const headerLine = headerTexts
+    .map((text: string, i: number) => {
+      const plain = text.replace(/\u001b\[.*?m/g, '');
+      return chalk.bold(text) + ' '.repeat(Math.max(0, widths[i] - plain.length));
+    })
+    .join(border(' │ '));
   lines.push(`${INDENT}${headerLine}`);
 
   // Separator
-  lines.push(`${INDENT}${widths.map(w => border(ICONS.dash.repeat(w))).join(border('─┼─'))}`);
+  lines.push(`${INDENT}${widths.map((w) => border(ICONS.dash.repeat(w))).join(border('─┼─'))}`);
 
   // Rows
   for (const row of rowTexts) {
-    const rowLine = row.map((text: string, i: number) => {
-      const plain = text.replace(/\u001b\[.*?m/g, '');
-      return text + ' '.repeat(Math.max(0, widths[i] - plain.length));
-    }).join(border(' │ '));
+    const rowLine = row
+      .map((text: string, i: number) => {
+        const plain = text.replace(/\u001b\[.*?m/g, '');
+        return text + ' '.repeat(Math.max(0, widths[i] - plain.length));
+      })
+      .join(border(' │ '));
     lines.push(`${INDENT}${rowLine}`);
   }
 
@@ -208,13 +227,16 @@ function renderListItem(item: any): string {
     if (textToken.tokens?.length > 0) return renderInline(textToken.tokens);
     return textToken.text || '';
   }
-  return item.tokens.map((t: Token) => renderBlock(t)).join('\n').trim();
+  return item.tokens
+    .map((t: Token) => renderBlock(t))
+    .join('\n')
+    .trim();
 }
 
 // ── Diff rendering ──────────────────────────────────────────────────────────
 
 function renderDiffBlock(text: string): string {
-  const lines = text.split('\n').map(line => {
+  const lines = text.split('\n').map((line) => {
     if (line.startsWith('+') && !line.startsWith('+++')) {
       return chalk.hex(COLORS.diffAdd)(line);
     } else if (line.startsWith('-') && !line.startsWith('---')) {
@@ -239,7 +261,10 @@ export function renderMarkdown(md: string): string {
   if (!md?.trim()) return '';
   const marked = new Marked();
   const tokens = marked.lexer(md);
-  return tokens.map(t => renderBlock(t)).filter(Boolean).join('\n');
+  return tokens
+    .map((t) => renderBlock(t))
+    .filter(Boolean)
+    .join('\n');
 }
 
 /**
@@ -279,14 +304,22 @@ export function renderBox(title: string, content: string, color = COLORS.brandLi
   const width = getWidth(70);
   const border = chalk.hex(color);
 
-  console.log(`${INDENT}${border(ICONS.corner.topLeft + ICONS.dash.repeat(width - 4) + ICONS.corner.topRight)}`);
-  console.log(`${INDENT}${border(ICONS.bar)} ${chalk.bold(title).padEnd(width - 5)} ${border(ICONS.bar)}`);
-  console.log(`${INDENT}${border(ICONS.corner.midLeft + ICONS.dash.repeat(width - 4) + ICONS.corner.midRight)}`);
+  console.log(
+    `${INDENT}${border(ICONS.corner.topLeft + ICONS.dash.repeat(width - 4) + ICONS.corner.topRight)}`,
+  );
+  console.log(
+    `${INDENT}${border(ICONS.bar)} ${chalk.bold(title).padEnd(width - 5)} ${border(ICONS.bar)}`,
+  );
+  console.log(
+    `${INDENT}${border(ICONS.corner.midLeft + ICONS.dash.repeat(width - 4) + ICONS.corner.midRight)}`,
+  );
 
   for (const line of content.split('\n')) {
     const trimmed = line.slice(0, width - 6);
     console.log(`${INDENT}${border(ICONS.bar)} ${trimmed.padEnd(width - 5)} ${border(ICONS.bar)}`);
   }
 
-  console.log(`${INDENT}${border(ICONS.corner.bottomLeft + ICONS.dash.repeat(width - 4) + ICONS.corner.bottomRight)}`);
+  console.log(
+    `${INDENT}${border(ICONS.corner.bottomLeft + ICONS.dash.repeat(width - 4) + ICONS.corner.bottomRight)}`,
+  );
 }

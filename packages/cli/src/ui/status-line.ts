@@ -74,22 +74,22 @@ export function renderStatusLine(s: StatusLineState): string {
   }
 
   if (s.usedTokens !== undefined && s.contextWindow) {
-    const pct = s.contextWindow > 0 ? Math.min(100, Math.round((s.usedTokens / s.contextWindow) * 100)) : 0;
+    const pct =
+      s.contextWindow > 0 ? Math.min(100, Math.round((s.usedTokens / s.contextWindow) * 100)) : 0;
     const col = contextColour(pct);
     parts.push(
       chalk.hex(col)(`${fmtTokens(s.usedTokens)}/${fmtTokens(s.contextWindow)}`) +
         ' ' +
-        chalk.hex(col)(`${pct}%`)
+        chalk.hex(col)(`${pct}%`),
     );
   }
 
-  if (s.costUsd !== undefined && s.costUsd > 0) parts.push(chalk.hex(theme.success)(fmtCost(s.costUsd)));
+  if (s.costUsd !== undefined && s.costUsd > 0)
+    parts.push(chalk.hex(theme.success)(fmtCost(s.costUsd)));
 
   if (s.elapsedMs !== undefined) parts.push(chalk.hex(theme.textMuted)(fmtDuration(s.elapsedMs)));
 
-  const bypass = s.bypass
-    ? chalk.hex(theme.error).bold(`⚡ ${s.bypass}`)
-    : null;
+  const bypass = s.bypass ? chalk.hex(theme.error).bold(`⚡ ${s.bypass}`) : null;
   if (bypass) parts.unshift(bypass);
 
   const stats: string[] = [];
@@ -123,22 +123,44 @@ export function compactStatus(s: StatusLineState): string {
 }
 
 /** Rough prices in USD per **million** tokens for common models. Null if unknown. */
-export function estimateCost(inputTokens: number, outputTokens: number, model: string | undefined): number | null {
+export function estimateCost(
+  inputTokens: number,
+  outputTokens: number,
+  model: string | undefined,
+): number | null {
   if (!model) return null;
   const m = model.toLowerCase();
   let inPrice = 0;
   let outPrice = 0;
 
-  if (/opus/.test(m)) { inPrice = 15; outPrice = 75; }
-  else if (/sonnet/.test(m)) { inPrice = 3; outPrice = 15; }
-  else if (/haiku/.test(m)) { inPrice = 0.25; outPrice = 1.25; }
-  else if (/gpt-5|gpt-4\.1|o3|o4/.test(m)) { inPrice = 2.5; outPrice = 10; }
-  else if (/gpt-4o-mini/.test(m)) { inPrice = 0.15; outPrice = 0.6; }
-  else if (/gpt-4o/.test(m)) { inPrice = 2.5; outPrice = 10; }
-  else if (/gemini.*flash/.test(m)) { inPrice = 0.075; outPrice = 0.3; }
-  else if (/gemini/.test(m)) { inPrice = 1.25; outPrice = 5; }
-  else if (/deepseek/.test(m)) { inPrice = 0.14; outPrice = 0.28; }
-  else return null; // free / local / unknown — do not invent a number
+  if (/opus/.test(m)) {
+    inPrice = 15;
+    outPrice = 75;
+  } else if (/sonnet/.test(m)) {
+    inPrice = 3;
+    outPrice = 15;
+  } else if (/haiku/.test(m)) {
+    inPrice = 0.25;
+    outPrice = 1.25;
+  } else if (/gpt-5|gpt-4\.1|o3|o4/.test(m)) {
+    inPrice = 2.5;
+    outPrice = 10;
+  } else if (/gpt-4o-mini/.test(m)) {
+    inPrice = 0.15;
+    outPrice = 0.6;
+  } else if (/gpt-4o/.test(m)) {
+    inPrice = 2.5;
+    outPrice = 10;
+  } else if (/gemini.*flash/.test(m)) {
+    inPrice = 0.075;
+    outPrice = 0.3;
+  } else if (/gemini/.test(m)) {
+    inPrice = 1.25;
+    outPrice = 5;
+  } else if (/deepseek/.test(m)) {
+    inPrice = 0.14;
+    outPrice = 0.28;
+  } else return null; // free / local / unknown — do not invent a number
 
   return (inputTokens / 1_000_000) * inPrice + (outputTokens / 1_000_000) * outPrice;
 }

@@ -1,4 +1,3 @@
-
 const mockChat = vi.fn();
 const mockExecuteTool = vi.fn();
 const mockGetDefinitions = vi.fn();
@@ -56,7 +55,11 @@ vi.mock('./context.js', () => ({
 const { AgentSession } = await import('./agent-session.js');
 
 function makeSession(opts?: Partial<import('./agent-session.js').SessionConfig>) {
-  const router = { chat: mockChat, stream: vi.fn(), getCurrentProvider: () => ({ name: 'test', model: 'gpt-4o' }) };
+  const router = {
+    chat: mockChat,
+    stream: vi.fn(),
+    getCurrentProvider: () => ({ name: 'test', model: 'gpt-4o' }),
+  };
   return new AgentSession({
     providerRouter: router as any,
     ...opts,
@@ -89,8 +92,7 @@ describe('AgentSession', () => {
   });
 
   it('processes input and returns response text', async () => {
-    mockChat
-      .mockResolvedValueOnce({ content: 'Hello! How can I help?', toolCalls: [] });
+    mockChat.mockResolvedValueOnce({ content: 'Hello! How can I help?', toolCalls: [] });
 
     const session = makeSession();
     const result = await session.run('Hi');
@@ -121,7 +123,11 @@ describe('AgentSession', () => {
       .mockResolvedValueOnce({
         content: 'Let me check that...',
         toolCalls: [
-          { id: 'call1', type: 'function', function: { name: 'read-file', arguments: '{"path": "test.txt"}' } },
+          {
+            id: 'call1',
+            type: 'function',
+            function: { name: 'read-file', arguments: '{"path": "test.txt"}' },
+          },
         ],
       })
       .mockResolvedValueOnce({ content: 'Here is the file content.', toolCalls: [] });
@@ -135,9 +141,18 @@ describe('AgentSession', () => {
 
     expect(result).toBe('Here is the file content.');
     expect(mockChat).toHaveBeenCalledTimes(2);
-    expect(mockExecuteTool).toHaveBeenCalledWith('read-file', { path: 'test.txt' }, expect.any(String), expect.any(Object));
+    expect(mockExecuteTool).toHaveBeenCalledWith(
+      'read-file',
+      { path: 'test.txt' },
+      expect.any(String),
+      expect.any(Object),
+    );
     expect(onToolCall).toHaveBeenCalledWith('read-file', { path: 'test.txt' });
-    expect(onToolResult).toHaveBeenCalledWith('read-file', 'File content: hello', expect.anything());
+    expect(onToolResult).toHaveBeenCalledWith(
+      'read-file',
+      'File content: hello',
+      expect.anything(),
+    );
   });
 
   it('handles empty tool definitions gracefully', async () => {
@@ -169,7 +184,10 @@ describe('AgentSession', () => {
 
     expect(result).toBe('Fixed it.');
     expect(events).toContainEqual(
-      expect.objectContaining({ type: 'error', message: expect.stringContaining('Permission denied') })
+      expect.objectContaining({
+        type: 'error',
+        message: expect.stringContaining('Permission denied'),
+      }),
     );
   });
 
@@ -195,13 +213,18 @@ describe('AgentSession', () => {
 
   it('aborts mid-execution', async () => {
     let resolveChat: ((v: any) => void) | undefined;
-    mockChat.mockImplementation(() => new Promise(resolve => { resolveChat = resolve; }));
+    mockChat.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveChat = resolve;
+        }),
+    );
 
     const session = makeSession();
     const runPromise = session.run('Long task');
 
     // Wait for run() to enter the while loop and await router.chat()
-    await new Promise(r => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
 
     session.abort();
     resolveChat?.({ content: '', toolCalls: [] });
@@ -263,19 +286,27 @@ describe('AgentSession', () => {
     mockChat
       .mockResolvedValueOnce({
         content: 'Call failing tool',
-        toolCalls: [{ id: 'c1', type: 'function', function: { name: 'read-file', arguments: '{"f": 1}' } }],
+        toolCalls: [
+          { id: 'c1', type: 'function', function: { name: 'read-file', arguments: '{"f": 1}' } },
+        ],
       })
       .mockResolvedValueOnce({
         content: 'Call failing tool again',
-        toolCalls: [{ id: 'c2', type: 'function', function: { name: 'read-file', arguments: '{"f": 2}' } }],
+        toolCalls: [
+          { id: 'c2', type: 'function', function: { name: 'read-file', arguments: '{"f": 2}' } },
+        ],
       })
       .mockResolvedValueOnce({
         content: 'Call failing tool third time',
-        toolCalls: [{ id: 'c3', type: 'function', function: { name: 'read-file', arguments: '{"f": 3}' } }],
+        toolCalls: [
+          { id: 'c3', type: 'function', function: { name: 'read-file', arguments: '{"f": 3}' } },
+        ],
       })
       .mockResolvedValueOnce({
         content: 'Call failing tool fourth time',
-        toolCalls: [{ id: 'c4', type: 'function', function: { name: 'read-file', arguments: '{"f": 4}' } }],
+        toolCalls: [
+          { id: 'c4', type: 'function', function: { name: 'read-file', arguments: '{"f": 4}' } },
+        ],
       })
       .mockResolvedValueOnce({ content: 'Done.', toolCalls: [] });
 
@@ -292,19 +323,27 @@ describe('AgentSession', () => {
     mockChat
       .mockResolvedValueOnce({
         content: 'Call tool',
-        toolCalls: [{ id: 'c1', type: 'function', function: { name: 'read-file', arguments: '{"s": 1}' } }],
+        toolCalls: [
+          { id: 'c1', type: 'function', function: { name: 'read-file', arguments: '{"s": 1}' } },
+        ],
       })
       .mockResolvedValueOnce({
         content: 'Call tool again',
-        toolCalls: [{ id: 'c2', type: 'function', function: { name: 'read-file', arguments: '{"s": 2}' } }],
+        toolCalls: [
+          { id: 'c2', type: 'function', function: { name: 'read-file', arguments: '{"s": 2}' } },
+        ],
       })
       .mockResolvedValueOnce({
         content: 'Call tool third time',
-        toolCalls: [{ id: 'c3', type: 'function', function: { name: 'read-file', arguments: '{"s": 3}' } }],
+        toolCalls: [
+          { id: 'c3', type: 'function', function: { name: 'read-file', arguments: '{"s": 3}' } },
+        ],
       })
       .mockResolvedValueOnce({
         content: 'Call tool fourth time',
-        toolCalls: [{ id: 'c4', type: 'function', function: { name: 'read-file', arguments: '{"s": 4}' } }],
+        toolCalls: [
+          { id: 'c4', type: 'function', function: { name: 'read-file', arguments: '{"s": 4}' } },
+        ],
       })
       .mockResolvedValueOnce({ content: 'Finished successfully.', toolCalls: [] });
 

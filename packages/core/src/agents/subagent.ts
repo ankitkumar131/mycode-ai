@@ -128,7 +128,9 @@ export class SubAgentRunner {
       cwd: this.opts.cwd,
       contextWindow: this.opts.contextWindow,
       maxIterations: def.maxIterations,
-      toolRegistry: def.canWrite ? registry : new ToolRegistry({ toolsets, disabled: ['write_file', 'patch'] }),
+      toolRegistry: def.canWrite
+        ? registry
+        : new ToolRegistry({ toolsets, disabled: ['write_file', 'patch'] }),
       confirmFn: async () => false,
     });
 
@@ -175,7 +177,16 @@ function cap(text: string, max: number): string {
 }
 
 function emptyResult(kind: SubAgentKind, error: string): SubAgentResult {
-  return { ok: false, kind, report: '', reportChars: 0, childTokens: 0, toolCalls: 0, iterations: 0, error };
+  return {
+    ok: false,
+    kind,
+    report: '',
+    reportChars: 0,
+    childTokens: 0,
+    toolCalls: 0,
+    iterations: 0,
+    error,
+  };
 }
 
 /** Format the result for the parent model to read. */

@@ -44,18 +44,20 @@ export async function editCommand(filePath?: string, instruction?: string): Prom
   spinner.start();
 
   try {
-    const result = await session.run([
-      'You are an expert code editor. Given a file and an edit instruction,',
-      'output ONLY the complete updated file content inside a code block.',
-      'Do NOT add any other commentary or explanation.',
-      '',
-      `File: ${filePath}`,
-      '```',
-      content,
-      '```',
-      '',
-      `Instruction: ${instruction}`,
-    ].join('\n'));
+    const result = await session.run(
+      [
+        'You are an expert code editor. Given a file and an edit instruction,',
+        'output ONLY the complete updated file content inside a code block.',
+        'Do NOT add any other commentary or explanation.',
+        '',
+        `File: ${filePath}`,
+        '```',
+        content,
+        '```',
+        '',
+        `Instruction: ${instruction}`,
+      ].join('\n'),
+    );
 
     spinner.stop();
 

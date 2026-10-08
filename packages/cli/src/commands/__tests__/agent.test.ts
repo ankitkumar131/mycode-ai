@@ -25,7 +25,9 @@ vi.mock('@mycode/core', () => ({
     summary: vi.fn(() => null),
     safeWindow: 128_000,
   })),
-  SubAgentRunner: vi.fn().mockImplementation(() => ({ run: () => Promise.resolve({ report: '', tokens: 0, turns: 0 }) })),
+  SubAgentRunner: vi.fn().mockImplementation(() => ({
+    run: () => Promise.resolve({ report: '', tokens: 0, turns: 0 }),
+  })),
   renderSubAgentResult: vi.fn((r) => r.report ?? ''),
   todoStore: { get: () => [], subscribe: () => () => {}, set: vi.fn(), clear: vi.fn() },
   sessionStore: { save: vi.fn(), load: vi.fn(), list: () => [], delete: vi.fn() },

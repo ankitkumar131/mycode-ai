@@ -31,7 +31,15 @@
  */
 
 import readline from 'readline';
-import { readdirSync, statSync, writeFileSync, readFileSync, unlinkSync, mkdtempSync, mkdirSync } from 'fs';
+import {
+  readdirSync,
+  statSync,
+  writeFileSync,
+  readFileSync,
+  unlinkSync,
+  mkdtempSync,
+  mkdirSync,
+} from 'fs';
 import { join, dirname, basename, sep } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
@@ -60,9 +68,7 @@ export interface SlashMenuItem {
 }
 
 export type TextAreaSubmit =
-  | { kind: 'text'; text: string }
-  | { kind: 'slash'; name: string }
-  | { kind: 'exit' };
+  { kind: 'text'; text: string } | { kind: 'slash'; name: string } | { kind: 'exit' };
 
 type CommitSubmit = { kind: 'text'; text: string } | { kind: 'slash'; name: string };
 
@@ -200,7 +206,7 @@ export class TextArea {
     this.rearmInput();
     if (this.readPromise) throw new Error('TextArea.read() already pending');
     this.clearInput();
-    const promise = new Promise<TextAreaSubmit>(resolve => {
+    const promise = new Promise<TextAreaSubmit>((resolve) => {
       this.readPromise = { resolve };
     });
     void this.render();
@@ -221,7 +227,8 @@ export class TextArea {
     }
     process.stdin.removeListener('keypress', this.keyHandler);
     process.stdin.removeListener('data', this.dataHandler);
-    if (typeof (process.stdout as any).removeListener === 'function') process.stdout.removeListener('resize', this.resizeHandler);
+    if (typeof (process.stdout as any).removeListener === 'function')
+      process.stdout.removeListener('resize', this.resizeHandler);
     if (this.nonTTYHandlers) {
       process.stdin.removeListener('data', this.nonTTYHandlers.onData);
       process.stdin.removeListener('end', this.nonTTYHandlers.onEnd);
@@ -258,7 +265,8 @@ export class TextArea {
 
     process.stdin.on('keypress', this.keyHandler);
     process.stdin.prependListener('data', this.dataHandler);
-    if (typeof (process.stdout as any).on === 'function') process.stdout.on('resize', this.resizeHandler);
+    if (typeof (process.stdout as any).on === 'function')
+      process.stdout.on('resize', this.resizeHandler);
     // Bracketed paste
     process.stdout.write('\x1b[?2004h');
   }
@@ -387,7 +395,10 @@ export class TextArea {
   /** Replace paste placeholders with their content. */
   private expandPastes(text: string): string {
     if (this.pastes.size === 0) return text;
-    return text.replace(/\[Pasted text #(\d+): [^\]]*\]/g, (m, id) => this.pastes.get(Number(id)) ?? m);
+    return text.replace(
+      /\[Pasted text #(\d+): [^\]]*\]/g,
+      (m, id) => this.pastes.get(Number(id)) ?? m,
+    );
   }
 
   // ─── Key handling ────────────────────────────────────────────────────────
@@ -494,7 +505,10 @@ export class TextArea {
       case 'pagedown':
         if (this.menu) {
           const n = this.menu.items.length;
-          this.menu.index = name === 'pageup' ? Math.max(0, this.menu.index - MAX_MENU_ROWS) : Math.min(n - 1, this.menu.index + MAX_MENU_ROWS);
+          this.menu.index =
+            name === 'pageup'
+              ? Math.max(0, this.menu.index - MAX_MENU_ROWS)
+              : Math.min(n - 1, this.menu.index + MAX_MENU_ROWS);
           void this.render();
         }
         return;
@@ -778,7 +792,11 @@ export class TextArea {
       this.stash.push(this.text);
       this.clearInput();
       void this.closeRegion();
-      void this.printLine(chalk.hex(theme.dim)(`  📌 Draft stashed (${this.stash.length}). Press Ctrl+S on an empty prompt to restore.`));
+      void this.printLine(
+        chalk.hex(theme.dim)(
+          `  📌 Draft stashed (${this.stash.length}). Press Ctrl+S on an empty prompt to restore.`,
+        ),
+      );
       void this.render();
       return;
     }
@@ -795,7 +813,8 @@ export class TextArea {
   }
 
   private async openExternalEditor(): Promise<void> {
-    const editor = process.env.VISUAL || process.env.EDITOR || (process.platform === 'win32' ? 'notepad' : 'vi');
+    const editor =
+      process.env.VISUAL || process.env.EDITOR || (process.platform === 'win32' ? 'notepad' : 'vi');
     const dir = mkdtempSync(join(tmpdir(), 'mycode-'));
     const file = join(dir, 'PROMPT.md');
     writeFileSync(file, this.text, 'utf-8');
@@ -897,7 +916,8 @@ export class TextArea {
   private loadHistory(file: string): void {
     try {
       const arr = JSON.parse(readFileSync(file, 'utf-8'));
-      if (Array.isArray(arr)) this.history = arr.filter(x => typeof x === 'string').slice(-MAX_HISTORY);
+      if (Array.isArray(arr))
+        this.history = arr.filter((x) => typeof x === 'string').slice(-MAX_HISTORY);
     } catch {
       /* none */
     }
@@ -938,8 +958,15 @@ export class TextArea {
     if (t.startsWith('/') && !t.includes('\n') && !t.includes(' ')) {
       const q = t.toLowerCase();
       const all = this.opts.commands ?? [];
-      const starts = all.filter(c => c.name.toLowerCase().startsWith(q) || (c.aliases ?? []).some(a => a.toLowerCase().startsWith(q)));
-      const contains = q.length > 2 ? all.filter(c => !starts.includes(c) && c.name.toLowerCase().includes(q.slice(1))) : [];
+      const starts = all.filter(
+        (c) =>
+          c.name.toLowerCase().startsWith(q) ||
+          (c.aliases ?? []).some((a) => a.toLowerCase().startsWith(q)),
+      );
+      const contains =
+        q.length > 2
+          ? all.filter((c) => !starts.includes(c) && c.name.toLowerCase().includes(q.slice(1)))
+          : [];
       const items = [...starts, ...contains];
       if (items.length) {
         const prevIdx = this.menu?.kind === 'slash' ? this.menu.index : 0;
@@ -958,7 +985,13 @@ export class TextArea {
 
   private updateGhost(): void {
     this.ghost = '';
-    if (!this.text || this.text.length < 3 || this.cursor !== this.text.length || this.text.includes('\n')) return;
+    if (
+      !this.text ||
+      this.text.length < 3 ||
+      this.cursor !== this.text.length ||
+      this.text.includes('\n')
+    )
+      return;
     for (let i = this.history.length - 1; i >= 0; i--) {
       const h = this.history[i];
       if (h.length > this.text.length && h.startsWith(this.text) && !h.includes('\n')) {
@@ -982,18 +1015,34 @@ export class TextArea {
     }
     const tokenStart = this.cursor - partial.length;
     const cwd = this.opts.cwd ?? process.cwd();
-    const items = this.completePath(cwd, partial).map(p => ({ name: p, description: '' }));
+    const items = this.completePath(cwd, partial).map((p) => ({ name: p, description: '' }));
     if (!items.length) {
       this.menu = null;
       return false;
     }
     const prevIdx = this.menu?.kind === 'file' ? this.menu.index : 0;
-    this.menu = { kind: 'file', items, index: Math.min(prevIdx, items.length - 1), tokenStart, tokenEnd: this.cursor };
+    this.menu = {
+      kind: 'file',
+      items,
+      index: Math.min(prevIdx, items.length - 1),
+      tokenStart,
+      tokenEnd: this.cursor,
+    };
     return true;
   }
 
   private completePath(cwd: string, partial: string): string[] {
-    const IGNORE = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage', '__pycache__', '.venv', 'target']);
+    const IGNORE = new Set([
+      'node_modules',
+      '.git',
+      'dist',
+      'build',
+      '.next',
+      'coverage',
+      '__pycache__',
+      '.venv',
+      'target',
+    ]);
     const slash = partial.lastIndexOf('/');
     const dirPart = slash >= 0 ? partial.slice(0, slash + 1) : '';
     const filePart = slash >= 0 ? partial.slice(slash + 1) : partial;
@@ -1031,7 +1080,9 @@ export class TextArea {
         out.push(dirPart + e + (isDir ? '/' : ''));
       }
     }
-    out.sort((a, b) => (a.endsWith('/') === b.endsWith('/') ? a.localeCompare(b) : a.endsWith('/') ? -1 : 1));
+    out.sort((a, b) =>
+      a.endsWith('/') === b.endsWith('/') ? a.localeCompare(b) : a.endsWith('/') ? -1 : 1,
+    );
     return out.slice(0, 40);
   }
 
@@ -1132,9 +1183,17 @@ export class TextArea {
     if (this.menu) {
       const items = this.menu.items;
       const max = Math.min(items.length, MAX_MENU_ROWS);
-      const startIdx = Math.max(0, Math.min(this.menu.index - Math.floor(max / 2), items.length - max));
+      const startIdx = Math.max(
+        0,
+        Math.min(this.menu.index - Math.floor(max / 2), items.length - max),
+      );
       for (let i = startIdx; i < startIdx + max; i++) menuLines.push(this.menuLine(items[i], i));
-      if (items.length > max) menuLines.push(chalk.hex(theme.dim)(`    … ${items.length - max} more · ↑/↓ to scroll · Tab to complete`));
+      if (items.length > max)
+        menuLines.push(
+          chalk.hex(theme.dim)(
+            `    … ${items.length - max} more · ↑/↓ to scroll · Tab to complete`,
+          ),
+        );
     }
 
     const rows = buildInputRows(promptW, this.text, W, promptW);
@@ -1188,7 +1247,7 @@ export class TextArea {
     if (s.startsWith('!')) return chalk.hex(theme.amber)(s);
     return s
       .replace(/(^|\s)(@[^\s@]+)/g, (_m, pre, tok) => pre + chalk.hex(theme.greenGlow)(tok))
-      .replace(/\[Pasted text #\d+: [^\]]*\]/g, m => chalk.hex(theme.amber)(m));
+      .replace(/\[Pasted text #\d+: [^\]]*\]/g, (m) => chalk.hex(theme.amber)(m));
   }
 
   private menuLine(item: SlashMenuItem, idx: number): string {
@@ -1196,15 +1255,31 @@ export class TextArea {
     const selected = !!this.menu && idx === this.menu.index;
     const isFile = this.menu?.kind === 'file';
 
-    const namePlain = isFile ? basename(item.name.replace(/\/$/, '')) + (item.name.endsWith('/') ? '/' : '') : item.name;
+    const namePlain = isFile
+      ? basename(item.name.replace(/\/$/, '')) + (item.name.endsWith('/') ? '/' : '')
+      : item.name;
     const hint = item.argumentHint ? ` ${item.argumentHint}` : '';
-    const descPlain = isFile ? dirname(item.name) === '.' ? '' : dirname(item.name) + sep : item.description ?? '';
+    const descPlain = isFile
+      ? dirname(item.name) === '.'
+        ? ''
+        : dirname(item.name) + sep
+      : (item.description ?? '');
     const descMax = Math.max(6, W - 2 - visLen(namePlain) - visLen(hint) - 6);
-    const descTrunc = visLen(descPlain) > descMax ? descPlain.slice(0, descMax - 1) + '…' : descPlain;
+    const descTrunc =
+      visLen(descPlain) > descMax ? descPlain.slice(0, descMax - 1) + '…' : descPlain;
 
     const prefix = selected ? chalk.hex(theme.green).bold(' ❯') : '  ';
-    const badge = item.kind === 'skill' ? chalk.hex(theme.amber)('◆ ') : item.kind === 'quick' ? chalk.hex(theme.greenGlow)('⚡') : isFile ? chalk.hex(theme.greenGlow)(item.name.endsWith('/') ? '▸ ' : '· ') : '  ';
-    const name = selected ? chalk.bgHex(theme.green).hex(theme.black).bold(` ${namePlain} `) : chalk.hex(theme.green).bold(namePlain);
+    const badge =
+      item.kind === 'skill'
+        ? chalk.hex(theme.amber)('◆ ')
+        : item.kind === 'quick'
+          ? chalk.hex(theme.greenGlow)('⚡')
+          : isFile
+            ? chalk.hex(theme.greenGlow)(item.name.endsWith('/') ? '▸ ' : '· ')
+            : '  ';
+    const name = selected
+      ? chalk.bgHex(theme.green).hex(theme.black).bold(` ${namePlain} `)
+      : chalk.hex(theme.green).bold(namePlain);
     const hintS = hint ? chalk.hex(theme.dim)(hint) : '';
     const desc = descTrunc ? chalk.hex(theme.muted)(descTrunc) : '';
 
@@ -1236,7 +1311,7 @@ export class TextArea {
    * (the terminal's own line editing handles the rest) but not when piped.
    */
   private readLineNonTTY(echo: boolean): Promise<TextAreaSubmit> {
-    return new Promise<TextAreaSubmit>(resolve => {
+    return new Promise<TextAreaSubmit>((resolve) => {
       if (echo) {
         // Drop our TTY hint so nothing tries to position a cursor.
         process.stdout.write(this.opts.prompt);

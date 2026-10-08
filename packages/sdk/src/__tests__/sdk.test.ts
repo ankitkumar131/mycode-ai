@@ -60,9 +60,15 @@ describe('MyCodeAgent', () => {
     await agent.run('hello', {
       maxIterations: 1,
       events: {
-        onText(t) { events.push(`text:${t}`); },
-        onToolCall(c) { events.push(`tool:${c.name}`); },
-        onToolResult(r) { events.push(`result:${r.toolName}`); },
+        onText(t) {
+          events.push(`text:${t}`);
+        },
+        onToolCall(c) {
+          events.push(`tool:${c.name}`);
+        },
+        onToolResult(r) {
+          events.push(`result:${r.toolName}`);
+        },
       },
     });
     expect(Array.isArray(events)).toBe(true);

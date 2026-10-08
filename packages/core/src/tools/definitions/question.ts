@@ -57,7 +57,7 @@ export const questionTool: ToolModule = {
   execute: (async (
     args: Record<string, unknown>,
     _cwd: string,
-    options?: { askUser?: (questions: AskUserQuestion[]) => Promise<Record<string, string>> }
+    options?: { askUser?: (questions: AskUserQuestion[]) => Promise<Record<string, string>> },
   ) => {
     const raw = Array.isArray(args.questions) ? args.questions : [];
     const questions: AskUserQuestion[] = raw

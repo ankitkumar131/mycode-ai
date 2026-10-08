@@ -33,7 +33,12 @@ export interface TodoCounts {
 
 export type TodoListener = (todos: readonly Todo[], sessionId: string) => void;
 
-const VALID_STATUS: ReadonlySet<string> = new Set(['pending', 'in_progress', 'completed', 'cancelled']);
+const VALID_STATUS: ReadonlySet<string> = new Set([
+  'pending',
+  'in_progress',
+  'completed',
+  'cancelled',
+]);
 const VALID_PRIORITY: ReadonlySet<string> = new Set(['high', 'medium', 'low']);
 
 /**
@@ -52,9 +57,11 @@ export function normalizeTodos(input: unknown): Todo[] {
 
     // Accept `content`/`text` and `status`/`done` so older prompts still work.
     const content =
-      typeof item.content === 'string' ? item.content
-      : typeof item.text === 'string' ? item.text
-      : '';
+      typeof item.content === 'string'
+        ? item.content
+        : typeof item.text === 'string'
+          ? item.text
+          : '';
     if (!content.trim()) continue;
 
     let status: TodoStatus;
@@ -72,14 +79,21 @@ export function normalizeTodos(input: unknown): Todo[] {
         : undefined;
 
     const trimmed = content.trim();
-    const text = trimmed.length > MAX_TODO_LENGTH ? `${trimmed.slice(0, MAX_TODO_LENGTH - 1)}…` : trimmed;
+    const text =
+      trimmed.length > MAX_TODO_LENGTH ? `${trimmed.slice(0, MAX_TODO_LENGTH - 1)}…` : trimmed;
     out.push(priority ? { content: text, status, priority } : { content: text, status });
   }
   return out;
 }
 
 export function countTodos(todos: readonly Todo[]): TodoCounts {
-  const c: TodoCounts = { total: todos.length, pending: 0, inProgress: 0, completed: 0, cancelled: 0 };
+  const c: TodoCounts = {
+    total: todos.length,
+    pending: 0,
+    inProgress: 0,
+    completed: 0,
+    cancelled: 0,
+  };
   for (const t of todos) {
     if (t.status === 'pending') c.pending++;
     else if (t.status === 'in_progress') c.inProgress++;

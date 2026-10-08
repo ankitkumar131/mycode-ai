@@ -22,10 +22,24 @@ export const execCommandTool: ToolModule = {
         type: 'object',
         properties: {
           command: { type: 'string', description: 'The shell command to execute' },
-          description: { type: 'string', description: 'Short human-readable description of what this command does (shown to the user)' },
-          timeout: { type: 'number', description: 'Timeout in milliseconds for foreground commands (default 120000, max 1800000)' },
-          background: { type: 'boolean', description: 'Start in the background and return a process id immediately' },
-          cwd: { type: 'string', description: 'Optional subdirectory (relative to the workspace) to run in' },
+          description: {
+            type: 'string',
+            description:
+              'Short human-readable description of what this command does (shown to the user)',
+          },
+          timeout: {
+            type: 'number',
+            description:
+              'Timeout in milliseconds for foreground commands (default 120000, max 1800000)',
+          },
+          background: {
+            type: 'boolean',
+            description: 'Start in the background and return a process id immediately',
+          },
+          cwd: {
+            type: 'string',
+            description: 'Optional subdirectory (relative to the workspace) to run in',
+          },
         },
         required: ['command'],
       },
@@ -35,7 +49,10 @@ export const execCommandTool: ToolModule = {
   async execute(args, cwd, options) {
     const command = typeof args.command === 'string' ? args.command.trim() : '';
     const description = typeof args.description === 'string' ? args.description : undefined;
-    const timeout = Math.min(1_800_000, typeof args.timeout === 'number' && args.timeout > 0 ? args.timeout : DEFAULT_TIMEOUT);
+    const timeout = Math.min(
+      1_800_000,
+      typeof args.timeout === 'number' && args.timeout > 0 ? args.timeout : DEFAULT_TIMEOUT,
+    );
     const background = args.background === true;
 
     if (!command) throw new Error('Command is required');
@@ -46,7 +63,8 @@ export const execCommandTool: ToolModule = {
     if (typeof args.cwd === 'string' && args.cwd.trim()) {
       const target = resolve(cwd, args.cwd);
       const rel = relative(cwd, target);
-      if (rel.startsWith('..') || isAbsolute(rel)) throw new Error(`cwd must be inside the workspace: ${args.cwd}`);
+      if (rel.startsWith('..') || isAbsolute(rel))
+        throw new Error(`cwd must be inside the workspace: ${args.cwd}`);
       runCwd = target;
     }
 
@@ -57,7 +75,16 @@ export const execCommandTool: ToolModule = {
     if (options?.confirmFn) {
       const confirmed = await options.confirmFn(command, description ?? null, safety);
       if (!confirmed) {
-        options.commandHistory?.add({ command, cwd: runCwd, exitCode: null, signal: null, durationMs: 0, status: 'cancelled', output: 'Cancelled by user', outputPreview: 'Cancelled by user' });
+        options.commandHistory?.add({
+          command,
+          cwd: runCwd,
+          exitCode: null,
+          signal: null,
+          durationMs: 0,
+          status: 'cancelled',
+          output: 'Cancelled by user',
+          outputPreview: 'Cancelled by user',
+        });
         return 'Command execution cancelled by user. Ask before retrying, or try a different approach.';
       }
     }
@@ -66,14 +93,24 @@ export const execCommandTool: ToolModule = {
       const { processManager } = await import('../process-manager.js');
       const proc = processManager.start(command, runCwd, { label: description });
       // Give it a moment to fail fast / print a first line.
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 800));
       const { lines } = processManager.poll(proc.id, { tail: 30 });
-      const state = proc.status === 'running' ? `running (pid ${proc.pid})` : `exited with code ${proc.exitCode}`;
-      return [`Started background process ${proc.id}: ${state}`, lines.length ? `Initial output:\n${lines.join('\n')}` : '(no output yet)', `Use process(action="logs", id="${proc.id}") to read output, process(action="kill", id="${proc.id}") to stop.`].join('\n');
+      const state =
+        proc.status === 'running'
+          ? `running (pid ${proc.pid})`
+          : `exited with code ${proc.exitCode}`;
+      return [
+        `Started background process ${proc.id}: ${state}`,
+        lines.length ? `Initial output:\n${lines.join('\n')}` : '(no output yet)',
+        `Use process(action="logs", id="${proc.id}") to read output, process(action="kill", id="${proc.id}") to stop.`,
+      ].join('\n');
     }
 
     const { executeCommand } = await import('../command-executor.js');
-    const result = await executeCommand(command, runCwd, { timeout, abortSignal: options?.abortSignal });
+    const result = await executeCommand(command, runCwd, {
+      timeout,
+      abortSignal: options?.abortSignal,
+    });
 
     options?.commandHistory?.add({
       command,
@@ -96,8 +133,16 @@ export const execCommandTool: ToolModule = {
     const parts: string[] = [];
     if (output.trim()) parts.push(output.trimEnd());
     else parts.push('(no output)');
-    const status = result.timedOut ? 'TIMED OUT' : result.killed ? 'KILLED' : result.exitCode === 0 ? 'SUCCESS' : 'FAILED';
-    parts.push(`\n[exit ${result.exitCode ?? result.signal ?? '?'} · ${(result.durationMs / 1000).toFixed(1)}s · ${status}]`);
+    const status = result.timedOut
+      ? 'TIMED OUT'
+      : result.killed
+        ? 'KILLED'
+        : result.exitCode === 0
+          ? 'SUCCESS'
+          : 'FAILED';
+    parts.push(
+      `\n[exit ${result.exitCode ?? result.signal ?? '?'} · ${(result.durationMs / 1000).toFixed(1)}s · ${status}]`,
+    );
     return parts.join('\n');
   },
 };

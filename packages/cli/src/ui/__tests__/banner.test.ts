@@ -22,20 +22,38 @@ describe('renderBanner', () => {
   const text = () => out.join('\n');
 
   it('announces the active ponytail mode and how to turn it off', () => {
-    renderBanner({ version: '3.2.0', model: 'gpt-4o', cwd: '/tmp', providerChain: ['test'], ponytail: 'ponytail: full (default)' });
+    renderBanner({
+      version: '3.2.0',
+      model: 'gpt-4o',
+      cwd: '/tmp',
+      providerChain: ['test'],
+      ponytail: 'ponytail: full (default)',
+    });
     expect(text()).toContain('ponytail: full (default)');
     expect(text()).toContain('/ponytail off');
   });
 
   it('stays quiet when ponytail is off or unset', () => {
-    renderBanner({ version: '3.2.0', model: 'gpt-4o', cwd: '/tmp', providerChain: ['test'], ponytail: null });
+    renderBanner({
+      version: '3.2.0',
+      model: 'gpt-4o',
+      cwd: '/tmp',
+      providerChain: ['test'],
+      ponytail: null,
+    });
     expect(text()).not.toContain('ponytail');
     renderBanner({ version: '3.2.0', model: 'gpt-4o', cwd: '/tmp', providerChain: [] });
     expect(text()).not.toContain('ponytail');
   });
 
   it('reports an explicitly chosen level, not just the default', () => {
-    renderBanner({ version: '3.2.0', model: 'gpt-4o', cwd: '/tmp', providerChain: ['test'], ponytail: 'ponytail: ultra (set this session)' });
+    renderBanner({
+      version: '3.2.0',
+      model: 'gpt-4o',
+      cwd: '/tmp',
+      providerChain: ['test'],
+      ponytail: 'ponytail: ultra (set this session)',
+    });
     expect(text()).toContain('ponytail: ultra (set this session)');
   });
 });

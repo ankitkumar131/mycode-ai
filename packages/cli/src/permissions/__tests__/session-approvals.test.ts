@@ -81,7 +81,9 @@ describe('SessionApprovals', () => {
   it('describe() explains the partial case accurately', () => {
     const a = new SessionApprovals();
     a.allow('writes');
-    expect(a.describe()[0]).toBe('Approval prompts are off for file writes, for this session only.');
+    expect(a.describe()[0]).toBe(
+      'Approval prompts are off for file writes, for this session only.',
+    );
   });
 
   it('describe() reports the normal state when nothing is bypassed', () => {
@@ -146,7 +148,7 @@ describe('shouldPrompt', () => {
   it('bypasses only the scope that was allowed', () => {
     const writes = new SessionApprovals();
     writes.allow('writes');
-    expect(shouldPrompt(writes, base)).toBe(false);                       // write: no prompt
+    expect(shouldPrompt(writes, base)).toBe(false); // write: no prompt
     expect(shouldPrompt(writes, { ...base, isCommand: true })).toBe(true); // command: still prompts
 
     const commands = new SessionApprovals();

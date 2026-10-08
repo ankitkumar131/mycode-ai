@@ -61,9 +61,11 @@ export async function agentCommand(task?: string, opts: AgentCommandOptions = {}
       console.log(
         `  ${chalk.hex(theme.switch)('↻')} ${chalk.hex(theme.warning).bold('Provider failover')}  ` +
           `${chalk.hex(theme.textSecondary)(event.from)} ${chalk.hex(theme.textDim)('→')} ` +
-          `${chalk.hex(theme.brand).bold(event.to)}  ${chalk.hex(theme.textDim)(event.reason)}`
+          `${chalk.hex(theme.brand).bold(event.to)}  ${chalk.hex(theme.textDim)(event.reason)}`,
       );
-      console.log(`  ${chalk.hex(theme.textDim)('Context preserved and checkpointed; continuing from where it left off.')}`);
+      console.log(
+        `  ${chalk.hex(theme.textDim)('Context preserved and checkpointed; continuing from where it left off.')}`,
+      );
       console.log();
     },
     onCheckpoint: () => {
@@ -101,7 +103,7 @@ export async function agentCommand(task?: string, opts: AgentCommandOptions = {}
       stopSpinner();
       console.log(
         `  ${chalk.hex(theme.tool)('◆')} ${chalk.hex(theme.tool).bold(`sub-agent ${req.kind}`)} ` +
-          chalk.hex(theme.textDim)(req.task.replace(/\s+/g, ' ').slice(0, 60))
+          chalk.hex(theme.textDim)(req.task.replace(/\s+/g, ' ').slice(0, 60)),
       );
       const runner = new SubAgentRunner({
         kind: req.kind,

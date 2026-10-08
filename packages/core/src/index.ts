@@ -7,14 +7,30 @@ export { ConversationContext } from './agent/context.js';
 export type { AgentOptions, AgentEvent, Message as AgentMessage } from './agent/types.js';
 
 // Multi-Agent Engine
-export { SubAgentRunner, SUBAGENTS, renderSubAgentResult, subAgentToolsets, extractReport } from './agents/subagent.js';
-export type { SubAgentKind, SubAgentDefinition, SubAgentResult, SubAgentRunOptions } from './agents/subagent.js';
+export {
+  SubAgentRunner,
+  SUBAGENTS,
+  renderSubAgentResult,
+  subAgentToolsets,
+  extractReport,
+} from './agents/subagent.js';
+export type {
+  SubAgentKind,
+  SubAgentDefinition,
+  SubAgentResult,
+  SubAgentRunOptions,
+} from './agents/subagent.js';
 
 // Tools
 export { ToolRegistry, TOOLSETS, ALIASES as TOOL_ALIASES } from './tools/tool-registry.js';
 export { todoStore, normalizeTodos, countTodos, hasOpenWork } from './tools/todo-store.js';
 export type { Todo, TodoStatus, TodoPriority, TodoCounts } from './tools/todo-store.js';
-export { truncateToolOutput, pruneToolOutputs, toolOutputDir, readSpilledOutput } from './tools/output-store.js';
+export {
+  truncateToolOutput,
+  pruneToolOutputs,
+  toolOutputDir,
+  readSpilledOutput,
+} from './tools/output-store.js';
 export type { TruncateOptions, TruncateResult } from './tools/output-store.js';
 export { ProcessManager, processManager } from './tools/process-manager.js';
 export type { ManagedProcess } from './tools/process-manager.js';
@@ -55,10 +71,22 @@ export { todoWriteTool } from './tools/definitions/todowrite.js';
 export { readInstructionsTool } from './tools/definitions/read-instructions.js';
 export { processTool } from './tools/definitions/process.js';
 export { skillsListTool, skillViewTool, skillManageTool } from './tools/definitions/skills.js';
-export { memoryTool, readMemoryFile, writeMemoryFile, memoryPath } from './tools/definitions/memory.js';
+export {
+  memoryTool,
+  readMemoryFile,
+  writeMemoryFile,
+  memoryPath,
+} from './tools/definitions/memory.js';
 
 // Documents
-export { extractDocument, renderDocument, isDocumentFile, DOCUMENT_EXTENSIONS, htmlToText, rtfToText } from './documents/document-reader.js';
+export {
+  extractDocument,
+  renderDocument,
+  isDocumentFile,
+  DOCUMENT_EXTENSIONS,
+  htmlToText,
+  rtfToText,
+} from './documents/document-reader.js';
 export type { ExtractedDocument, DocumentSection } from './documents/document-reader.js';
 export { ZipReader } from './documents/zip.js';
 
@@ -67,15 +95,36 @@ export { SessionStore, sessionStore } from './sessions/session-store.js';
 export type { SavedSession, SessionSummary } from './sessions/session-store.js';
 
 // Skills
-export { SkillLoader, parseFrontmatter, stripFrontmatter, isPlatformCompatible } from './skills/skill-loader.js';
+export {
+  SkillLoader,
+  parseFrontmatter,
+  stripFrontmatter,
+  isPlatformCompatible,
+} from './skills/skill-loader.js';
 export { BUNDLED_SKILLS } from './skills/bundled-skills.js';
 export { SkillManager, skillManager } from './skills/skill-manager.js';
-export type { SkillDefinition, InstalledSkill, SkillsLockFile, SkillFrontmatter, SkillIndexEntry } from './skills/types.js';
+export type {
+  SkillDefinition,
+  InstalledSkill,
+  SkillsLockFile,
+  SkillFrontmatter,
+  SkillIndexEntry,
+} from './skills/types.js';
 export type { SkillManagerOptions, SkillSearchResult } from './skills/skill-manager.js';
 
 // Failover
-export { FailoverCoordinator, effectiveWindowFor, safeContextWindow, describeFailoverReason } from './routing/failover.js';
-export type { FailoverEvent, FailoverCoordinatorOptions, CheckpointPayload, CheckpointFn } from './routing/failover.js';
+export {
+  FailoverCoordinator,
+  effectiveWindowFor,
+  safeContextWindow,
+  describeFailoverReason,
+} from './routing/failover.js';
+export type {
+  FailoverEvent,
+  FailoverCoordinatorOptions,
+  CheckpointPayload,
+  CheckpointFn,
+} from './routing/failover.js';
 
 // Compaction
 export {
@@ -96,7 +145,13 @@ export {
 export type { CompactionSettings, CompactionPlan } from './session/compaction.js';
 
 // Verification
-export { runDiagnostics, runFormatter, renderVerification, filterDiagnostics, isVerifiable } from './verify/verify.js';
+export {
+  runDiagnostics,
+  runFormatter,
+  renderVerification,
+  filterDiagnostics,
+  isVerifiable,
+} from './verify/verify.js';
 export type { VerifyResult } from './verify/verify.js';
 
 // Providers
@@ -123,7 +178,12 @@ export type { MyCodeConfig } from './config/types.js';
 // Output
 
 // Prompts
-export { SystemPromptBuilder, findContextFiles, readMemory, CONTEXT_FILE_NAMES } from './prompts/system-prompt.js';
+export {
+  SystemPromptBuilder,
+  findContextFiles,
+  readMemory,
+  CONTEXT_FILE_NAMES,
+} from './prompts/system-prompt.js';
 export {
   type PonytailMode,
   PONYTAIL_MODES,

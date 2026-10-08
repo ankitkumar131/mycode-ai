@@ -17,7 +17,12 @@ import {
 
 const user = (content: string): Message => ({ role: 'user', content });
 const assistant = (content: string): Message => ({ role: 'assistant', content });
-const toolResult = (content: string): Message => ({ role: 'tool', content, tool_call_id: 'c1', name: 'bash' });
+const toolResult = (content: string): Message => ({
+  role: 'tool',
+  content,
+  tool_call_id: 'c1',
+  name: 'bash',
+});
 
 /** A message whose serialised length is roughly `tokens * 4` characters. */
 const big = (role: Message['role'], tokens: number): Message => ({
@@ -149,7 +154,10 @@ describe('summary prompt', () => {
   it('injects the live todo list so the plan survives compaction', () => {
     const prompt = buildSummaryPrompt({
       transcript: serializeForSummary([user('do the thing')]),
-      todos: [{ content: 'step one', status: 'completed' }, { content: 'step two', status: 'pending' }],
+      todos: [
+        { content: 'step one', status: 'completed' },
+        { content: 'step two', status: 'pending' },
+      ],
     });
     expect(prompt).toContain('step one');
     expect(prompt).toContain('step two');

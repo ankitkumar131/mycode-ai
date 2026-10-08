@@ -91,8 +91,7 @@ describe('TextArea (simulated TTY)', () => {
   const type = (s: string) => {
     for (const ch of s) stdin.emit('data', Buffer.from(ch, 'utf-8'));
   };
-  const press = (str: string, key: Partial<readline.Key>) =>
-    stdin.emit('keypress', str, key);
+  const press = (str: string, key: Partial<readline.Key>) => stdin.emit('keypress', str, key);
 
   const tick = () => new Promise<void>((r) => setTimeout(r, 5));
 

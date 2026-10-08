@@ -58,7 +58,8 @@ export const webSearchTool: ToolModule = {
     type: 'function',
     function: {
       name: 'web_search',
-      description: 'Search the web for up-to-date information, documentation, news, or technical questions using web search.',
+      description:
+        'Search the web for up-to-date information, documentation, news, or technical questions using web search.',
       parameters: {
         type: 'object',
         properties: {
@@ -78,7 +79,8 @@ export const webSearchTool: ToolModule = {
 
   async execute(args) {
     const query = typeof args.query === 'string' ? args.query.trim() : '';
-    const numResults = typeof args.numResults === 'number' ? Math.min(Math.max(1, args.numResults), 10) : 5;
+    const numResults =
+      typeof args.numResults === 'number' ? Math.min(Math.max(1, args.numResults), 10) : 5;
 
     if (!query) {
       throw new Error('Search query must not be empty.');
@@ -93,7 +95,8 @@ export const webSearchTool: ToolModule = {
         signal: controller.signal,
         body: new URLSearchParams({ q: query }),
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Content-Type': 'application/x-www-form-urlencoded',
         },
       });
@@ -111,9 +114,9 @@ export const webSearchTool: ToolModule = {
         return `Web Search Query: "${query}"\nNo results found.`;
       }
 
-      const formatted = results.map((r, i) =>
-        `[${i + 1}] ${r.title}\n    URL: ${r.url}\n    Snippet: ${r.snippet}`
-      ).join('\n\n');
+      const formatted = results
+        .map((r, i) => `[${i + 1}] ${r.title}\n    URL: ${r.url}\n    Snippet: ${r.snippet}`)
+        .join('\n\n');
 
       return `Web Search Results for "${query}":\n\n${formatted}`;
     } catch (err: any) {

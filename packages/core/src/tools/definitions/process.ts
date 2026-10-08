@@ -15,13 +15,29 @@ export const processTool: ToolModule = {
       parameters: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['list', 'logs', 'poll', 'wait', 'write', 'kill', 'kill_all'], description: 'Operation' },
-          id: { type: 'string', description: 'Process id (e.g. "p1") — required for logs/poll/wait/write/kill' },
+          action: {
+            type: 'string',
+            enum: ['list', 'logs', 'poll', 'wait', 'write', 'kill', 'kill_all'],
+            description: 'Operation',
+          },
+          id: {
+            type: 'string',
+            description: 'Process id (e.g. "p1") — required for logs/poll/wait/write/kill',
+          },
           tail: { type: 'number', description: 'Number of trailing lines for logs (default 100)' },
-          from_line: { type: 'number', description: 'Absolute line index to read from (use next_line from a previous poll)' },
+          from_line: {
+            type: 'number',
+            description: 'Absolute line index to read from (use next_line from a previous poll)',
+          },
           pattern: { type: 'string', description: 'Regex to wait for (wait action)' },
-          timeout: { type: 'number', description: 'Max ms to wait (wait action, default 30000, max 180000)' },
-          input: { type: 'string', description: 'Text to write to stdin (write action). Add "\\n" to submit a line.' },
+          timeout: {
+            type: 'number',
+            description: 'Max ms to wait (wait action, default 30000, max 180000)',
+          },
+          input: {
+            type: 'string',
+            description: 'Text to write to stdin (write action). Add "\\n" to submit a line.',
+          },
         },
         required: ['action'],
       },
@@ -55,17 +71,22 @@ export const processTool: ToolModule = {
       case 'wait': {
         if (!id) throw new Error('id is required');
         const timeout = Math.min(180_000, typeof args.timeout === 'number' ? args.timeout : 30_000);
-        const pattern = typeof args.pattern === 'string' && args.pattern ? new RegExp(args.pattern, 'i') : null;
+        const pattern =
+          typeof args.pattern === 'string' && args.pattern ? new RegExp(args.pattern, 'i') : null;
         const r = await processManager.waitFor(id, pattern, timeout);
         const proc = processManager.get(id)!;
-        const head = r.matched ? 'Pattern matched.' : r.exited ? `Process exited (code ${proc.exitCode}).` : 'Timed out waiting.';
+        const head = r.matched
+          ? 'Pattern matched.'
+          : r.exited
+            ? `Process exited (code ${proc.exitCode}).`
+            : 'Timed out waiting.';
         return `${head}\n${r.lines.slice(-80).join('\n')}`;
       }
       case 'write': {
         if (!id) throw new Error('id is required');
         const input = typeof args.input === 'string' ? args.input : '';
         processManager.write(id, input);
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 300));
         const { lines } = processManager.poll(id, { tail: 20 });
         return `Wrote ${input.length} chars to ${id}.\n${lines.join('\n')}`;
       }

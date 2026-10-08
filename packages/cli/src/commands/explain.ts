@@ -34,20 +34,26 @@ export async function explainCommand(filePath?: string): Promise<void> {
   const session = new AgentSession({
     providerRouter: router,
     cwd: process.cwd(),
-    onError(msg) { spinner.fail(chalk.red(msg)); },
-    onFinish() { spinner.stop(); },
+    onError(msg) {
+      spinner.fail(chalk.red(msg));
+    },
+    onFinish() {
+      spinner.stop();
+    },
   });
 
   try {
-    const result = await session.run([
-      'You are a senior engineer. Explain the following code file clearly and concisely.',
-      'Describe what it does, its structure, key functions, and any notable patterns.',
-      '',
-      `File: ${filePath}`,
-      '```',
-      content,
-      '```',
-    ].join('\n'));
+    const result = await session.run(
+      [
+        'You are a senior engineer. Explain the following code file clearly and concisely.',
+        'Describe what it does, its structure, key functions, and any notable patterns.',
+        '',
+        `File: ${filePath}`,
+        '```',
+        content,
+        '```',
+      ].join('\n'),
+    );
     console.log(renderMarkdown(result || '(no response)'));
   } catch (err: any) {
     spinner.fail(chalk.red(err.message));

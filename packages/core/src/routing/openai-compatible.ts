@@ -82,13 +82,16 @@ export class OpenAICompatibleProvider extends BaseProvider {
     }
     try {
       const params = this.buildParams(messages, tools, options);
-      const response = await this.client.chat.completions.create(params, { signal: options.abortSignal });
+      const response = await this.client.chat.completions.create(params, {
+        signal: options.abortSignal,
+      });
       this.recordSuccess();
       const choice = response.choices[0];
       const rawToolCalls = choice.message.tool_calls || [];
       return {
         content: choice.message.content || '',
-        reasoning: (choice.message as any).reasoning_content || (choice.message as any).reasoning || '',
+        reasoning:
+          (choice.message as any).reasoning_content || (choice.message as any).reasoning || '',
         toolCalls: rawToolCalls,
         usage: response.usage || {},
         finish_reason: choice.finish_reason,
@@ -100,7 +103,11 @@ export class OpenAICompatibleProvider extends BaseProvider {
     }
   }
 
-  private async chatStreaming(messages: unknown[], tools: unknown[] = [], options: any = {}): Promise<any> {
+  private async chatStreaming(
+    messages: unknown[],
+    tools: unknown[] = [],
+    options: any = {},
+  ): Promise<any> {
     const params = this.buildParams(messages, tools, options);
     params.stream = true;
     params.stream_options = { include_usage: true };
@@ -119,7 +126,9 @@ export class OpenAICompatibleProvider extends BaseProvider {
         // Some servers reject stream_options — retry without it once.
         if (/stream_options/i.test(err?.message ?? '')) {
           delete params.stream_options;
-          stream = await this.client.chat.completions.create(params, { signal: options.abortSignal });
+          stream = await this.client.chat.completions.create(params, {
+            signal: options.abortSignal,
+          });
         } else throw err;
       }
       this.recordSuccess();
@@ -162,13 +171,21 @@ export class OpenAICompatibleProvider extends BaseProvider {
 
     const toolCalls = Array.from(toolCallBuffers.entries())
       .sort((a, b) => a[0] - b[0])
-      .map(([i, b]) => ({ id: b.id || `call_${i}`, type: 'function', function: { name: b.name, arguments: b.arguments || '{}' } }))
-      .filter(t => t.function.name);
+      .map(([i, b]) => ({
+        id: b.id || `call_${i}`,
+        type: 'function',
+        function: { name: b.name, arguments: b.arguments || '{}' },
+      }))
+      .filter((t) => t.function.name);
 
     return { content, reasoning, toolCalls, usage, finish_reason };
   }
 
-  async *stream(messages: unknown[], tools: unknown[] = [], options: any = {}): AsyncGenerator<any> {
+  async *stream(
+    messages: unknown[],
+    tools: unknown[] = [],
+    options: any = {},
+  ): AsyncGenerator<any> {
     try {
       const params = this.buildParams(messages, tools, options);
       params.stream = true;
@@ -176,7 +193,8 @@ export class OpenAICompatibleProvider extends BaseProvider {
       const stream = await this.client.chat.completions.create(params);
       this.recordSuccess();
 
-      const toolCallBuffers: Map<number, { id: string; name: string; arguments: string }> = new Map();
+      const toolCallBuffers: Map<number, { id: string; name: string; arguments: string }> =
+        new Map();
 
       for await (const chunk of stream as any) {
         const choice = chunk.choices?.[0];

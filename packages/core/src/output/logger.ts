@@ -58,13 +58,13 @@ export const logger = {
   tool(toolName: string, detail: string) {
     const meta = TOOL_META[toolName] || { icon: '\u2B21', verb: toolName, color: BRAND.accent };
     console.log(
-      `  ${chalk.hex(meta.color)(meta.icon)} ${chalk.hex(meta.color).bold(meta.verb)} ${chalk.hex(BRAND.muted)(detail)}`
+      `  ${chalk.hex(meta.color)(meta.icon)} ${chalk.hex(meta.color).bold(meta.verb)} ${chalk.hex(BRAND.muted)(detail)}`,
     );
   },
 
   switchProviders(from: string, to: string, reason: string) {
     console.log(
-      `  ${ICONS.switch} ${chalk.hex(BRAND.warning)(`Switching ${chalk.bold(from)} \u2192 ${chalk.bold(to)}`)} ${chalk.hex(BRAND.dim)(`(${reason})`)}`
+      `  ${ICONS.switch} ${chalk.hex(BRAND.warning)(`Switching ${chalk.bold(from)} \u2192 ${chalk.bold(to)}`)} ${chalk.hex(BRAND.dim)(`(${reason})`)}`,
     );
   },
 
@@ -79,7 +79,7 @@ export const logger = {
   header(version = '', model = '') {
     console.log();
     console.log(
-      `  ${chalk.hex(BRAND.sparkle).bold('\u2726')} ${chalk.hex(BRAND.text).bold('MyCode')} ${version ? chalk.hex(BRAND.dim)(`v${version}`) : ''}`
+      `  ${chalk.hex(BRAND.sparkle).bold('\u2726')} ${chalk.hex(BRAND.text).bold('MyCode')} ${version ? chalk.hex(BRAND.dim)(`v${version}`) : ''}`,
     );
     if (model) {
       console.log(`  ${chalk.hex(BRAND.dim)(`model: ${model}`)}`);
@@ -91,8 +91,8 @@ export const logger = {
     const prefix = estimated ? '~' : '';
     console.log(
       chalk.hex(BRAND.dim)(
-        `  ${prefix}${inTokens.toLocaleString()} input \u2192 ${prefix}${outTokens.toLocaleString()} output tokens`
-      )
+        `  ${prefix}${inTokens.toLocaleString()} input \u2192 ${prefix}${outTokens.toLocaleString()} output tokens`,
+      ),
     );
   },
 };

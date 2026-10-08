@@ -15,7 +15,15 @@
  */
 
 import { createHash } from 'crypto';
-import { mkdirSync, writeFileSync, existsSync, readFileSync, statSync, readdirSync, unlinkSync } from 'fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  existsSync,
+  readFileSync,
+  statSync,
+  readdirSync,
+  unlinkSync,
+} from 'fs';
 import { join, dirname } from 'path';
 import { homedir, tmpdir } from 'os';
 

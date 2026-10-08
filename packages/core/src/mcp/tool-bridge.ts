@@ -22,7 +22,7 @@ import type { MCPToolInfo } from './types.js';
 /** Turn one MCP tool into a registry-compatible module. */
 export function mcpToolToModule(
   manager: MCPClientManager,
-  tool: MCPToolInfo & { qualifiedName: string }
+  tool: MCPToolInfo & { qualifiedName: string },
 ): ToolModule {
   const definition: ToolFunctionDefinition = {
     type: 'function',
@@ -59,7 +59,7 @@ export function mcpToolToModule(
  */
 export async function registerMCPTools(
   manager: MCPClientManager,
-  registry: { registerModule(mod: ToolModule): void }
+  registry: { registerModule(mod: ToolModule): void },
 ): Promise<{ servers: number; tools: number; failed: string[] }> {
   const failed: string[] = [];
 
@@ -78,7 +78,10 @@ export async function registerMCPTools(
   let tools = 0;
   try {
     for (const tool of await manager.allTools()) {
-      if (!tool.qualifiedName.endsWith('__') && /^[A-Za-z0-9_-]+__[A-Za-z0-9_-]+$/.test(tool.qualifiedName)) {
+      if (
+        !tool.qualifiedName.endsWith('__') &&
+        /^[A-Za-z0-9_-]+__[A-Za-z0-9_-]+$/.test(tool.qualifiedName)
+      ) {
         registry.registerModule(mcpToolToModule(manager, tool));
         tools++;
       }

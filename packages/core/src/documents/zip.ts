@@ -101,7 +101,13 @@ export class ZipReader {
       const nameLen = b.readUInt16LE(i + 26);
       const extraLen = b.readUInt16LE(i + 28);
       const name = b.toString('utf8', i + 30, i + 30 + nameLen);
-      this.entries.set(name, { name, compressedSize, uncompressedSize, method, localHeaderOffset: i });
+      this.entries.set(name, {
+        name,
+        compressedSize,
+        uncompressedSize,
+        method,
+        localHeaderOffset: i,
+      });
       i = i + 30 + nameLen + extraLen + compressedSize;
       if (compressedSize === 0) i++;
     }

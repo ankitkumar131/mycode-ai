@@ -2,7 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { isVerifiable, filterDiagnostics, renderVerification, runFormatter, runDiagnostics } from './verify.js';
+import {
+  isVerifiable,
+  filterDiagnostics,
+  renderVerification,
+  runFormatter,
+  runDiagnostics,
+} from './verify.js';
 
 describe('isVerifiable', () => {
   it('accepts source extensions', () => {
@@ -54,7 +60,10 @@ describe('filterDiagnostics', () => {
   it('bounds the number of diagnostics reported', () => {
     // 500 errors would otherwise dominate the next request; the model needs the
     // first screenful, not the whole build log.
-    const noisy = Array.from({ length: 500 }, (_, i) => `src/alpha.ts(${i},1): error TS1: boom`).join('\n');
+    const noisy = Array.from(
+      { length: 500 },
+      (_, i) => `src/alpha.ts(${i},1): error TS1: boom`,
+    ).join('\n');
     const out = filterDiagnostics(noisy, ['src/alpha.ts']);
     expect(out.split('\n').length).toBeLessThanOrEqual(60);
     expect(out.length).toBeLessThan(3_500);
@@ -71,20 +80,35 @@ describe('renderVerification', () => {
   });
 
   it('labels diagnostics so the model knows they are actionable', () => {
-    const out = renderVerification({ diagnostics: 'a.ts(1,1): error', formatted: '', ran: ['tsc'], skipped: false });
+    const out = renderVerification({
+      diagnostics: 'a.ts(1,1): error',
+      formatted: '',
+      ran: ['tsc'],
+      skipped: false,
+    });
     expect(out).toContain('[diagnostics');
     expect(out).toContain('fix these');
     expect(out).toContain('a.ts(1,1): error');
   });
 
   it('reports formatter activity without pretending it is an error', () => {
-    const out = renderVerification({ diagnostics: '', formatted: 'formatted 2 files with prettier', ran: [], skipped: false });
+    const out = renderVerification({
+      diagnostics: '',
+      formatted: 'formatted 2 files with prettier',
+      ran: [],
+      skipped: false,
+    });
     expect(out).toBe('[formatter] formatted 2 files with prettier');
     expect(out).not.toContain('error');
   });
 
   it('includes both when both are present', () => {
-    const out = renderVerification({ diagnostics: 'err', formatted: 'fmt', ran: [], skipped: false });
+    const out = renderVerification({
+      diagnostics: 'err',
+      formatted: 'fmt',
+      ran: [],
+      skipped: false,
+    });
     expect(out.indexOf('fmt')).toBeLessThan(out.indexOf('err'));
   });
 });

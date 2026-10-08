@@ -62,12 +62,13 @@ export function renderTodoPanel(todos: readonly Todo[], opts: TodoViewOptions = 
   const barWidth = 12;
   const filled = Math.round((progress / 100) * barWidth);
   const bar =
-    chalk.hex(theme.success)('█'.repeat(filled)) + chalk.hex(theme.border)('░'.repeat(barWidth - filled));
+    chalk.hex(theme.success)('█'.repeat(filled)) +
+    chalk.hex(theme.border)('░'.repeat(barWidth - filled));
 
   lines.push(
     `  ${chalk.hex(theme.brand)('◆')} ${chalk.hex(theme.brand).bold('Plan')}  ` +
       `${bar} ${chalk.hex(theme.textMuted)(`${done}/${counts.total}`)}` +
-      (counts.inProgress ? chalk.hex(theme.warning)(`  ${counts.inProgress} active`) : '')
+      (counts.inProgress ? chalk.hex(theme.warning)(`  ${counts.inProgress} active`) : ''),
   );
 
   if (collapsed) {
@@ -77,7 +78,8 @@ export function renderTodoPanel(todos: readonly Todo[], opts: TodoViewOptions = 
     const shown = [...active, ...upcoming];
     for (const t of shown) lines.push(renderRow(t, width));
     const hidden = todos.length - shown.length;
-    if (hidden > 0) lines.push(chalk.hex(theme.textDim)(`    … ${hidden} more ( /todo to expand )`));
+    if (hidden > 0)
+      lines.push(chalk.hex(theme.textDim)(`    … ${hidden} more ( /todo to expand )`));
   } else {
     for (const t of todos) lines.push(renderRow(t, width));
   }
