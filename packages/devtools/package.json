@@ -1,6 +1,6 @@
 {
   "name": "@mycode/devtools",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "private": true,
   "description": "MyCode developer tooling",
   "type": "module",
