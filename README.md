@@ -1,613 +1,523 @@
 <div align="center">
 
-# 🚀 MYCODE
+# MyCode
 
-### **Your Universal AI Coding Agent in the Terminal**
+**A provider-agnostic AI coding agent for your terminal.**
 
-*One Agent. Any AI Provider. No Lock-in. Just Code.*
+Bring your own API key. Chain providers by priority. When one rate-limits or goes down,
+MyCode switches, checkpoints, and keeps working.
 
-<br />
-
-![MyCode - Universal AI Coding Assistant](project-image.jpg)
-
-<br />
-
-[![npm version](https://img.shields.io/npm/v/@ankitkumar131/mycode-ai?style=for-the-badge&logo=npm&color=CB3837&label=NPM)](https://www.npmjs.com/package/@ankitkumar131/mycode-ai)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20.0.0-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge&logo=github)](https://github.com/anomalyco/mycode/pulls)
-
-<br />
-
-**Like Claude Code, but works with _any_ AI provider — just bring your API key.**
-
-[📦 Install](#-quick-start) · [📖 Docs](#-cli-commands) · [🔌 How It Works](#-how-it-works--any-api-provider) · [🤖 Agent Mode](#-agent-mode) · [🛠️ SDK](#-sdk--plugins) · [💬 Community](https://github.com/anomalyco/mycode/discussions)
-
-</div>
-
----
-
-<br />
-
-## ⚡ Why MyCode?
-
-Most AI coding tools lock you into a single provider. **MyCode breaks that wall.**
-
-> MyCode works with **any AI provider that has an API**. Just provide your **API provider**, **API URL**, **model name**, and **API key** — and you're ready to code. OpenRouter, NVIDIA NIM, Ollama, OpenAI, Groq, Together AI, Mistral, Fireworks, DeepSeek, or your own self-hosted endpoint — **if it has an API, MyCode can use it.**
-
-<table>
-<tr>
-<td width="50%">
-
-### 🎯 The Problem
-- Locked into one AI provider
-- No fallback when services go down
-- Expensive API costs with no alternatives
-- Can't use local models for privacy
-- Each tool needs its own setup & config
-
-</td>
-<td width="50%">
-
-### ✅ The MyCode Solution
-- **Any AI provider** — just enter API details
-- **Automatic failover** chain keeps you coding
-- **Free tiers** available via OpenRouter & Ollama
-- **Local models** via Ollama — fully private & offline
-- **One setup** — `mycode init` and you're done
-
-</td>
-</tr>
-</table>
-
-<br />
-
----
-
-## 🔌 How It Works — Any API Provider
-
-MyCode uses a **universal OpenAI-compatible interface**. This means it works with virtually any AI provider out of the box. When you run `mycode init`, the setup wizard asks just **4 things**:
-
-```
-┌──────────────────────────────────────────────┐
-│          ⚡ MyCode Setup Wizard              │
-│                                              │
-│  1. API Provider   → openai / openrouter /   │
-│                      ollama / nvidia_nim /   │
-│                      custom                  │
-│                                              │
-│  2. Model Name     → e.g. gpt-4o,            │
-│                      llama3.1:8b,            │
-│                      claude-sonnet-4         │
-│                                              │
-│  3. API Key        → your provider's key     │
-│                                              │
-│  4. API Base URL   → the provider's endpoint │
-│                      e.g. https://api.xxx/v1 │
-└──────────────────────────────────────────────┘
-```
-
-That's it. **Any API provider, any model, one command.**
-
-### Works With Any OpenAI-Compatible API
-
-Since most AI providers today follow the OpenAI chat completions format, MyCode's **"Custom"** provider option lets you connect to literally anything:
-
-| Provider | API Base URL | Works? |
-|:---|:---|:---:|
-| OpenRouter | `https://openrouter.ai/api/v1` | ✅ |
-| OpenAI | `https://api.openai.com/v1` | ✅ |
-| NVIDIA NIM | `https://integrate.api.nvidia.com/v1` | ✅ |
-| Ollama (local) | `http://localhost:11434` | ✅ |
-| Groq | `https://api.groq.com/openai/v1` | ✅ |
-| Together AI | `https://api.together.xyz/v1` | ✅ |
-| Fireworks AI | `https://api.fireworks.ai/inference/v1` | ✅ |
-| Mistral AI | `https://api.mistral.ai/v1` | ✅ |
-| DeepSeek | `https://api.deepseek.com/v1` | ✅ |
-| Azure OpenAI | Your deployment URL | ✅ |
-| LM Studio (local) | `http://localhost:1234/v1` | ✅ |
-| Any OpenAI-compatible API | Your custom URL | ✅ |
-
-> [!TIP]
-> Use the **"Custom"** provider type during `mycode init` to connect to any endpoint that follows the OpenAI chat completions API format.
-
-<br />
-
----
-
-## 🌟 Features
-
-<table>
-<tr>
-<td align="center" width="33%">
-<br />
-<h3>🌐 Universal AI Provider</h3>
-<p>Connect to <strong>any</strong> AI API — just provide the URL, model, and key. No vendor lock-in</p>
-</td>
-<td align="center" width="33%">
-<br />
-<h3>🔄 Automatic Failover</h3>
-<p>Chain multiple providers with priority — seamless switching when one fails</p>
-</td>
-<td align="center" width="33%">
-<br />
-<h3>🤖 AI Agent Mode</h3>
-<p>Autonomous tool use — reads, writes, searches, and runs commands</p>
-</td>
-</tr>
-<tr>
-<td align="center" width="33%">
-<br />
-<h3>🛡️ Safety First</h3>
-<p>Confirmation for file writes & dangerous commands. You stay in control</p>
-</td>
-<td align="center" width="33%">
-<br />
-<h3>📁 Project Aware</h3>
-<p>MYCODE.md for project-specific context, conventions & instructions</p>
-</td>
-<td align="center" width="33%">
-<br />
-<h3>🔌 Extensible SDK</h3>
-<p>Build plugins, custom tools, and custom providers with the SDK</p>
-</td>
-</tr>
-<tr>
-<td align="center" width="33%">
-<br />
-<h3>🌐 A2A Protocol</h3>
-<p>Agent-to-Agent server for multi-agent orchestration</p>
-</td>
-<td align="center" width="33%">
-<br />
-<h3>🖥️ Beautiful Terminal UI</h3>
-<p>Rich markdown rendering, spinners, colored output powered by Ink</p>
-</td>
-<td align="center" width="33%">
-<br />
-<h3>📦 Standalone Binary</h3>
-<p>Build as a Single Executable App — no Node.js required to run</p>
-</td>
-</tr>
-</table>
-
-<br />
-
----
-
-## 📦 Quick Start
-
-### 1. Install globally
+[![npm](https://img.shields.io/npm/v/@ankitkumar131/mycode-ai?style=flat-square)](https://www.npmjs.com/package/@ankitkumar131/mycode-ai)
+[![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![node](https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square)](https://nodejs.org)
+[![providers](https://img.shields.io/badge/providers-any%20OpenAI--compatible-8b5cf6?style=flat-square)](#providers)
 
 ```bash
 npm install -g @ankitkumar131/mycode-ai
 ```
 
-### 2. Set up your AI provider
+[Quick start](#quick-start) · [Providers](#providers) · [Failover](#automatic-failover) · [CLI](#cli-reference) · [Agent tools](#agent-mode) · [Skills](#skills) · [MCP](#mcp-model-context-protocol) · [Context](#project-context-mycode-md) · [Config](#configuration) · [Architecture](#architecture)
+
+</div>
+
+---
+
+## Why MyCode
+
+Most coding agents assume one model vendor. MyCode assumes you have several, and treats switching
+between them as a first-class operation rather than an error path.
+
+| | |
+|:---|:---|
+| 🔌 **Any OpenAI-compatible endpoint** | OpenRouter, OpenAI, Ollama, NVIDIA NIM, Groq, Together, Fireworks, Mistral, DeepSeek, LM Studio, vLLM, Azure — one code path, your base URL |
+| 🧠 **Native Anthropic support** | Speaks the Messages API directly: extended thinking, prompt caching, native tool schemas — not a compatibility shim |
+| 🛟 **Automatic failover** | Providers are chained by priority. Rate limit, outage, auth failure or context overflow → the next provider takes over, the session is checkpointed first, and the replacement model is told what happened |
+| 🤖 **Autonomous agent mode** | 22 tools across six toolsets, plan tracking, sub-agent delegation, post-write verification, undoable edits |
+| 📁 **Project context** | `MYCODE.md` (plus `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `GEMINI.md`) is read hierarchically and injected into every request |
+| 🧩 **Skills & MCP** | `SKILL.md` skills and Model Context Protocol servers both surface as ordinary tools to the agent |
+| 🛡️ **Safety by default** | Writes and shell commands ask for confirmation, dangerous patterns are hard-blocked, and each provider has its own read/write permission |
+| 🧪 **Zero-dependency runtime** | The published CLI is one self-contained ~13 MB bundle; no `node_modules` at run time |
+
+---
+
+## Quick start
+
+### 1. Install
+
+Requires **Node.js 20+**.
+
+```bash
+npm install -g @ankitkumar131/mycode-ai
+
+mycode --version     # MyCode CLI v3.2.1 (@ankitkumar131/mycode-ai)
+mycode doctor        # environment + configuration summary
+```
+
+### 2. Configure a provider
 
 ```bash
 mycode init
 ```
 
-The interactive wizard will ask you:
-- **API Provider** — choose a preset (OpenRouter, OpenAI, NVIDIA NIM, Ollama) or select **Custom** for any other provider
-- **Model Name** — pick from suggested models or enter any model identifier
-- **API Key** — your provider's API key (not needed for Ollama)
-- **Base URL** — auto-filled for presets, or enter your custom endpoint
+The wizard walks through nine prompts. Only the first six normally need input — the rest have
+sensible defaults:
+
+```text
+MyCode Setup
+
+Priority (1): 1
+Provider name (provider-1): groq
+API provider (openai/anthropic/openrouter/ollama/custom): custom
+Model (gpt-4o): llama-3.1-70b-versatile
+API key: gsk_xxxxxxxx
+Base URL: https://api.groq.com/openai/v1
+Read permission (true/false) [true]:
+Write permission (true/false) [true]:
+Max retries (3):
+
+Config saved to: /home/you/.mycode/settings.json
+```
+
+Run it again to add a second provider — providers are ordered by priority, and that order is what
+failover follows:
+
+```text
+Config already exists at: /home/you/.mycode/settings.json
+
+Existing Providers:
+  1. groq (custom) — Model: llama-3.1-70b-versatile [Priority 1]
+
+? What would you like to do?
+  1. Add a new provider
+  2. Change provider priorities
+  3. Exit
+```
 
 ### 3. Start coding
 
 ```bash
-mycode chat
+mycode chat                     # interactive session
+mycode chat "explain src/db.ts" # one-shot: chat with a prompt and exit
+mycode run "fix the failing test" # same thing under the name other CLIs use
+mycode agent                    # autonomous, multi-step, tool-using
 ```
-
-That's it! 🎉
-
-<br />
-
-### Example: Connect to Groq in 30 Seconds
-
-```bash
-$ mycode init
-
-⚡ MyCode Setup Wizard
-
-? Priority: 1
-? Provider name: groq
-? Choose your AI provider: ⚙️  Custom (any OpenAI-compatible endpoint)
-? Enter the model identifier: llama-3.1-70b-versatile
-? Enter your API key: gsk_xxxxxxxxxxxxxxx
-? Enter the API base URL: https://api.groq.com/openai/v1
-
-✓ Added provider: groq
-
-$ mycode chat
-```
-
-> [!NOTE]
-> You can add **multiple providers** during setup for automatic failover. If provider #1 goes down, MyCode seamlessly switches to provider #2, then #3, and so on.
-
-<br />
 
 ---
 
-## 🔄 Multi-Provider Failover
+## Providers
 
-MyCode's killer feature: **chain multiple AI providers with priority-based automatic failover.**
+MyCode talks to anything that implements the OpenAI chat-completions format, plus a native
+Anthropic client and a native Ollama client. `mycode init` accepts five provider types:
 
-```bash
-$ mycode init
-# Add provider #1: OpenRouter (priority 1)
-# Add provider #2: Ollama local (priority 2)
-# Add provider #3: OpenAI (priority 3)
-```
+| `apiProvider` | Client | Base URL | Notes |
+|:---|:---|:---|:---|
+| `openai` | OpenAI-compatible | `https://api.openai.com/v1` | default |
+| `openrouter` | OpenAI-compatible | `https://openrouter.ai/api/v1` | auto-filled |
+| `anthropic` | **Native Messages API** | `https://api.anthropic.com` | auto-filled; thinking + prompt caching |
+| `ollama` | **Native Ollama API** | `http://localhost:11434` | auto-filled; no API key needed |
+| `custom` | OpenAI-compatible | *you enter it* | Groq, Together, Fireworks, Mistral, DeepSeek, LM Studio, vLLM, Azure, your own gateway |
 
-Now your failover chain looks like:
+> **Presets:** the wizard auto-fills the base URL for `ollama`, `openrouter` and `anthropic`
+> (and `openai` needs none). For everything else choose **custom** and paste the endpoint — the
+> request format is identical. `nvidia_nim` also has a built-in URL, but it is a hand-edit in
+> `settings.json` rather than a wizard option.
 
-```
-Request → OpenRouter → (fails?) → Ollama → (fails?) → OpenAI
-```
+Every provider entry carries its own **read** and **write** permission, so you can, for example,
+answer questions with a free model while restricting file writes to a trusted one.
 
-### How Failover Works
+---
 
-| Error Type | Behavior |
+## Automatic failover
+
+Failover is the feature the rest of the design bends around. A mid-task provider switch is not a
+cosmetic event — the replacement has a different tokenizer, a different context window, and often
+a different tool-calling dialect — so MyCode treats it as four separate problems:
+
+| Problem | What MyCode does |
 |:---|:---|
-| 🚫 Rate Limited (429) | Wait briefly, then try next provider |
-| 💥 Server Error (5xx) | Immediately try next provider |
-| 🔐 Auth Error (401/403) | Skip provider, warn user |
-| 📏 Context Too Long | Try next provider (may have larger window) |
-| 🔌 Connection Refused | Skip provider (offline) |
+| **The user sees nothing** | The switch is announced, with both provider names and the reason. The status line keeps a running count: `↻ primary -> backup (1 failover)` |
+| **State is lost** | The session is checkpointed to `~/.mycode/sessions/` *before* work continues, so a crash mid-switch does not lose the task |
+| **The model restarts** | The replacement is handed a re-orientation brief instead of a cold start |
+| **The window shrinks** | The safe context window is recomputed for the now-active provider (`effectiveWindowFor` / `safeContextWindow`), so compaction measures against the weakest provider in the chain |
 
-Each provider also has **read/write permissions**, so you can use a free provider for code explanation but restrict file writes to a trusted provider.
+Providers are tried in priority order, filtered by the permissions the current call needs, and
+errors are classified rather than string-matched where possible:
 
-<br />
-
----
-
-## 💻 CLI Commands
-
-| Command | Description |
+| Failure | Reaction |
 |:---|:---|
-| `mycode chat` | 💬 Start an interactive AI chat session |
-| `mycode agent` | 🤖 Start AI agent with autonomous tool use |
-| `mycode explain <file>` | 📖 Get AI explanation of any code file |
-| `mycode fix <file>` | 🔧 Detect and fix bugs in your code |
-| `mycode edit <file>` | ✏️ Edit code with AI assistance |
-| `mycode review <file>` | 🔍 AI-powered code review with suggestions |
-| `mycode config` | ⚙️ Manage configuration (set/get/list/reset) |
-| `mycode init` | 🚀 Set up providers interactively |
-| `mycode doctor` | 🩺 System diagnostics & provider health check |
+| **429 / rate limit** | The client's retry policy (per-provider `maxRetries`) backs off first, then the next provider serves the request |
+| **5xx / provider server error** | Immediate switch to the next provider |
+| **401 / 403 / auth** | Switch immediately and warn — the key is not retried on this request |
+| **Context overflow** (413, `maximum context`, `token limit`) | Switch to the next provider, which may have a larger window |
+| **Connection refused / DNS / timeout** | Switch to the next provider |
+| **Model not found, provider overloaded** | Reported with an accurate reason, then switch |
 
-### Global Options
+A skipped provider is skipped **for the current request**; MyCode does not maintain a cooldown
+clock. `Retry-After` is parsed but not awaited, and the `429` backoff comes from the provider's
+HTTP client.
 
-```bash
-mycode <command> --provider <name>   # Override default provider
-mycode <command> --model <name>      # Override default model
-mycode <command> --verbose           # Enable verbose logging
-mycode <command> --no-color          # Disable colored output
+The invariant is covered by a hermetic end-to-end test — a mock provider that always answers `429`
+in front of a healthy one, with a throwaway `$HOME`:
+
+```console
+$ node scripts/smoke-failover.mjs
+
+  ↻ Switching primary → backup (rate limit)
+  ✦ Using backup (claude-sonnet-4)
+
+  ↻ Provider failover  primary → backup
+    rate limited
+    Context preserved and checkpointed; the agent will continue where it left off.
+
+  ⚡ YOLO · backup/claude-sonnet-4 · 2.0k/128.0k 2% · 0s · ↻ primary -> backup (1 failover)
+
+  ✓ CLI exited cleanly          ✓ the task actually completed on the backup
+  ✓ failover announced          ✓ session checkpointed to disk
+  ✓ named both providers        ✓ checkpoint carries the conversation
+  ✓ gave a reason               ✓ told the user context was preserved
+  8/8 checks passed
 ```
-
-<br />
 
 ---
 
-## 🤖 Agent Mode
+## CLI reference
 
-Agent mode gives MyCode **autonomous superpowers**. It can think, plan, and execute multi-step tasks using built-in tools:
-
-```bash
-mycode agent
-```
-
-### Available Agent Tools
-
-| Tool | Description |
+| Command | What it does |
 |:---|:---|
-| `read_file` | 📄 Read file contents with optional line ranges |
-| `write_file` | ✍️ Create or overwrite files (with confirmation) |
-| `edit_file` | 🔧 Surgical find-and-replace editing |
-| `list_directory` | 📂 List directory contents with metadata |
-| `search_files` | 🔎 Glob-based file pattern search |
-| `search_code` | 🔍 Regex code search across your project |
-| `run_command` | ⚡ Execute shell commands (with safety guards) |
-| `web_search` | 🌐 Search the web for information |
+| `mycode chat [prompt]` | Interactive session, or a one-shot query when a prompt is given |
+| `mycode run [prompt]` | Alias for the one-shot `chat` path (same shape as `opencode run`, `claude -p`) |
+| `mycode agent [task]` | Autonomous mode: plans, calls tools, verifies its own writes |
+| `mycode explain <file>` | Explanatory walkthrough of a file |
+| `mycode fix <file\|error>` | Diagnose and repair, from a path or a pasted error |
+| `mycode edit <file> <instruction>` | Targeted AI edit |
+| `mycode config list\|test\|remove <name>` | `list` prints the config and its providers, `test` prints each provider's status, `remove` deletes one |
+| `mycode init` / `setup` | Setup wizard; re-run to add providers or re-prioritise |
+| `mycode skills` | List the skills available on this machine |
+| `mycode sessions` | List saved sessions for resuming |
+| `mycode doctor` | Environment and configuration summary |
+| `mycode --version` / `--help` | Version / usage |
 
-> [!IMPORTANT]
-> **Safety by design** — All file writes and dangerous shell commands (rm, del, format, etc.) require your explicit confirmation before execution. You always stay in control.
+### Chat flags
 
-### Agent Loop
-
+```bash
+mycode chat --continue                 # resume the latest session for this directory
+mycode chat --resume <id|title>        # resume a specific saved session
+mycode chat --query "why is CI red?"   # one-shot: run this and exit
+mycode chat --model <name>             # use a specific configured provider/model
+mycode chat --yolo                     # skip approval prompts (alias: --allow-all)
 ```
-Observe → Think → Plan → Act → Repeat
-```
 
-The agent reads your codebase, understands context, plans actions, executes them with tools, and iterates until the task is complete.
+### Inside chat
 
-<br />
+Type `/` for the command palette. Highlights:
+
+| Group | Commands |
+|:---|:---|
+| Session | `/new` `/clear` `/save` `/resume` `/sessions` `/history` `/title` `/undo [files]` `/compress` |
+| Control | `/stop` `/steer <note>` `/queue` `/retry` `/model` `/config` `/status` `/usage` `/diff` |
+| Safety | `/allow-all [writes\|commands]` `/yolo` `/tools` `/toolsets` |
+| Context | `/context` `/memory` `/plan` `/init` `/review` `/read` `/ls` `/git` |
+| Skills | `/skills` `/reload-skills` `/learn` `/skill-creator` |
+| Extras | `/theme` `/statusbar` `/timestamps` `/reasoning` `/personality` `/mcp` `/btw` `/about` |
+| Ponytail | `/ponytail` `/ponytail-review` `/ponytail-audit` `/ponytail-debt` `/ponytail-gain` `/ponytail-help` |
+
+Also supported inside chat: `!command` runs a shell command, `@file` attaches a file, and custom
+slash commands come from markdown files in `.mycode/commands/` (`.opencode/command/` and
+`.claude/commands/` are read too).
+
+> **Heads-up:** there is no `mycode review` command — code review lives at `/review` inside chat.
+> Large tool outputs are spilled to `~/.mycode/tool-output/` and summarised in context rather than
+> dumped wholesale.
 
 ---
 
-## 📁 Project Context with MYCODE.md
+## Agent mode
 
-Make MyCode understand your project deeply by creating a `.mycode/MYCODE.md` file:
+`mycode agent` runs an observe → plan → act → verify loop (up to 50 iterations; chat uses 40).
+It streams text, shows a todo panel as it plans, and asks before doing anything destructive.
 
-```bash
-mycode init
-```
+### The 22 built-in tools, by toolset
 
-This generates a project context file where you can define:
+| Toolset | Tools |
+|:---|:---|
+| **files** | `read_file` · `write_file` · `patch` · `list_dir` · `glob` · `search_files` · `read_document` · `read_pdf` |
+| **terminal** | `terminal` · `process` · `execute_code` |
+| **git** | `git_status` |
+| **web** | `web_search` · `web_fetch` |
+| **skills** | `skills_list` · `skill_view` · `skill_manage` |
+| **agent** | `todo_write` · `read_instructions` · `memory` · `delegate` · `question` |
 
-```markdown
-# Project: My Awesome App
+Older names are accepted as aliases (`readFile`, `edit-file`, `list_directory`, `run_command`,
+`bash`, `str_replace`, `search_code`→`search_files`, …), so prompts written for other agents keep
+working. Toolsets can be restricted per session (`toolsets` in config) and individual tools
+disabled (`disabledTools`).
 
-## Tech Stack
-- Language: TypeScript
-- Framework: React + Next.js
-- Database: PostgreSQL
-- Package Manager: pnpm
+### What makes the loop more than a `while` statement
 
-## Conventions
-- Use functional components
-- Follow Airbnb ESLint config
-- Use kebab-case for file names
-
-## Instructions
-- Always add unit tests for new features
-- Use Tailwind CSS for styling
-- Follow the repository's PR template
-```
-
-MyCode automatically loads this context into every AI interaction, making responses **project-aware and consistent**.
-
-<br />
+- **Confirmation gates.** Writes and shell commands prompt before running, with the target and cwd
+  shown. `/allow-all` or `--yolo` opts out; the settings file sets the default.
+- **Command safety classifier.** Shell commands are graded `blocked` / `dangerous` / `elevated` /
+  `normal` before execution — pattern-blocked commands cannot be approved away.
+- **Post-write verification.** After a successful write the agent runs the project formatter and
+  type/lint diagnostics on the touched files, so it sees its own mistakes on the next turn rather
+  than leaving them for you.
+- **Undoable edits.** Pre-edit file contents are snapshotted per session; `/undo files` restores
+  them.
+- **Sub-agents.** `delegate` spawns an `explore` or `general` sub-agent in its own context and
+  returns only the report — this is what keeps forty file reads out of the parent's context window.
+- **Failover-aware.** An agent run survives a provider switch mid-task (see above).
 
 ---
 
-## ⚙️ Configuration
+## Skills
 
-Your provider configuration is stored in `~/.mycode/settings.json`. You can manage it via the CLI:
+Skills are folders containing a `SKILL.md` with frontmatter (`name`, `description`) plus whatever
+supporting files the skill needs. Eight ship bundled: `graphify`, `plan`, `code-review`,
+`test-driven-development`, `debug`, `commit`, `document-analysis`, `skill-creator`.
+
+Discovery order:
+
+1. **Workspace** — `<project>/.mycode/skills`, `<project>/.agents/skills`, `<project>/skills`
+2. **User** — `~/.mycode/skills` (where the bundled set is seeded and newly authored skills are written)
+3. **External** — `MYCODE_SKILL_DIRS` (path-separated) or `skills.externalDirs` in config
 
 ```bash
-# View current config
-mycode config list
-
-# Test all provider connections
-mycode config test
-
-# Reset configuration
-mycode config reset
+mycode skills      # list what's available
 ```
 
-### Settings Structure
+Inside chat, `/skills` lists them, `/reload-skills` re-scans, `/learn` turns a workflow you just
+did into a skill, and `/skill-creator` scaffolds a new one. The agent can also manage skills
+itself through `skills_list`, `skill_view` and `skill_manage`.
+
+---
+
+## MCP (Model Context Protocol)
+
+MCP servers plug into the same tool registry the agent already uses — configure them once and
+their tools become first-class, namespaced as `server__tool` so two servers can expose the same
+name without colliding:
 
 ```json
 {
-  "providers": [
-    {
-      "priority": 1,
-      "name": "my-openrouter",
-      "api_provider": "openrouter",
-      "model": "google/gemini-2.5-flash",
-      "api_key": "sk-or-...",
-      "base_url": "https://openrouter.ai/api/v1",
-      "read": true,
-      "write": true,
-      "max_retries": 3
-    },
-    {
-      "priority": 2,
-      "name": "local-ollama",
-      "api_provider": "ollama",
-      "model": "llama3.1:8b",
-      "base_url": "http://localhost:11434",
-      "read": true,
-      "write": true,
-      "max_retries": 3
-    }
-  ],
-  "preferences": {
-    "theme": "dark",
-    "confirm_writes": true,
-    "confirm_commands": true,
-    "log_conversations": true
+  "mcp": {
+    "servers": [
+      {
+        "name": "filesystem",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/you/projects"],
+        "env": { "LOG_LEVEL": "warn" },
+        "enabled": true
+      }
+    ]
   }
 }
 ```
 
-<br />
+MyCode spawns the server over stdio, performs the `initialize` handshake, lists its tools and
+registers them. Broken or slow servers are isolated: a server that fails to start is reported and the rest of the
+agent keeps working. `/mcp` lists each configured server with its connection status.
 
 ---
 
-## 🏗️ Architecture
+## Project context (`MYCODE.md`)
 
-MyCode is built as a **TypeScript monorepo** with a clean layered architecture:
+Drop a `MYCODE.md` in your project and it becomes part of every request:
 
-```
-┌─────────────────────────────────────────────────┐
-│                   CLI Layer                     │
-│          Commander + Ink (React Terminal UI)    │
-├─────────────────────────────────────────────────┤
-│                  Core Layer                     │
-│     Provider Router │ Agent Loop │ Tool System  │
-├─────────────────────────────────────────────────┤
-│               Provider Layer                    │
-│   OpenAI-Compatible Adapter │ Ollama Adapter    │
-│   (works with ANY API endpoint)                 │
-├─────────────────────────────────────────────────┤
-│                  SDK Layer                      │
-│       Plugin API │ Custom Tools │ Extensions    │
-├─────────────────────────────────────────────────┤
-│               A2A Server Layer                  │
-│         Agent-to-Agent Protocol Server          │
-└─────────────────────────────────────────────────┘
+```markdown
+# Project: Billing API
+
+## Stack
+- TypeScript, Fastify, Postgres, pnpm
+
+## Conventions
+- Functional style; no classes
+- Every route needs an integration test
+- Migrations are append-only
 ```
 
-### Monorepo Packages
+How it is resolved:
 
-| Package | Description |
-|:---|:---|
-| `@mycode/cli` | CLI frontend with Ink-based terminal UI |
-| `@mycode/core` | Core engine — providers, tools, agent, config |
-| `@mycode/sdk` | SDK for building plugins & extensions |
-| `@mycode/a2a-server` | Agent-to-Agent protocol server |
-| `@mycode/devtools` | Developer tools & debugging utilities |
-| `@mycode/test-utils` | Test utilities, mocks & fixtures |
-
-### The Provider Router — MyCode's Core Innovation
-
-The **Provider Router** is the heart of MyCode. It takes your configured providers (sorted by priority) and uses a simple but powerful pattern:
-
-1. All providers are wrapped in a **universal `OpenAICompatibleProvider`** adapter (except Ollama, which has its own adapter)
-2. On each request, the router tries providers **in priority order**
-3. If a provider fails, the router **automatically fails over** to the next one
-4. Providers track their own **health metrics** (success rate, failures, availability)
-
-This is why you can plug in **any API endpoint** — as long as it speaks the OpenAI chat completions format, MyCode handles the rest.
-
-<br />
+- **Hierarchical** — MyCode walks from the git root down to your cwd, so a monorepo can have a
+  root file plus per-package ones; they stack in order.
+- **Global** — `~/.mycode/MYCODE.md` applies everywhere.
+- **Compatible names** — `AGENTS.md`, `CLAUDE.md`, `.cursorrules` and `GEMINI.md` are read too, so
+  an existing repo works without renaming anything (first match in each directory wins).
+- **On demand** — the agent can re-read it through the `read_instructions` tool, and `/init`
+  generates or updates one from a scan of the repo.
+- **Durable notes** — `~/.mycode/MEMORY.md` (written via the `memory` tool, shown by `/memory`) is
+  for facts that should outlive a single project.
 
 ---
 
-## 🛠️ SDK & Plugins
+## Configuration
 
-Build custom extensions with the MyCode SDK:
+Settings live in `~/.mycode/settings.json`:
 
-```typescript
-import { MyCodeSDK } from '@mycode/sdk';
-
-const sdk = new MyCodeSDK();
-
-// Register a custom tool
-sdk.registerTool({
-  name: 'deploy',
-  description: 'Deploy the application',
-  parameters: { environment: { type: 'string' } },
-  execute: async ({ environment }) => {
-    return { success: true, url: `https://${environment}.myapp.com` };
+```json
+{
+  "version": "1",
+  "providers": [
+    {
+      "priority": 1,
+      "name": "openrouter",
+      "apiProvider": "openrouter",
+      "model": "google/gemini-2.5-flash",
+      "apiKey": "sk-or-...",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "read": true,
+      "write": true,
+      "maxRetries": 3,
+      "contextWindow": 1000000
+    },
+    {
+      "priority": 2,
+      "name": "local-ollama",
+      "apiProvider": "ollama",
+      "model": "llama3.1:8b",
+      "baseUrl": "http://localhost:11434",
+      "read": true,
+      "write": false
+    }
+  ],
+  "preferences": {
+    "theme": "dark",
+    "confirmWrites": true,
+    "confirmCommands": true,
+    "maxContextFiles": 20,
+    "logConversations": true
   }
-});
-
-// Register a custom provider
-sdk.registerProvider({
-  name: 'my-custom-llm',
-  chat: async (messages) => { /* ... */ },
-  isAvailable: async () => true,
-});
+}
 ```
 
-<br />
+`contextWindow` is worth setting explicitly: when omitted, MyCode infers it from the model name,
+and a wrong guess in either direction costs you (overflow, or needless compaction).
+
+### Other keys
+
+| Key | Purpose |
+|:---|:---|
+| `mcp.servers[]` | MCP servers (see above) |
+| `disabledTools[]` | Tools to switch off for every session |
+| `toolsets[]` | Restrict the session to these toolsets (`files`, `terminal`, `git`, `web`, `skills`, `agent`) |
+| `skills.externalDirs[]` · `skills.noBundled` | Extra skill directories; skip the bundled set |
+| `quickCommands` | `/name` → shell command or alias to another slash command |
+| `personalities` | Named system-prompt overlays (`/personality`) |
+| `contextWindows` | Per-provider or per-model context window overrides |
+| `vimMode` | Vim-style composer keybindings |
+
+> Provider keys accept snake_case too (`api_provider`, `api_key`, `base_url`, `max_retries`), which
+> is handy when generating the file from a script. `preferences` are camelCase only.
+
+### Data on disk
+
+```text
+~/.mycode/
+├── settings.json     configuration (git-ignored by default)
+├── sessions/         saved conversations — /save, /resume, mycode sessions
+├── skills/           user + seeded bundled skills
+├── snapshots/        pre-edit file contents, powering /undo
+└── tool-output/      spilled large tool outputs
+```
+
+### Environment variables
+
+| Variable | Effect |
+|:---|:---|
+| `MYCODE_HOME` | Relocate the data directory above (used by tests to stay hermetic) |
+| `MYCODE_SKILL_DIRS` | Extra skill directories, path-separated |
+| `MYCODE_NO_UPDATE_CHECK=1` | Skip the npm version check on startup |
+| `MYCODE_PLAIN=1` · `MYCODE_NO_CURSOR=1` · `MYCODE_NO_KITTY=1` | Simpler rendering for limited terminals |
+| `MYCODE_THEME_LIGHT=1` | Prefer the light theme |
+| `MYCODE_SKIP_BUILD_CHECK=1` | Don't rebuild when running from a source checkout |
+| `PONYTAIL_DEFAULT_MODE=off\|lite\|full\|ultra` | Default intensity of the built-in minimal-code discipline |
 
 ---
 
-## 🌐 A2A Protocol
+## Architecture
 
-MyCode includes an **Agent-to-Agent (A2A) protocol server**, enabling multi-agent orchestration:
+```text
+packages/
+├── core/   engine: agent loop, tools, providers, routing + failover, MCP, skills, context
+├── cli/    terminal app: commands, composer, renderer, themes, approval prompts
+└── sdk/    programmatic API: MyCodeAgent, skill authoring helpers
+```
+
+- **The model never touches a provider directly.** `ProviderRouter` owns provider selection,
+  permission filtering and the failover loop; everything above it speaks one interface.
+- **Tools are a registry, not a switch.** Each tool is a module declaring a schema, a handler and
+  its safety metadata; MCP tools and skills are registered through the same door.
+- **The CLI is one bundle.** `scripts/build.mjs` compiles the CLI (and its workspace dependencies)
+  into a single CJS file, which is what the published package runs — see `bin/mycode.js`.
+- **Text is rendered, not echoed.** Markdown, diffs and tables go through a theme-aware renderer;
+  the composer handles multi-line input, paste, and CJK/or wide-character measurement.
+
+### The SDK
+
+```ts
+import { MyCodeAgent } from '@mycode/sdk';
+
+const agent = new MyCodeAgent({ cwd: process.cwd() });
+
+agent.run('summarise the open TODOs', {
+  events: { onText: (t) => process.stdout.write(t) },
+});
+```
+
+The SDK exposes `MyCodeAgent`, `discoverSkills`, `createSkill` and `loadSkillConfig`. It is
+in-repo and not yet published to npm; if you need a plugin/extension surface beyond skills, MCP is
+the supported route today.
+
+---
+
+## Development
 
 ```bash
-mycode a2a-server --port 3000
+npm install            # Node 20+
+npm run build          # esbuild → core, sdk, cli (+ the standalone CLI bundle)
+npm test               # vitest: 445 tests in 40 files
+npm run typecheck      # tsc --noEmit
+npm run lint           # eslint
+npm run format         # prettier
+
+# hermetic, offline end-to-end checks (no API key needed)
+npm run smoke:mock-failover &   # two mock providers: one always 429, one healthy
+npm run smoke:failover          # asserts switch + checkpoint + continuation (8/8)
+
+npm run eval           # head-to-head benchmark harness against other agents
+npm run eval:report    # render the last run
 ```
 
-This exposes MyCode's capabilities to other A2A-compatible agents, enabling complex multi-agent workflows.
-
-<br />
-
----
-
-## 🧑‍💻 Development
-
-```bash
-# Clone the repository
-git clone https://github.com/anomalyco/mycode.git
-cd mycode
-
-# Install dependencies
-npm install
-
-# Build all packages
-npm run build
-
-# Run in development mode (with hot reload)
-npm run dev
-
-# Run tests
-npm test
-
-# Lint & Format
-npm run lint
-npm run format
-
-# Type checking
-npm run typecheck
-```
-
-<br />
+`npm run dev` watches the CLI. When running from a checkout, the launcher rebuilds automatically if
+sources are newer than the bundle (disable with `MYCODE_SKIP_BUILD_CHECK=1`).
 
 ---
 
-## 🗺️ Roadmap
+## What's not here yet
 
-- [x] Universal AI provider support (any OpenAI-compatible API)
-- [x] Provider presets (OpenRouter, NVIDIA NIM, Ollama, OpenAI)
-- [x] Custom provider support (any endpoint)
-- [x] Priority-based automatic failover
-- [x] Interactive chat mode with streaming
-- [x] Agent mode with autonomous tool use
-- [x] Project context (MYCODE.md)
-- [x] SDK & Plugin system
-- [x] A2A Protocol server
-- [x] Single Executable Application (SEA) builds
-- [x] DevTools & Debugging
-- [x] Read/Write permission controls per provider
-- [ ] VS Code extension
-- [ ] Web dashboard
-- [ ] MCP (Model Context Protocol) support
-- [ ] Team collaboration features
+Written down so nobody has to discover it by grepping:
 
-<br />
+- **A2A (Agent-to-Agent) protocol server** — not implemented. The package that used to claim it has
+  been removed rather than left as a stub.
+- **Plugin host** — there is no third-party plugin system that can contribute agents, commands or
+  providers. Skills and MCP cover the same needs today; see
+  [`docs/opencode-vs-mycode.md`](docs/opencode-vs-mycode.md) for the full comparison.
+- **Single Executable Application (SEA) builds** — `npm run build` produces a self-contained ~13 MB
+  CLI *bundle* (no runtime dependencies), but it still requires Node 20+. There are no
+  per-platform binaries and no release pipeline.
+- **`mycode review` / `mycode a2a-server`** — neither is a command. Use `/review` in chat.
+- **`doctor` and `config test` are summaries, not probes** — they report configuration and provider
+  order; they do not make network requests, so "active" means "configured", not "reachable".
+- **One outbound call on start-up** — the CLI checks npm for a newer version (3 s timeout).
+  Disable it with `MYCODE_NO_UPDATE_CHECK=1`.
 
 ---
 
-## 🤝 Contributing
+## Licence
 
-Contributions are welcome! Here's how to get started:
-
-1. **Fork** the repository
-2. **Create** your feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
-
-> [!NOTE]
-> Please read the [Architecture Docs](docs/ARCHITECTURE.md) before contributing to understand the codebase structure.
-
-<br />
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
-
-<br />
-
----
+MIT — see [LICENSE](LICENSE). Third-party notices, including the vendored
+[Ponytail](https://github.com/DietrichGebert/ponytail) prompt discipline and the Apache-2.0
+`graphify` skill, are in [NOTICE.md](NOTICE.md).
 
 <div align="center">
-
-### 💡 Code Faster. Smarter. Safer.
-
-**Your code. Any AI. Your way.**
-
-<br />
-
-⭐ **If you find MyCode useful, give it a star on GitHub!** ⭐
-
-<br />
-
-[![GitHub Stars](https://img.shields.io/github/stars/anomalyco/mycode?style=for-the-badge&logo=github&color=yellow)](https://github.com/anomalyco/mycode)
-[![npm downloads](https://img.shields.io/npm/dm/@ankitkumar131/mycode-ai?style=for-the-badge&logo=npm&color=CB3837)](https://www.npmjs.com/package/@ankitkumar131/mycode-ai)
-
-Made with ❤️ by the [MyCode](https://github.com/anomalyco/mycode) team
-
+<sub>Project documents: <a href="docs/opencode-vs-mycode.md">capability comparison</a> · <a href="feature-verification.md">feature verification</a> · <a href="website-vs-app.md">docs vs. reality audit</a> · <a href="dead-code-audit.md">dead-code audit</a></sub>
 </div>
