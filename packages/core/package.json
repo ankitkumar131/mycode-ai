@@ -1,13 +1,13 @@
 {
   "name": "@mycode/core",
   "version": "3.2.1",
-  "private": true,
   "description": "MyCode Core \u2014 Agent engine, tools, skills, MCP, and provider system",
   "type": "module",
   "main": "./dist/index.js",
   "files": [
     "dist",
-    "src"
+    "src",
+    "README.md"
   ],
   "scripts": {
     "build": "node ../../scripts/build.mjs --package core",
@@ -27,5 +27,17 @@
     "@types/diff": "^7.0.2",
     "@types/node": "^22.0.0",
     "@types/pdf-parse": "^1.1.4"
-  }
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "prepublishOnly": "npm run build --prefix ../.. && npm test --prefix ../.."
 }

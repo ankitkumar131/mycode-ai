@@ -439,8 +439,12 @@ and a wrong guess in either direction costs you (overflow, or needless compactio
 packages/
 ├── core/   engine: agent loop, tools, providers, routing + failover, MCP, skills, context
 ├── cli/    terminal app: commands, composer, renderer, themes, approval prompts
-└── sdk/    programmatic API: MyCodeAgent, skill authoring helpers
+└── sdk/    programmatic API: MyCodeAgent, skills helpers, extension points
 ```
+
+`core` and `sdk` build as separate published-shaped packages (`@mycode/core`, `@mycode/sdk`) with
+`.d.ts` for the whole public surface; the CLI is compiled into a single self-contained bundle that
+inlines both.
 
 - **The model never touches a provider directly.** `ProviderRouter` owns provider selection,
   permission filtering and the failover loop; everything above it speaks one interface.
@@ -453,28 +457,52 @@ packages/
 
 ### The SDK
 
+The agent loop is usable headlessly. `MyCodeAgent` gives your process the same engine the CLI
+runs: provider routing, failover with checkpointing, all 22 tools, verification, and delegation.
+
 ```ts
 import { MyCodeAgent } from '@mycode/sdk';
 
-const agent = new MyCodeAgent({ cwd: process.cwd() });
+const agent = new MyCodeAgent({
+  cwd: process.cwd(),
+  providers: [primary, fallback],          // tried in priority order
+  confirm: async ({ target }) => ask(target),   // your approval UI
+});
 
-agent.run('summarise the open TODOs', {
-  events: { onText: (t) => process.stdout.write(t) },
+const answer = await agent.run('summarise the open TODOs', {
+  signal: abortController.signal,
+  events: {
+    onText: (t) => process.stdout.write(t),
+    onToolCall: (c) => log(`→ ${c.name}`),
+    onFailover: (e) => warn(`${e.from} → ${e.to} (${e.reason})`),
+  },
 });
 ```
 
-The SDK exposes `MyCodeAgent`, `discoverSkills`, `createSkill` and `loadSkillConfig`. It is
-in-repo and not yet published to npm; if you need a plugin/extension surface beyond skills, MCP is
-the supported route today.
+| | |
+|:---|:---|
+| **Approvals fail closed** | Writes and shell commands are refused unless you pass `confirm` or opt into `autoApprove: true`. The model is told the call was cancelled and keeps going, so nothing is written by accident. |
+| **Extensions** | `registerTool()` (model-callable, appears in the tool list) and `registerProvider()` (route any `apiProvider` id to your own `BaseProvider` subclass — the SDK wraps `ProviderRouter`'s factory registry). |
+| **Skills** | `loadSkills(dir)` discovers `<dir>/<name>/SKILL.md` and feeds the agent's skill index, so `skill_view` works exactly as in the CLI. Complements the bundled set. |
+| **Events** | `onText`, `onReasoning`, `onToolCall`, `onToolResult`, `onError`, `onUsage`, `onFailover`, `onCompress`, `onFinish`. |
+| **Lifecycle** | `newSession()`, `getSession()`, `getInfo()`, `listProviders()`, `loadConfig(path?)`. |
 
----
+`packages/sdk/README.md` has the full walkthrough.
+
+**Status — read before adopting.** The SDK *works* (it is what the end-to-end checks exercise), and
+both packages are now publishable: no bundler step needs to inline `core`, declarations are emitted
+for the public API, and `npm pack` yields 18 kB / 490 kB tarballs. They are **not on npm yet**
+because nothing outside this repo consumes them — publishing is deliberately deferred until one of
+the consumer features below (A2A, a plugin host, editor integration) actually starts. Until then, consume them from the monorepo
+(`npm run build`), or use MCP, which is the supported *stable* extension route today.
 
 ## Development
 
 ```bash
 npm install            # Node 20+
 npm run build          # esbuild → core, sdk, cli (+ the standalone CLI bundle)
-npm test               # vitest: 445 tests in 40 files
+npm run build:types    # emit .d.ts for core and sdk
+npm test               # vitest: 464 tests in 41 files
 npm run typecheck      # tsc --noEmit
 npm run lint           # eslint
 npm run format         # prettier
@@ -505,6 +533,8 @@ Written down so nobody has to discover it by grepping:
   CLI *bundle* (no runtime dependencies), but it still requires Node 20+. There are no
   per-platform binaries and no release pipeline.
 - **`mycode review` / `mycode a2a-server`** — neither is a command. Use `/review` in chat.
+- **Nothing is published to npm** — `@mycode/core` and `@mycode/sdk` are publishable but
+  unpublished; the CLI is the only installable artifact (`@ankitkumar131/mycode-ai`).
 - **`doctor` and `config test` are summaries, not probes** — they report configuration and provider
   order; they do not make network requests, so "active" means "configured", not "reachable".
 - **One outbound call on start-up** — the CLI checks npm for a newer version (3 s timeout).

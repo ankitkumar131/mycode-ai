@@ -203,6 +203,7 @@ $ mycode doctor
 Both pages promise `MyCodeSDK` with `registerTool` / `registerProvider` and "plugins that plug straight into the agent loop". Reality (see part 1, §5):
 
 - no `MyCodeSDK` class, no `registerTool`, no `registerProvider` — the real SDK surface is `MyCodeAgent`, `discoverSkills`, `createSkill`, … and it is `private` + unpublished (`npm view @mycode/sdk` → 404);
+  - *Update (later work):* `registerTool` and `registerProvider` now exist on `MyCodeAgent` and both packages are publishable (declarations emitted, `@mycode/core` external), but neither is published yet. The site's `MyCodeSDK` class name is still wrong.
 - `grep -rn -i "plugin" packages --include=*.ts` → **zero matches**; the repo's own comparison doc says *"MyCode has skills and MCP; it has no plugin host."*
 
 Then:

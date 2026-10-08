@@ -49,6 +49,7 @@ export type {
   SafetyResult,
   CommandRecord,
   ExecutionResult,
+  AskUserQuestion,
 } from './tools/types.js';
 
 // Tool definitions
@@ -157,6 +158,7 @@ export type { VerifyResult } from './verify/verify.js';
 // Providers
 export { BaseProvider } from './routing/base-provider.js';
 export { ProviderRouter } from './routing/provider-router.js';
+export type { ProviderFactory } from './routing/provider-router.js';
 export type { ProviderConfig, ProviderStats } from './routing/types.js';
 
 // Hooks

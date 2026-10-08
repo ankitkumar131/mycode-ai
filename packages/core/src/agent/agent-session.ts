@@ -267,6 +267,11 @@ export class AgentSession {
     }
   }
 
+  /** Retune the iteration cap for subsequent runs (the cap is per session). */
+  setMaxIterations(iterations: number): void {
+    if (Number.isFinite(iterations) && iterations > 0) this.config.maxIterations = iterations;
+  }
+
   abort(): void {
     this._aborted = true;
     this._abortController.abort();

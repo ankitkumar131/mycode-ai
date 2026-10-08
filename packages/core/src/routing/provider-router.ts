@@ -12,9 +12,37 @@ import {
 } from '../errors.js';
 import { logger } from '../output/logger.js';
 import type { ProviderConfig, ProviderStats } from './types.js';
+
+/**
+ * Builds a provider implementation for one `apiProvider` id. Registered through
+ * `ProviderRouter.registerProviderFactory`, which is how hosts (the SDK, plugins)
+ * add provider backends without editing the core switch.
+ */
+export type ProviderFactory = (config: ProviderConfig) => BaseProvider;
 import { describeFailoverReason } from './failover.js';
 
 export class ProviderRouter {
+  /** Custom implementations, keyed by `apiProvider` (lower-cased). */
+  private static _factories: Map<string, ProviderFactory> = new Map();
+
+  /**
+   * Teach the router about a provider backend. The id matches the `apiProvider`
+   * field of a provider config; a registered factory always wins over the
+   * built-ins, so a host can also override one of those.
+   */
+  static registerProviderFactory(id: string, factory: ProviderFactory): void {
+    ProviderRouter._factories.set(id.toLowerCase(), factory);
+  }
+
+  static unregisterProviderFactory(id: string): boolean {
+    return ProviderRouter._factories.delete(id.toLowerCase());
+  }
+
+  /** Ids currently handled by a custom factory. */
+  static providerFactoryIds(): string[] {
+    return Array.from(ProviderRouter._factories.keys());
+  }
+
   private providers: BaseProvider[] = [];
   private _currentIndex = 0;
   /** Index of the first provider that failed in this attempt, or -1. */
@@ -33,6 +61,9 @@ export class ProviderRouter {
   }
 
   private createProvider(config: ProviderConfig): BaseProvider {
+    const custom = ProviderRouter._factories.get((config.apiProvider ?? '').toLowerCase());
+    if (custom) return custom(config);
+
     switch (config.apiProvider) {
       case 'ollama':
         return new OllamaProvider(config);

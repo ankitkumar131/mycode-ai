@@ -60,8 +60,12 @@ async function buildPackage(pkg) {
   const externalDeps = Object.keys(allDeps || {}).filter(
     (d) => !d.startsWith('@mycode/'),
   );
+  // Workspace deps stay external so a published package (e.g. @mycode/sdk)
+  // requires its peers instead of inlining another 13 MB copy of them. Only the
+  // CLI needs everything in one file, and it has its own standalone bundle.
+  const workspaceDeps = Object.keys(allDeps || {}).filter((d) => d.startsWith('@mycode/'));
 
-  const external = [...NODE_BUILTINS, ...externalDeps];
+  const external = [...NODE_BUILTINS, ...externalDeps, ...workspaceDeps];
 
   const sharedOpts = {
     platform: 'node',
@@ -73,6 +77,7 @@ async function buildPackage(pkg) {
     logLevel: 'info',
     define: {
       'process.env.CLI_VERSION': JSON.stringify(currentVersion),
+      'process.env.MYCODE_VERSION': JSON.stringify(currentVersion),
     },
   };
 
