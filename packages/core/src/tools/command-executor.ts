@@ -85,7 +85,7 @@ export function executeCommand(
       }
     }
 
-    const appendOutput = (buffer: string, target: 'stdout' | 'stderr') => {
+    const appendOutput = (buffer: string, _target: 'stdout' | 'stderr') => {
       if (lineCount >= MAX_LOG_LINES) return;
       const lines = buffer.split('\n').filter(Boolean);
       for (const line of lines) {

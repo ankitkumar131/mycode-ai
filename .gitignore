@@ -21,3 +21,7 @@ Thumbs.db
 
 # eval harness output
 evals/runs/
+
+# Generated skill output (regenerable)
+graphify-out/
+brag-output/

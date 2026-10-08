@@ -70,7 +70,6 @@ describe('TextArea (simulated TTY)', () => {
     (globalThis as any).__fakeStdin = stdin;
     Object.defineProperty(process, 'stdin', { value: stdin, configurable: true });
     Object.defineProperty(process, 'stdout', { value: stdout, configurable: true });
-    const previousTerm = process.env.TERM;
     process.env.TERM = 'xterm-256color';
     // Capability detection is cached per process; each test installs a new fake.
     resetCapabilityCache();

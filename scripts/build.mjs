@@ -15,7 +15,7 @@ const args = process.argv.slice(2);
 const pkgIndex = args.indexOf('--package');
 const targetPackage = pkgIndex !== -1 ? args[pkgIndex + 1] : null;
 
-const packages = targetPackage ? [targetPackage] : ['core', 'sdk', 'cli', 'a2a-server', 'devtools', 'test-utils'];
+const packages = targetPackage ? [targetPackage] : ['core', 'sdk', 'cli'];
 
 const NODE_BUILTINS = [
   'assert', 'assert/strict', 'async_hooks', 'buffer', 'child_process', 'cluster',
@@ -30,7 +30,7 @@ const NODE_BUILTINS = [
 ];
 
 function syncWorkspaceVersions() {
-  for (const pkg of ['core', 'sdk', 'cli', 'a2a-server', 'devtools', 'test-utils']) {
+  for (const pkg of ['core', 'sdk', 'cli']) {
     const pkgPath = join(root, 'packages', pkg, 'package.json');
     if (existsSync(pkgPath)) {
       try {
@@ -77,12 +77,15 @@ async function buildPackage(pkg) {
   };
 
   try {
-    await esbuild.build({
-      ...sharedOpts,
-      entryPoints: [join(pkgDir, 'src', 'index.ts')],
-      outfile: join(pkgDir, 'dist', 'index.js'),
-      bundle: true,
-    });
+    const indexEntry = join(pkgDir, 'src', 'index.ts');
+    if (existsSync(indexEntry)) {
+      await esbuild.build({
+        ...sharedOpts,
+        entryPoints: [indexEntry],
+        outfile: join(pkgDir, 'dist', 'index.js'),
+        bundle: true,
+      });
+    }
 
     const binEntry = join(pkgDir, 'src', 'mycode.ts');
     if (existsSync(binEntry)) {

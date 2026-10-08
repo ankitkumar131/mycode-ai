@@ -9,7 +9,6 @@ const DOC_EXTENSIONS = new Set([
 ]);
 
 const DEFAULT_LINE_LIMIT = 500;
-const MAX_BYTES_DEFAULT = 100_000;
 
 export function formatLineNumbered(lines: string[], startLine = 1): string {
   const maxDigits = String(startLine + lines.length - 1).length;

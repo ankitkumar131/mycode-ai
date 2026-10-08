@@ -1,4 +1,3 @@
-import { EventTranslator } from './event-translator.js';
 import { ConversationContext, type Message } from './context.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import { ProviderRouter } from '../routing/provider-router.js';
@@ -90,7 +89,6 @@ type RawToolCall = { id: string; type: string; function: { name: string; argumen
 
 export class AgentSession {
   private config: SessionConfig;
-  public translator: EventTranslator;
   private context: ConversationContext;
   private toolRegistry: ToolRegistry;
   private _running = false;
@@ -98,6 +96,7 @@ export class AgentSession {
   private _aborted = false;
   private _abortController: AbortController;
   private _toolFailures: Map<string, number> = new Map();
+  private _listeners: Array<(event: AgentEvent) => void> = [];
   private _executedToolCalls: Set<string> = new Set();
   private _initialized = false;
   private _steerQueue: string[] = [];
@@ -113,7 +112,6 @@ export class AgentSession {
 
   constructor(config: SessionConfig) {
     this.config = config;
-    this.translator = new EventTranslator();
     // Compact against the smallest window in the provider chain when a failover
     // coordinator is present: the conversation must stay representable no matter
     // which provider ends up answering.
@@ -710,11 +708,26 @@ export class AgentSession {
     if (data.todos) todoStore.restore(this.id, data.todos);
   }
 
+  /**
+   * Subscribe to session events (text, tool call/result, error, finish).
+   * Returns an unsubscribe function. Listener errors are swallowed so a broken
+   * listener can never abort a task.
+   */
+  onEvent(listener: (event: AgentEvent) => void): () => void {
+    this._listeners.push(listener);
+    return () => {
+      const i = this._listeners.indexOf(listener);
+      if (i >= 0) this._listeners.splice(i, 1);
+    };
+  }
+
   private emit(event: AgentEvent): void {
-    try {
-      this.translator.translate(event);
-    } catch {
-      /* best-effort */
+    for (const listener of this._listeners) {
+      try {
+        listener(event);
+      } catch {
+        /* best-effort: a listener must not break the session */
+      }
     }
   }
 }

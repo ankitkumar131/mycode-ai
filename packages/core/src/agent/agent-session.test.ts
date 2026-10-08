@@ -1,10 +1,8 @@
-import type { AgentOptions } from './types.js';
 
 const mockChat = vi.fn();
 const mockExecuteTool = vi.fn();
 const mockGetDefinitions = vi.fn();
 const mockBuildSystemPrompt = vi.fn();
-const mockTranslate = vi.fn();
 
 vi.mock('../routing/provider-router.js', () => ({
   ProviderRouter: vi.fn(() => ({
@@ -30,12 +28,6 @@ vi.mock('../prompts/system-prompt.js', () => ({
   },
   findContextFiles: vi.fn(() => []),
   readMemory: vi.fn(() => ''),
-}));
-
-vi.mock('./event-translator.js', () => ({
-  EventTranslator: vi.fn(() => ({
-    translate: mockTranslate,
-  })),
 }));
 
 vi.mock('./context.js', () => ({
@@ -82,7 +74,6 @@ beforeEach(() => {
   mockExecuteTool.mockReset();
   mockGetDefinitions.mockReset();
   mockBuildSystemPrompt.mockReset();
-  mockTranslate.mockReset();
 
   mockBuildSystemPrompt.mockResolvedValue('You are MyCode, an AI coding agent.');
   mockGetDefinitions.mockReturnValue([{ function: { name: 'read-file' } }]);
@@ -172,10 +163,12 @@ describe('AgentSession', () => {
     mockExecuteTool.mockRejectedValueOnce(new Error('Permission denied'));
 
     const session = makeSession();
+    const events: any[] = [];
+    session.onEvent((e) => events.push(e));
     const result = await session.run('Do something');
 
     expect(result).toBe('Fixed it.');
-    expect(mockTranslate).toHaveBeenCalledWith(
+    expect(events).toContainEqual(
       expect.objectContaining({ type: 'error', message: expect.stringContaining('Permission denied') })
     );
   });
@@ -235,19 +228,23 @@ describe('AgentSession', () => {
     mockChat.mockResolvedValueOnce({ content: 'Done.', toolCalls: [] });
 
     const session = makeSession();
+    const events: any[] = [];
+    session.onEvent((e) => events.push(e));
     await session.run('Test');
 
-    expect(mockTranslate).toHaveBeenCalledWith(expect.objectContaining({ type: 'finish' }));
+    expect(events).toContainEqual(expect.objectContaining({ type: 'finish' }));
   });
 
   it('emits error event when provider throws', async () => {
     mockChat.mockRejectedValueOnce(new Error('API unavailable'));
 
     const session = makeSession();
+    const events: any[] = [];
+    session.onEvent((e) => events.push(e));
     const result = await session.run('Test');
 
     expect(result).toContain('API unavailable');
-    expect(mockTranslate).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
+    expect(events).toContainEqual(expect.objectContaining({ type: 'error' }));
   });
 
   it('returns context from getContext', () => {

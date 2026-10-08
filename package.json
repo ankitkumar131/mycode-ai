@@ -10,20 +10,12 @@
   "files": [
     "bin",
     "packages/cli/dist",
-    "packages/core/dist",
-    "packages/sdk/dist",
-    "packages/a2a-server/dist",
-    "packages/devtools/dist",
-    "packages/test-utils/dist",
     "scripts"
   ],
   "workspaces": [
     "packages/cli",
     "packages/core",
-    "packages/sdk",
-    "packages/a2a-server",
-    "packages/devtools",
-    "packages/test-utils"
+    "packages/sdk"
   ],
   "scripts": {
     "eval": "node evals/run.mjs",
@@ -51,11 +43,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/mycode.git"
+    "url": "git+https://github.com/ankitkumar131/mycode-ai.git"
   },
-  "homepage": "https://github.com/anomalyco/mycode#readme",
+  "homepage": "https://github.com/ankitkumar131/mycode-ai#readme",
   "bugs": {
-    "url": "https://github.com/anomalyco/mycode/issues"
+    "url": "https://github.com/ankitkumar131/mycode-ai/issues"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -85,7 +77,6 @@
     "esbuild": "^0.25.0",
     "eslint": "^9.0.0",
     "prettier": "^3.4.0",
-    "rimraf": "^6.0.0",
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"
   }

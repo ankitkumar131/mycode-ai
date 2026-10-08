@@ -5,7 +5,7 @@ vi.mock('@mycode/core', async (importOriginal) => {
   return {
     ...mod,
     AgentSession: vi.fn().mockImplementation((opts: any) => ({
-      run: vi.fn().mockImplementation(async (input: string) => {
+      run: vi.fn().mockImplementation(async (_input: string) => {
         opts?.onText?.('Mock answer');
         return 'Mock answer';
       }),

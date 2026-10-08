@@ -14,7 +14,6 @@
  */
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
-import readline from 'readline';
 import { TextArea } from '../text-area.js';
 import { resetCapabilityCache } from '../capabilities.js';
 

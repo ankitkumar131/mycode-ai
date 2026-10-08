@@ -54,9 +54,8 @@ import { getLocalPackageInfo } from '../utils/update-check.js';
 import { confirmCommand, askQuestions } from '../ui/prompt.js';
 import { renderTodoPanel } from '../ui/todo-view.js';
 import { renderStatusLine, estimateCost } from '../ui/status-line.js';
-import { renderDiff, openDiffViewer, diffStats } from '../ui/diff-viewer.js';
 import { setTheme, prefersLightTheme } from '../ui/themes/registry.js';
-import { supportsCursorControl, describeTerminal, describeBuild } from '../ui/capabilities.js';
+import { supportsCursorControl, describeBuild } from '../ui/capabilities.js';
 import { SessionApprovals, shouldPrompt } from '../permissions/session-approvals.js';
 import { effectiveWindowFor, safeContextWindow, type ProviderConfig } from '@mycode/core';
 
@@ -286,8 +285,6 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       currentSpinner = null;
     }
   };
-  const strictSpinnerStop = stopSpinner;
-  const out = (line: string) => (textArea && textArea.isBusy() === false ? textArea.log(line) : console.log(line));
   const stamp = () => (ui.timestamps ? chalk.hex(theme.dim)(`[${new Date().toTimeString().slice(0, 5)}] `) : '');
 
   // ─── Failover coordination ──────────────────────────────────────────────
@@ -342,10 +339,8 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
   // `delegate` hands a subtask to a child session whose transcript is discarded;
   // only its report returns. This is what keeps forty file reads out of the
   // parent's context.
-  let activeSubAgents = 0;
 
   const delegateFn = async (req: { kind: 'explore' | 'general'; task: string }): Promise<string> => {
-    activeSubAgents++;
     stopSpinner();
     console.log(
       `  ${chalk.hex(theme.tool)('◆')} ${chalk.hex(theme.tool).bold(`sub-agent ${req.kind}`)} ` +
@@ -363,7 +358,6 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       const result = await runner.run();
       return renderSubAgentResult(result);
     } finally {
-      activeSubAgents--;
     }
   };
 

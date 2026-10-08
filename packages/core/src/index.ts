@@ -3,16 +3,12 @@
 // Agent
 export { AgentSession } from './agent/agent-session.js';
 export type { SessionConfig, SessionUsage } from './agent/agent-session.js';
-export { EventTranslator } from './agent/event-translator.js';
 export { ConversationContext } from './agent/context.js';
 export type { AgentOptions, AgentEvent, Message as AgentMessage } from './agent/types.js';
 
 // Multi-Agent Engine
-export { AgentService, agentService } from './agents/agent-service.js';
 export { SubAgentRunner, SUBAGENTS, renderSubAgentResult, subAgentToolsets, extractReport } from './agents/subagent.js';
 export type { SubAgentKind, SubAgentDefinition, SubAgentResult, SubAgentRunOptions } from './agents/subagent.js';
-export { registerBuiltInAgents, buildInfo, planInfo, generalInfo, exploreInfo } from './agents/built-in.js';
-export type { AgentInfo, AgentMode, Agent, GenerateOptions, GenerateResult } from './agents/types.js';
 
 // Tools
 export { ToolRegistry, TOOLSETS, ALIASES as TOOL_ALIASES } from './tools/tool-registry.js';
@@ -23,7 +19,6 @@ export type { TruncateOptions, TruncateResult } from './tools/output-store.js';
 export { ProcessManager, processManager } from './tools/process-manager.js';
 export type { ManagedProcess } from './tools/process-manager.js';
 export { classifyCommand, isBlocked, getSafetyLabel } from './tools/command-safety.js';
-export { CommandHistory } from './tools/command-history.js';
 export { executeCommand } from './tools/command-executor.js';
 export { detectFileType, isBinaryFile } from './tools/file-detector.js';
 export type {
@@ -110,8 +105,6 @@ export { ProviderRouter } from './routing/provider-router.js';
 export type { ProviderConfig, ProviderStats } from './routing/types.js';
 
 // Hooks
-export { HookAggregator, HookRunner } from './hooks/hooks.js';
-export type { HookDefinition, HookEvent } from './hooks/types.js';
 
 // MCP
 export { SnapshotStore, snapshotStore } from './git/snapshots.js';
@@ -120,20 +113,14 @@ export { MCPClient, MCPClientManager, mcpManager } from './mcp/mcp-client.js';
 export type { MCPConfig, MCPServerConfig, MCPToolInfo } from './mcp/types.js';
 
 // Voice
-export { VoiceEngine, voiceEngine } from './voice/voice-engine.js';
-export type { VoiceConfig } from './voice/voice-engine.js';
 
 // Context
-export { ContextManager } from './context/context-manager.js';
-export { FileContextResolver } from './context/file-resolver.js';
 
 // Config
 export { ConfigManager, adjustProviderPriorities } from './config/config-manager.js';
 export type { MyCodeConfig } from './config/types.js';
 
 // Output
-export { OutputFormatter } from './output/output-formatter.js';
-export type { OutputFormat } from './output/types.js';
 
 // Prompts
 export { SystemPromptBuilder, findContextFiles, readMemory, CONTEXT_FILE_NAMES } from './prompts/system-prompt.js';
@@ -165,9 +152,5 @@ export {
 } from './prompts/custom-commands.js';
 
 // Safety & Policy
-export { SafetyChecker } from './safety/safety-checker.js';
-export { PolicyEngine } from './policy/policy-engine.js';
-export { PermissionManager, permissionManager } from './policy/permission-manager.js';
-export type { PermissionRule, RulesetArray, Effect, PermissionPromptRequest } from './policy/permission-manager.js';
 
 export * from './mcp/tool-bridge.js';

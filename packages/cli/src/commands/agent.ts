@@ -16,7 +16,6 @@ import { Ora } from 'ora';
 import { decodeEntities } from '../utils/html.js';
 import { confirmCommand, askQuestions } from '../ui/prompt.js';
 import { renderTodoPanel } from '../ui/todo-view.js';
-import { renderStatusLine, estimateCost } from '../ui/status-line.js';
 import { theme } from '../ui/themes/theme.js';
 
 async function question(prompt: string): Promise<string> {

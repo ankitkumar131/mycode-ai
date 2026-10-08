@@ -15,6 +15,36 @@ Everything below was found by inspection **and then tested**: I copied the repo,
 | `npm run format:check` | **fails — 115 files** would be reformatted |
 | `node scripts/smoke-failover.mjs` | 8/8 checks pass |
 
+## Executed — final result (commit `chore: remove dead code…`)
+
+The tier-1 list below was applied to the repository, with the coupled edits from §2 made alongside it.
+
+| Metric | Before | After | Δ |
+|:---|:---|:---|:---|
+| Tracked files | 696 | **580** | −116 |
+| Tracked bytes | 24,403,183 (24.4 MB) | **17,999,871 (17.9 MB)** | −6.4 MB (**−26.2 %**) |
+| Published tarball | 8.5 MB / 27 entries | **2.2 MB / 14 entries** | **−74 %** |
+| `npm run lint` | 211 warnings | **177 warnings** | −34; **zero `no-unused-vars` left** |
+| `tsc --noEmit` | clean | **clean** | — |
+| `vitest run` | 445/445 | **445/445** | — |
+| `scripts/build.mjs` | 6 packages | **3 packages** (core, sdk, cli) | build ok |
+| `smoke-failover.mjs` | 8/8 | **8/8** | — |
+| Fresh `npm i <tarball>` + `mycode --version` | ok | **ok** | 3.2.1 |
+
+**Late finds** — an exhaustive re-scan (every module whose only importer is `index.ts` or a test) turned up three more dead files that the first pass missed, now also removed:
+
+| Path | Why | Note |
+|:---|:---|:---|
+| `packages/core/src/safety/safety-checker.ts` | `SafetyChecker` re-exported, never used | it was a **stub that returned `true` for every command and path** — dead code that also mis-advertised safety |
+| `packages/core/src/tools/command-history.ts` | `CommandHistory` re-exported, never instantiated | the `commandHistory?` hook in `ToolRegistry` stays (no-op unless a host passes one) |
+| `packages/cli/src/ui/types.ts` | `AppProps`/`AppState` existed only for the deleted `App.ts` stub | — |
+
+**One deliberate change of plan** — §2.2 said to delete `event-translator.ts` *and* the emission it served. Three tests assert on those events, so instead the emission was kept and turned into a real API: `AgentSession.onEvent(listener)` (unsubscribe returned, listener errors swallowed). The dead translator module is gone, the test mock on an internal module is gone, and the event tests now exercise a public surface.
+
+**Also fixed while in there:** `workspaces`/`files` trimmed to the packages that exist, `packages/cli` lost its dangling `main`/`types` (the `index.ts` it pointed at is deleted) and its unused `@mycode/sdk` dependency, `types: ./dist/index.d.ts` dropped from `core`/`sdk` (no `.d.ts` is ever emitted), `rimraf` removed (unused), `repository`/`homepage`/`bugs` repointed from `anomalyco/mycode` to `ankitkumar131/mycode-ai`, and the `vitest.config.ts` coverage block removed (its provider was never installed, so `--coverage` always failed — add `@vitest/coverage-v8` if you want it back).
+
+Not done, listed for a separate pass: the 177 `no-explicit-any` warnings, `npm run format` (115 files), and the `packages/sdk` decision in §6.
+
 ## Result of deleting the tier-1 list (verified in a copy at `/tmp/deadcheck`)
 
 | Check | Before | After pruning | Verdict |

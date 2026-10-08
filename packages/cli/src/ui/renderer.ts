@@ -6,7 +6,7 @@
 
 import { Marked, type Token } from 'marked';
 import chalk from 'chalk';
-import { COLORS, S, ICONS, getWidth, indent } from './themes/theme.js';
+import { COLORS, S, ICONS, getWidth } from './themes/theme.js';
 
 const INDENT = '  ';
 

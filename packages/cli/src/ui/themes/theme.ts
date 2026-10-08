@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { getTokens, getThemeName, type ThemeTokens } from './registry.js';
+import { getTokens, type ThemeTokens } from './registry.js';
 
 /**
  * Live theme tokens.

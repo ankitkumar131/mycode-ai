@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { FakeTerminal } from './fake-terminal.js';
 import { TextArea } from '../text-area.js';
 import { resetCapabilityCache } from '../capabilities.js';

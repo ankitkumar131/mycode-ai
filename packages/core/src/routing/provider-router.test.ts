@@ -1,4 +1,4 @@
-import { NoProvidersConfiguredError, AllProvidersExhaustedError, RateLimitError, AuthError } from '../errors.js';
+import { NoProvidersConfiguredError, AllProvidersExhaustedError, NoProvidersConfiguredError } from '../errors.js';
 
 const mockCreate = vi.fn();
 const mockStream = vi.fn();

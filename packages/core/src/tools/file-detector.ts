@@ -3,7 +3,7 @@
  * Detects PDF, images, and other binary files to prevent garbled readFile output.
  */
 
-import { readFileSync, statSync } from 'fs';
+import { statSync } from 'fs';
 
 export type FileCategory = 'text' | 'pdf' | 'image' | 'audio' | 'video' | 'binary';
 
