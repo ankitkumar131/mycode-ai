@@ -145,6 +145,29 @@ describe('shouldPrompt', () => {
     expect(shouldPrompt(a, { ...base, isCommand: true })).toBe(false);
   });
 
+  it('always asks for shell commands in plan mode, even with /allow-all armed', () => {
+    const a = new SessionApprovals();
+    a.allowAll();
+    // Entering plan mode is an explicit narrowing, so it outranks a bypass the
+    // user granted for ordinary work. `terminal` is the one tool plan mode
+    // keeps (opencode keeps bash too), so this ask is the only thing standing
+    // between a "planning" turn and `echo x > file`.
+    expect(shouldPrompt(a, { ...base, isCommand: true, planMode: true })).toBe(true);
+    expect(
+      shouldPrompt(a, { ...base, isCommand: true, planMode: true, confirmCommands: false }),
+    ).toBe(true);
+  });
+
+  it('lets --yolo still win in plan mode', () => {
+    const a = new SessionApprovals();
+    expect(shouldPrompt(a, { ...base, yolo: true, planMode: true, isCommand: true })).toBe(false);
+  });
+
+  it('leaves the write preference alone in plan mode (writes are removed upstream)', () => {
+    const a = new SessionApprovals();
+    expect(shouldPrompt(a, { ...base, planMode: true, confirmWrites: false })).toBe(false);
+  });
+
   it('bypasses only the scope that was allowed', () => {
     const writes = new SessionApprovals();
     writes.allow('writes');

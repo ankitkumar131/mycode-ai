@@ -1,4 +1,5 @@
 import { ConversationContext, type Message } from './context.js';
+import { isMutatingTool, planModeRefusal } from './plan-mode.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 import { ProviderRouter } from '../routing/provider-router.js';
 import { SystemPromptBuilder } from '../prompts/system-prompt.js';
@@ -118,6 +119,7 @@ export class AgentSession {
   private _filesTouched: Set<string> = new Set();
   private _toolCounts: Map<string, number> = new Map();
   private _pendingSystemSections: string[] = [];
+  private _planMode = false;
   public id: string;
   public title: string | null = null;
 
@@ -175,8 +177,11 @@ export class AgentSession {
 
         const messages = this.context.getHistory();
         // The tool surface is derived from the pinned provider so it cannot
-        // change underneath a turn that already planned its edits.
-        const toolDefs = this.toolRegistry.getDefinitions();
+        // change underneath a turn that already planned its edits. In plan mode
+        // the mutating tools are absent from the list, not merely unapproved.
+        const toolDefs = this.toolRegistry
+          .getDefinitions()
+          .filter((d) => !(this._planMode && isMutatingTool(d.function.name)));
 
         let response = '';
         let toolCalls: RawToolCall[] | undefined;
@@ -272,6 +277,22 @@ export class AgentSession {
     if (Number.isFinite(iterations) && iterations > 0) this.config.maxIterations = iterations;
   }
 
+  /**
+   * Plan mode: read-only by construction.
+   *
+   * The mutating tools are removed from every request built while this is on,
+   * and refused at execution as a second line (see `plan-mode.ts` for why this
+   * is a mode rather than a prompt, and why `terminal` stays). Enforced here
+   * rather than in the CLI so `mycode agent` and SDK hosts inherit it.
+   */
+  setPlanMode(on: boolean): void {
+    this._planMode = on === true;
+  }
+
+  isPlanMode(): boolean {
+    return this._planMode;
+  }
+
   abort(): void {
     this._aborted = true;
     this._abortController.abort();
@@ -361,6 +382,22 @@ export class AgentSession {
         `Error: arguments were not valid JSON: ${call.function.arguments.slice(0, 200)}`,
         toolName,
       );
+      return;
+    }
+
+    // A model that was never offered the tool can still call it from habit or
+    // a stale transcript; refuse without touching the registry, the failure
+    // counter or the snapshot store.
+    if (this._planMode && isMutatingTool(toolName)) {
+      // Announced like any other call, then failed: the user should be able to
+      // see that the agent *tried* to write and was stopped by the mode, not
+      // wonder why nothing happened.
+      this.emit({ type: 'tool_call', name: toolName, args });
+      this.config.onToolCall?.(toolName, args);
+      const refusal = planModeRefusal(toolName);
+      this.context.addToolResult(call.id, refusal, toolName);
+      this.emit({ type: 'tool_result', name: toolName, result: refusal });
+      this.config.onToolResult?.(toolName, refusal, { durationMs: 0, error: true });
       return;
     }
 

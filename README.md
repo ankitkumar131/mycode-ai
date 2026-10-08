@@ -215,8 +215,8 @@ Type `/` for the command palette. Highlights:
 |:---|:---|
 | Session | `/new` `/clear` `/save` `/resume` `/sessions` `/history` `/title` `/undo [files]` `/compress` |
 | Control | `/stop` `/steer <note>` `/queue` `/retry` `/model` `/config` `/status` `/usage` `/diff` |
-| Safety | `/allow-all [writes\|commands]` `/yolo` `/tools` `/toolsets` |
-| Context | `/context` `/memory` `/plan` `/init` `/review` `/read` `/ls` `/git` |
+| Safety | `/allow-all [writes\|commands]` `/yolo` `/approvals [manual\|smart\|off]` `/tools` `/toolsets` |
+| Context | `/context` `/memory` `/plan [task]` `/build` `/init` `/review` `/read` `/ls` `/git` |
 | Skills | `/skills` `/reload-skills` `/learn` `/skill-creator` |
 | Extras | `/theme` `/statusbar` `/timestamps` `/reasoning` `/personality` `/mcp` `/btw` `/about` |
 | Ponytail | `/ponytail` `/ponytail-review` `/ponytail-audit` `/ponytail-debt` `/ponytail-gain` `/ponytail-help` |
@@ -257,6 +257,10 @@ disabled (`disabledTools`).
 - **Confirmation gates.** Writes and shell commands prompt before running, with the target and cwd
   shown. `/allow-all` or `--yolo` opts out; the settings file sets the default. A session bypass is
   bound to the conversation — follow-up questions stay silent, `/new` puts the prompts back.
+- **Plan mode** (`/plan`, leave with `/build`). Not a request in the prompt: the write tools
+  (`write_file`, `patch`, `execute_code`, `skill_manage`) are removed from what the model is offered
+  and refused if it calls them anyway, while shell commands always ask. Same shape as opencode's
+  read-only `plan` agent. `/plan <task>` also saves the plan to `.mycode/plans/`.
 - **Command safety classifier.** Shell commands are graded `blocked` / `dangerous` / `elevated` /
   `normal` before execution — pattern-blocked commands cannot be approved away.
 - **Post-write verification.** After a successful write the agent runs the project formatter and

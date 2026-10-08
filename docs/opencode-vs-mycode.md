@@ -630,7 +630,7 @@ same verifier, at the same wire.
 | # | Capability | What MyCode has | What is missing |
 | --- | --- | --- | --- |
 | 25 | **Permissions** | `confirmWrites` / `confirmCommands`, session allow-all (`/allow-all`, or the in-prompt option) scoped to writes/commands, catastrophic floor in `command-safety.ts` | No per-tool allow/ask/deny, no path/glob rules, no directory-level config layering (`docs/permissions.mdx`, `docs/policies.mdx`). It is two switches, not a policy. |
-| 26 | **Plan mode** | `/plan` writes a plan to `.mycode/plans/`; the `explore` sub-agent is read-only by construction | No read-only *primary* agent the user can switch to and back mid-session. |
+| 26 | **Plan mode** | Shipped after this table was written: `/plan` enters a sticky read-only mode (`/build` leaves it, `PLAN` in the status line). Mutating tools are removed from the request and refused at execution, `terminal` always asks, `general` delegation is refused, and `/plan <task>` saves the plan to `.mycode/plans/` — the same split as opencode's `plan` agent (`edit: { '*': 'deny' }`, `task: { general: 'deny' }`, bash asks). | opencode also lets the *model* switch modes via `plan_enter`/`plan_exit` tools and lists agents as first-class config; MyCode's switch is user-only and a markdown-defined agent list is still #3. |
 | 27 | **Background processes** | `process-manager.ts`: `background: true`, log polling, stdin writes, kill | No PTY (see #5). This is otherwise shipped, not partial. |
 | 28 | **Persistence** | `SessionStore` with list/search/load/latestFor, `/compress`, `--continue` | File-per-session, no DB, no mid-turn crash resume (#18). |
 | 29 | **Verification** | formatter + diagnostics after a write, bounded retries (`verify/verify.ts`) | Command-based only; no LSP (#4). |
@@ -663,7 +663,8 @@ Ranked by effect on a single task, using the same reasoning as Part 2.4:
    and already running in the user's editor.
 2. **Markdown-defined agents (#3) + per-agent model routing (#19).** Together they
    are the extensibility story users ask for first, and they reuse the markdown
-   loader that already exists for commands.
+   loader that already exists for commands. (Plan mode, #26, now exists as a
+   built-in mode — naming more of them is what remains.)
 3. **MCP is the stable extension point today**, which is why the plugin host (#1)
    and on-disk tools (#2) rank below these two: MCP already covers "contribute
    tools from outside the process", and it is the interface MyCode does not have

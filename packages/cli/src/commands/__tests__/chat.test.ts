@@ -58,6 +58,7 @@ vi.mock('@mycode/core', () => {
     queuedCount: 0,
   }));
   return {
+    MUTATING_TOOLS: ['write_file', 'patch', 'execute_code', 'skill_manage'],
     getPonytailMode,
     describePonytailMode,
     ConfigManager: vi.fn().mockImplementation(() => ({

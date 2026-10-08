@@ -57,6 +57,7 @@ import { renderStatusLine, estimateCost } from '../ui/status-line.js';
 import { setTheme, prefersLightTheme } from '../ui/themes/registry.js';
 import { supportsCursorControl, describeBuild } from '../ui/capabilities.js';
 import { SessionApprovals, shouldPrompt } from '../permissions/session-approvals.js';
+import { savePlan } from './plan-file.js';
 import { effectiveWindowFor, safeContextWindow, type ProviderConfig } from '@mycode/core';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -281,6 +282,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     personality: null,
     loadedSkills: [],
     plan: false,
+    planSlug: null,
     approvals,
   };
 
@@ -357,6 +359,11 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     kind: 'explore' | 'general';
     task: string;
   }): Promise<string> => {
+    // Mirror opencode's `task: { general: 'deny' }` for the plan agent: a
+    // write-capable child would launder plan mode's read-only guarantee.
+    if (ui.plan && req.kind === 'general') {
+      return 'Error: plan mode is read-only, and the `general` sub-agent can write. Use the `explore` sub-agent instead, or leave plan mode with /build.';
+    }
     stopSpinner();
     console.log(
       `  ${chalk.hex(theme.tool)('◆')} ${chalk.hex(theme.tool).bold(`sub-agent ${req.kind}`)} ` +
@@ -397,6 +404,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       // `safety` marks a shell command; its absence marks a file mutation.
       const needed = shouldPrompt(approvals, {
         yolo: ui.yolo,
+        planMode: session.isPlanMode(),
         isCommand: !!safety,
         confirmCommands: cfg.preferences.confirmCommands,
         confirmWrites: cfg.preferences.confirmWrites,
@@ -675,6 +683,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
     }
     const needsPrompt = shouldPrompt(approvals, {
       yolo: ui.yolo,
+      planMode: session.isPlanMode(),
       isCommand: true,
       confirmCommands: cfg.preferences.confirmCommands,
       confirmWrites: cfg.preferences.confirmWrites,
@@ -730,6 +739,20 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
         console.log();
         console.log(decodeEntities(renderMarkdown(result)));
       }
+      // `/plan <task>` asks MyCode to save the plan, not the model: write_file
+      // is exactly the tool plan mode takes away (core `plan-mode.ts`), and
+      // opencode's equivalent is a path-scoped `edit` permission MyCode has no
+      // way to express yet. One write, in code, to a directory the user chose.
+      if (ui.plan && ui.planSlug && result?.trim()) {
+        try {
+          const rel = savePlan(cwd, ui.planSlug, result);
+          console.log(`  ${chalk.hex(theme.dim)('plan saved')} ${chalk.hex(theme.textDim)(rel)}`);
+        } catch (err: any) {
+          console.log(`  ${S.error(ICONS.cross)} could not save the plan: ${err.message}`);
+        }
+      }
+      ui.planSlug = null;
+
       const u = session.getUsage();
       const st = session.getState();
       const model = router.getCurrentProvider()?.model;
@@ -737,7 +760,7 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
 
       console.log(
         renderStatusLine({
-          bypass: ui.yolo ? 'YOLO' : approvals.badge(),
+          bypass: ui.plan ? 'PLAN' : ui.yolo ? 'YOLO' : approvals.badge(),
           model,
           provider: router.getCurrentProvider()?.name,
           usedTokens: st.estimatedTokens,

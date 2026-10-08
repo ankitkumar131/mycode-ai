@@ -13,6 +13,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 let lastOpts: any = null;
+/** What the CLI asked the (mocked) session to do. */
+const sessionCalls: { planMode: boolean | null } = { planMode: null };
 
 vi.mock('@mycode/core', () => {
   const getPonytailMode = vi.fn(() => 'full');
@@ -41,6 +43,10 @@ vi.mock('@mycode/core', () => {
   const AgentSession = vi.fn().mockImplementation((opts: any) => {
     lastOpts = opts;
     return {
+      setPlanMode: vi.fn((on: boolean) => {
+        sessionCalls.planMode = on;
+      }),
+      isPlanMode: vi.fn(() => sessionCalls.planMode === true),
       // The mock plays the part of the model by calling the very confirmation
       // callback the real session would call for a shell command.
       run: vi.fn(async () => {
@@ -91,6 +97,7 @@ vi.mock('@mycode/core', () => {
     };
   });
   return {
+    MUTATING_TOOLS: ['write_file', 'patch', 'execute_code', 'skill_manage'],
     getPonytailMode,
     describePonytailMode,
     ConfigManager: vi.fn().mockImplementation(() => ({
@@ -152,14 +159,18 @@ vi.mock('../../ui/text-area.js', () => ({
   })),
 }));
 
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { chatCommand } from '../chat.js';
 import { TextArea } from '../../ui/text-area.js';
 
 const ENTER = { name: 'return', sequence: '\r' };
 const DOWN = { name: 'down', sequence: '\x1b[B' };
 
-describe('session-scoped approvals in `mycode chat`', () => {
+describe('session-scoped modes in `mycode chat` (approvals, plan mode)', () => {
   let writes: string[];
+  let logs: string[];
   let promptsAnswered = 0;
   let planning = false;
 
@@ -168,8 +179,10 @@ describe('session-scoped approvals in `mycode chat`', () => {
 
   beforeEach(() => {
     writes = [];
+    logs = [];
     promptsAnswered = 0;
     planning = false;
+    sessionCalls.planMode = null;
 
     vi.spyOn(process.stdout, 'write').mockImplementation((chunk: any) => {
       const text = String(chunk);
@@ -188,7 +201,9 @@ describe('session-scoped approvals in `mycode chat`', () => {
       }
       return true;
     });
-    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '));
+    });
 
     Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
     (process.stdin as any).isRaw = false;
@@ -235,6 +250,53 @@ describe('session-scoped approvals in `mycode chat`', () => {
     expect(output).toContain(ALLOW_ALL_LABEL);
     // 3. /new is a new session, so the user is asked again (2 prompts total)
     expect(promptsAnswered).toBe(2);
+  });
+
+  it('/plan turns on a real mode, not just a prompt', async () => {
+    script([{ kind: 'slash', name: '/plan' }, { kind: 'exit' }]);
+    await chatCommand();
+
+    expect(sessionCalls.planMode).toBe(true);
+    expect(logs.join('\n')).toContain('PLAN MODE');
+  });
+
+  it('/plan <task> runs a planning turn and saves the plan where the user asked', async () => {
+    // chatCommand resolves cwd from process.cwd(); pin it to a scratch dir.
+    const dir = mkdtempSync(join(tmpdir(), 'mycode-plan-'));
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(dir);
+    try {
+      script([{ kind: 'slash', name: '/plan fix the uploader' }, { kind: 'exit' }]);
+      await chatCommand();
+
+      expect(sessionCalls.planMode).toBe(true);
+      const saved = readdirSync(join(dir, '.mycode', 'plans'));
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatch(/^\d{4}-\d{2}-\d{2}-fix-the-uploader\.md$/);
+      expect(readFileSync(join(dir, '.mycode', 'plans', saved[0]), 'utf-8')).toContain('done');
+    } finally {
+      cwdSpy.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('/build leaves the mode, and a new session does not silently keep it', async () => {
+    script([{ kind: 'slash', name: '/plan' }, { kind: 'slash', name: '/build' }, { kind: 'exit' }]);
+    await chatCommand();
+
+    // Last word wins: /build switched it back off.
+    expect(sessionCalls.planMode).toBe(false);
+    expect(logs.join('\n')).toContain('Build mode');
+  });
+
+  it('/plan off is the same as /build', async () => {
+    script([
+      { kind: 'slash', name: '/plan' },
+      { kind: 'slash', name: '/plan off' },
+      { kind: 'exit' },
+    ]);
+    await chatCommand();
+
+    expect(sessionCalls.planMode).toBe(false);
   });
 
   it('does not interrupt a follow-up question in the same session', async () => {

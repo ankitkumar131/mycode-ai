@@ -2,6 +2,7 @@
 
 // Agent
 export { AgentSession } from './agent/agent-session.js';
+export { MUTATING_TOOLS, isMutatingTool, planModeRefusal } from './agent/plan-mode.js';
 export type { SessionConfig, SessionUsage } from './agent/agent-session.js';
 export { ConversationContext } from './agent/context.js';
 export type { AgentOptions, AgentEvent, Message as AgentMessage } from './agent/types.js';

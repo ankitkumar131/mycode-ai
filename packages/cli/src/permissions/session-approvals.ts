@@ -143,8 +143,9 @@ export function parseAllowAllArgs(
  *
  * Precedence, highest first:
  *   1. `--yolo` / `/approvals off` — an explicit startup decision
- *   2. a session bypass from `/allow-all`
- *   3. the configured preference for that category
+ *   2. plan mode, for shell commands only — see `planMode` below
+ *   3. a session bypass from `/allow-all`
+ *   4. the configured preference for that category
  */
 export function shouldPrompt(
   approvals: SessionApprovals,
@@ -155,9 +156,20 @@ export function shouldPrompt(
     isCommand: boolean;
     confirmCommands: boolean;
     confirmWrites: boolean;
+    /**
+     * True while the session is in plan mode.
+     *
+     * Plan mode removes the write tools outright (see core `plan-mode.ts`), so
+     * only shell execution reaches this gate — and `terminal` can write
+     * (`echo > file`), so it always asks. This deliberately outranks a session
+     * bypass: entering plan mode is an explicit narrowing, and the bypass was
+     * granted for a different kind of work. `--yolo` still wins.
+     */
+    planMode?: boolean;
   },
 ): boolean {
   if (opts.yolo) return false;
+  if (opts.planMode && opts.isCommand) return true;
   if (approvals.isAllowed(opts.isCommand ? 'commands' : 'writes')) return false;
   return opts.isCommand ? opts.confirmCommands : opts.confirmWrites;
 }

@@ -52,6 +52,7 @@ import {
   PONYTAIL_SOURCE,
   PONYTAIL_VERSION,
   PONYTAIL_LICENSE,
+  MUTATING_TOOLS,
 } from '@mycode/core';
 import { parseAllowAllArgs, type SessionApprovals } from '../permissions/session-approvals.js';
 import { pickChoiceArrowKeys, resetAlwaysAllowed } from '../ui/prompt.js';
@@ -83,7 +84,10 @@ export interface SlashCommandContext {
     reasoning: 'hide' | 'show';
     personality: string | null;
     loadedSkills: string[];
+    /** True while the session is in plan mode (read-only; see core plan-mode.ts) */
     plan: boolean;
+    /** Task text of a `/plan <task>` run, consumed by the turn that answers it */
+    planSlug?: string | null;
     /** Session-scoped approval bypass, driven by /allow-all */
     approvals: SessionApprovals;
   };
@@ -124,6 +128,27 @@ export interface CommandDef {
 
 const ok = (msg: string) => console.log(`  ${chalk.hex(theme.green)(ICONS.check)} ${msg}`);
 const warn = (msg: string) => console.log(`  ${chalk.hex(theme.amber)(ICONS.warning)} ${msg}`);
+
+/**
+ * Leave plan mode. The conversation is untouched — whatever was planned is
+ * still in context — so "switch to build" is a one-word operation, which is
+ * what makes it realistic to plan first and execute second.
+ */
+function leavePlanMode(ctx: SlashCommandContext): SlashCommandResult {
+  if (!ctx.ui.plan) {
+    console.log(
+      `  ${chalk.hex(theme.dim)('Not in plan mode.')} ${chalk.hex(theme.dim)('/plan to enter it.')}`,
+    );
+    return { handled: true };
+  }
+  ctx.session.setPlanMode(false);
+  ctx.ui.plan = false;
+  ctx.ui.planSlug = null;
+  ok(
+    'Build mode — edits and commands are available again. The plan is still in this conversation.',
+  );
+  return { handled: true };
+}
 const err = (msg: string) => console.log(`  ${chalk.hex(theme.red)(ICONS.cross)} ${msg}`);
 const dim = (msg: string) => chalk.hex(theme.dim)(msg);
 const usage = (u: string) => console.log(`  ${chalk.hex(theme.amber)('Usage:')} ${u}`);
@@ -529,7 +554,7 @@ export const COMMANDS: CommandDef[] = [
   },
   {
     name: '/todo',
-    aliases: ['/todos', '/plan'],
+    aliases: ['/todos'],
     description: "Show the agent's plan (its current todo list)",
     argumentHint: '[expand]',
     category: 'Info',
@@ -1262,7 +1287,11 @@ export const COMMANDS: CommandDef[] = [
   },
 
   {
-    name: '/yolo',
+    // Named /approvals because that is what its own usage line has always said;
+    // it shipped as a second `/yolo` instead, so the first definition won the
+    // lookup and none of this was reachable.
+    name: '/approvals',
+    aliases: ['/approval-mode'],
     description: 'Set approval mode: manual (ask everything), smart (ask for risky only), off',
     argumentHint: '[manual|smart|off]',
     category: 'Configuration',
@@ -1550,21 +1579,54 @@ Steps:
   },
   {
     name: '/plan',
-    description: 'Write an implementation plan to .mycode/plans/ without executing anything',
+    description: 'Enter plan mode: read-only, no edits — write tools are removed',
+    usage: '/plan [task]',
     argumentHint: '[task]',
     category: 'Tools & Skills',
     handler: async (args, ctx) => {
       const task = args.trim();
-      const plansDir = join(ctx.cwd, '.mycode', 'plans');
-      const prompt = `PLAN MODE — planning only, do not implement.
-${task ? `Task: ${task}` : 'Task: infer the task from our conversation so far.'}
+      if (task.toLowerCase() === 'off') return leavePlanMode(ctx);
 
-1. Inspect the relevant code with read-only tools (glob, search_files, read_file, git_status). Do not run write_file/patch/terminal except the single write in step 3.
-2. Produce a markdown plan with: Goal · Context (files/modules, current behaviour) · Steps (numbered; each names files to touch and the change) · Risks & open questions · Verification (tests/commands).
-3. Save it to ${plansDir}/${new Date().toISOString().slice(0, 10)}-<short-slug>.md with write_file, then print the plan.`;
-      await ctx.sendPrompt(prompt, { display: `/plan ${task}`.trim() });
+      const fresh = !ctx.ui.plan;
+      ctx.session.setPlanMode(true);
+      ctx.ui.plan = true;
+      ctx.ui.planSlug = task || null;
+
+      if (fresh) {
+        console.log();
+        console.log(
+          `  ${chalk.hex(theme.amber).bold('◆ PLAN MODE')} ${chalk.hex(theme.dim)(`— read-only: ${MUTATING_TOOLS.join(', ')} are unavailable, and shell commands ask first.`)}`,
+        );
+        console.log(
+          `  ${chalk.hex(theme.dim)('Inspect and design freely; nothing in the workspace can be changed.')} ` +
+            chalk.hex(theme.dim)('Leave with /build.'),
+        );
+      }
+
+      if (task) {
+        // Read-only by construction, so no "do not write" begging is needed —
+        // the tools are simply not there.
+        const prompt = `Produce an implementation plan for: ${task}
+
+Inspect the relevant code first with read-only tools (glob_search, search_files, read_file, git_status, terminal), then answer with a markdown plan containing:
+- **Goal** — one paragraph restating the task
+- **Context** — files/modules involved and their current behaviour
+- **Steps** — numbered; each names the files to touch and the change
+- **Risks / open questions**
+- **Verification** — the commands/tests that will prove it works
+
+Do not implement anything. The plan is your whole answer; it is saved to .mycode/plans/ for you.`;
+        await ctx.sendPrompt(prompt, { display: `/plan ${task}` });
+      }
       return { handled: true, type: 'plan_mode' };
     },
+  },
+  {
+    name: '/build',
+    description: 'Leave plan mode and execute (writes and commands available again)',
+    aliases: ['/unplan'],
+    category: 'Tools & Skills',
+    handler: async (_args, ctx) => leavePlanMode(ctx),
   },
   {
     name: '/init',
@@ -1934,7 +1996,10 @@ export function buildMenuItems(cwd: string, config?: MyCodeConfig): SlashMenuIte
 
 export function findCommand(name: string): CommandDef | undefined {
   const n = name.toLowerCase();
-  return COMMANDS.find((c) => c.name === n || c.aliases?.includes(n));
+  // Exact names win over aliases: an alias must never be able to shadow a real
+  // command. `/plan` used to be an alias of `/todo`, so it opened the todo panel
+  // and the plan handler below it was unreachable.
+  return COMMANDS.find((c) => c.name === n) ?? COMMANDS.find((c) => c.aliases?.includes(n));
 }
 
 export async function handleSlashCommand(
