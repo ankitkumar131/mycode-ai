@@ -217,6 +217,8 @@ export interface ChatOptions {
   query?: string;
   /** Skip all approval prompts */
   yolo?: boolean;
+  /** TUI backend: `legacy` (default) or `opentui` (Phase 1 stub, falls back to legacy) */
+  tui?: string;
 }
 
 export async function chatCommand(options: ChatOptions = {}): Promise<void> {
@@ -228,6 +230,13 @@ export async function chatCommand(options: ChatOptions = {}): Promise<void> {
       S.error(`\n  ${ICONS.cross} No providers configured. Run ${S.brand('mycode init')} first.\n`),
     );
     return;
+  }
+
+  // Phase 1 OpenTUI gate: `opentui` attempts takeover, `legacy` (default)
+  // continues below. Stub always falls back for now. See plan_opencode.md.
+  if (options.tui === 'opentui') {
+    const { tryLaunchOpenTUI } = await import('../tui/launcher.js');
+    if (await tryLaunchOpenTUI()) return;
   }
 
   // Apply the saved theme (falling back to auto-detection on light terminals)

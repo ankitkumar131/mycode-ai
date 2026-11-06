@@ -11,7 +11,7 @@ import { checkForUpdate, getLocalPackageInfo } from './utils/update-check.js';
 
 const argv = process.argv.slice(2);
 
-/** Parse chat flags: --continue/-c, --resume <id>, -q/--query <text>, --model/-m, --yolo, -Q (quiet/one-shot). */
+/** Parse chat flags: --continue/-c, --resume <id>, -q/--query <text>, --model/-m, --yolo, --tui <legacy|opentui>, -Q (quiet/one-shot). */
 function parseChatFlags(args: string[]): { opts: ChatOptions; rest: string[] } {
   const opts: ChatOptions = {};
   const rest: string[] = [];
@@ -21,6 +21,8 @@ function parseChatFlags(args: string[]): { opts: ChatOptions; rest: string[] } {
     if (a === '--continue' || a === '-c') opts.continue = true;
     else if (a === '--resume' || a === '-r') opts.resume = next();
     else if (a.startsWith('--resume=')) opts.resume = a.slice(9);
+    else if (a === '--tui') opts.tui = next();
+    else if (a.startsWith('--tui=')) opts.tui = a.slice(6);
     else if (a === '--query' || a === '-q' || a === '-Q') opts.query = next();
     else if (a === '--model' || a === '-m') opts.model = next();
     else if (a.startsWith('--model=')) opts.model = a.slice(8);
@@ -45,6 +47,7 @@ const CHAT_FLAGS = new Set([
   '-c',
   '--resume',
   '-r',
+  '--tui',
   '--query',
   '-q',
   '-Q',
@@ -59,6 +62,7 @@ const cmd =
   first === undefined ||
   CHAT_FLAGS.has(first) ||
   first.startsWith('--resume=') ||
+  first.startsWith('--tui=') ||
   first.startsWith('--model=')
     ? 'chat'
     : first;
@@ -140,7 +144,9 @@ async function main() {
         `  Editor:    ${process.env.VISUAL || process.env.EDITOR || '(unset — Ctrl+G uses vi/notepad)'}`,
       );
       const { describeTerminal } = await import('./ui/capabilities.js');
-      console.log(`  Terminal:  ${describeTerminal()}\n`);
+      console.log(`  Terminal:  ${describeTerminal()}`);
+      const { describeOpenTUI } = await import('./ui/opentui-status.js');
+      console.log(`  OpenTUI:   ${describeOpenTUI()}\n`);
       break;
     }
     case '--version':
@@ -160,6 +166,7 @@ Commands:
       -r, --resume <id>      Resume a saved session by id or title
       -q, --query <text>     Run a single query and exit
       -m, --model <name>     Use a specific configured provider/model
+      --tui <backend>        TUI backend: legacy (default) or opentui (Phase 1 stub, falls back)
       --yolo                 Skip approval prompts (alias: --allow-all)
   init | setup           Setup configuration
   config                 Manage providers
