@@ -28,12 +28,15 @@ export interface ManagedProcess {
 
 const MAX_LOG_LINES = 4000;
 
-
 export class ProcessManager {
   private procs = new Map<string, ManagedProcess>();
   private counter = 0;
 
-  start(command: string, cwd: string, opts: { env?: Record<string, string | undefined>; label?: string } = {}): ManagedProcess {
+  start(
+    command: string,
+    cwd: string,
+    opts: { env?: Record<string, string | undefined>; label?: string } = {},
+  ): ManagedProcess {
     const inv = buildShellInvocation(command);
     const child = spawn(inv.file, inv.args, {
       cwd,
@@ -78,7 +81,7 @@ export class ProcessManager {
       mp.exitedAt = Date.now();
       if (mp.status === 'running') mp.status = 'exited';
     });
-    child.on('error', err => {
+    child.on('error', (err) => {
       mp.logs.push(`[spawn error] ${err.message}`);
       mp.status = 'exited';
       mp.exitCode = 1;
@@ -89,7 +92,7 @@ export class ProcessManager {
   }
 
   get(id: string): ManagedProcess | undefined {
-    return this.procs.get(id) ?? Array.from(this.procs.values()).find(p => String(p.pid) === id);
+    return this.procs.get(id) ?? Array.from(this.procs.values()).find((p) => String(p.pid) === id);
   }
 
   list(): ManagedProcess[] {
@@ -97,11 +100,14 @@ export class ProcessManager {
   }
 
   running(): ManagedProcess[] {
-    return this.list().filter(p => p.status === 'running');
+    return this.list().filter((p) => p.status === 'running');
   }
 
   /** Return log lines since `fromLine` (absolute line index) — or the tail. */
-  poll(id: string, opts: { fromLine?: number; tail?: number } = {}): { lines: string[]; nextLine: number; proc: ManagedProcess } {
+  poll(
+    id: string,
+    opts: { fromLine?: number; tail?: number } = {},
+  ): { lines: string[]; nextLine: number; proc: ManagedProcess } {
     const proc = this.get(id);
     if (!proc) throw new Error(`No such process: ${id}`);
     const total = proc.logOffset + proc.logs.length;
@@ -113,18 +119,27 @@ export class ProcessManager {
   }
 
   /** Block until a regex matches new output, the process exits, or timeout. */
-  async waitFor(id: string, pattern: RegExp | null, timeoutMs: number): Promise<{ matched: boolean; exited: boolean; lines: string[] }> {
+  async waitFor(
+    id: string,
+    pattern: RegExp | null,
+    timeoutMs: number,
+  ): Promise<{ matched: boolean; exited: boolean; lines: string[] }> {
     const proc = this.get(id);
     if (!proc) throw new Error(`No such process: ${id}`);
     const startLine = proc.logOffset + proc.logs.length;
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const { lines } = this.poll(id, { fromLine: startLine });
-      if (pattern && lines.some(l => pattern.test(l))) return { matched: true, exited: proc.status !== 'running', lines };
+      if (pattern && lines.some((l) => pattern.test(l)))
+        return { matched: true, exited: proc.status !== 'running', lines };
       if (proc.status !== 'running') return { matched: false, exited: true, lines };
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 200));
     }
-    return { matched: false, exited: proc.status !== 'running', lines: this.poll(id, { fromLine: startLine }).lines };
+    return {
+      matched: false,
+      exited: proc.status !== 'running',
+      lines: this.poll(id, { fromLine: startLine }).lines,
+    };
   }
 
   write(id: string, input: string): void {
@@ -139,7 +154,7 @@ export class ProcessManager {
     if (!proc) return false;
     if (proc.status !== 'running') return true;
     proc.status = 'killed';
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       if (!proc.pid) return resolve();
       treeKill(proc.pid, signal, () => resolve());
     });
@@ -157,7 +172,7 @@ export class ProcessManager {
 
   async killAll(): Promise<number> {
     const running = this.running();
-    await Promise.all(running.map(p => this.kill(p.id)));
+    await Promise.all(running.map((p) => this.kill(p.id)));
     return running.length;
   }
 

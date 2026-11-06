@@ -40,7 +40,9 @@ describe('ConfigManager', () => {
     const cm = new ConfigManager();
     const saved = {
       version: '1',
-      providers: [{ name: 'test', apiProvider: 'openai' as const, apiKey: 'sk-xxx', model: 'gpt-4' }],
+      providers: [
+        { name: 'test', apiProvider: 'openai' as const, apiKey: 'sk-xxx', model: 'gpt-4' },
+      ],
       preferences: { confirmWrites: false, confirmCommands: true },
     };
     await cm.save(saved);
@@ -52,7 +54,11 @@ describe('ConfigManager', () => {
 
   it('configExists returns true after save', async () => {
     const cm = new ConfigManager();
-    await cm.save({ version: '1', providers: [], preferences: { confirmWrites: true, confirmCommands: true } });
+    await cm.save({
+      version: '1',
+      providers: [],
+      preferences: { confirmWrites: true, confirmCommands: true },
+    });
     expect(cm.configExists()).toBe(true);
   });
 
@@ -66,7 +72,12 @@ describe('ConfigManager', () => {
 
   it('removeProvider removes by name (case-insensitive)', async () => {
     const cm = new ConfigManager();
-    await cm.addProvider({ name: 'TestProvider', apiProvider: 'openai', apiKey: 'k1', model: 'gpt-4' });
+    await cm.addProvider({
+      name: 'TestProvider',
+      apiProvider: 'openai',
+      apiKey: 'k1',
+      model: 'gpt-4',
+    });
     const removed = await cm.removeProvider('testprovider');
     expect(removed).toBe(true);
     const cfg = await cm.load();
@@ -82,7 +93,11 @@ describe('ConfigManager', () => {
 
   it('updatePreferences merges preferences', async () => {
     const cm = new ConfigManager();
-    await cm.save({ version: '1', providers: [], preferences: { confirmWrites: true, confirmCommands: false } });
+    await cm.save({
+      version: '1',
+      providers: [],
+      preferences: { confirmWrites: true, confirmCommands: false },
+    });
     await cm.updatePreferences({ confirmWrites: false, maxContextFiles: 50 });
     const cfg = await cm.load();
     expect(cfg.preferences.confirmWrites).toBe(false);
@@ -99,7 +114,11 @@ describe('ConfigManager', () => {
 
   it('handles corrupt JSON gracefully', async () => {
     const cm = new ConfigManager();
-    await cm.save({ version: '1', providers: [], preferences: { confirmWrites: true, confirmCommands: true } });
+    await cm.save({
+      version: '1',
+      providers: [],
+      preferences: { confirmWrites: true, confirmCommands: true },
+    });
     writeFileSync(cm.getConfigPath(), '{invalid json}', 'utf-8');
     const config = await cm.load();
     expect(config.version).toBe('1');
@@ -109,7 +128,12 @@ describe('ConfigManager', () => {
   it('automatically shifts existing provider priority when a new provider is added with same priority', async () => {
     const cm = new ConfigManager();
     await cm.addProvider({ name: 'p1', apiProvider: 'openai', priority: 1, model: 'gpt-4o' });
-    await cm.addProvider({ name: 'p2', apiProvider: 'openrouter', priority: 1, model: 'claude-3-5-sonnet' });
+    await cm.addProvider({
+      name: 'p2',
+      apiProvider: 'openrouter',
+      priority: 1,
+      model: 'claude-3-5-sonnet',
+    });
 
     const cfg = await cm.load();
     expect(cfg.providers).toHaveLength(2);

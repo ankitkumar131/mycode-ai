@@ -31,24 +31,30 @@ describe('readDocumentTool', () => {
     expect(result).toContain('Hello world document text');
     expect(result).toContain('.txt text');
 
-    try { unlinkSync(filePath); } catch {}
+    try {
+      unlinkSync(filePath);
+    } catch {}
   });
 
   it('reads RTF files stripping formatting codes', async () => {
     const filePath = join(TEST_DIR, 'sample.rtf');
-    const rtfContent = '{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\\f0\\fs24 Hello \\b bold\\b0 text!\\par Second paragraph.}';
+    const rtfContent =
+      '{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\\f0\\fs24 Hello \\b bold\\b0 text!\\par Second paragraph.}';
     writeFileSync(filePath, rtfContent, 'utf-8');
 
     const result = await readDocumentTool.execute({ path: filePath }, process.cwd());
     expect(result).toContain('Hello boldtext!');
     expect(result).toContain('Second paragraph.');
 
-    try { unlinkSync(filePath); } catch {}
+    try {
+      unlinkSync(filePath);
+    } catch {}
   });
 
   it('reads HTML files stripping script and style tags', async () => {
     const filePath = join(TEST_DIR, 'sample.html');
-    const htmlContent = '<html><head><style>body { color: red; }</style></head><body><h1>Document Title</h1><p>Document content paragraph.</p></body></html>';
+    const htmlContent =
+      '<html><head><style>body { color: red; }</style></head><body><h1>Document Title</h1><p>Document content paragraph.</p></body></html>';
     writeFileSync(filePath, htmlContent, 'utf-8');
 
     const result = await readDocumentTool.execute({ path: filePath }, process.cwd());
@@ -56,7 +62,9 @@ describe('readDocumentTool', () => {
     expect(result).toContain('Document content paragraph.');
     expect(result).not.toContain('color: red');
 
-    try { unlinkSync(filePath); } catch {}
+    try {
+      unlinkSync(filePath);
+    } catch {}
   });
 
   it('readFile auto-delegates .rtf and .html to readDocument', async () => {
@@ -66,6 +74,8 @@ describe('readDocumentTool', () => {
     const result = await readFileTool.execute({ path: filePath }, process.cwd());
     expect(result).toContain('Direct read RTF');
 
-    try { unlinkSync(filePath); } catch {}
+    try {
+      unlinkSync(filePath);
+    } catch {}
   });
 });

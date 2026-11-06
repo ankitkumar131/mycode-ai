@@ -20,7 +20,10 @@ export const skillsListTool: ToolModule = {
         type: 'object',
         properties: {
           category: { type: 'string', description: 'Optional category filter' },
-          query: { type: 'string', description: 'Optional substring filter on name/description/tags' },
+          query: {
+            type: 'string',
+            description: 'Optional substring filter on name/description/tags',
+          },
         },
       },
     },
@@ -29,17 +32,20 @@ export const skillsListTool: ToolModule = {
     const category = typeof args.category === 'string' ? args.category.toLowerCase() : '';
     const query = typeof args.query === 'string' ? args.query.toLowerCase() : '';
     let skills = skillManager.list(cwd);
-    if (category) skills = skills.filter(s => (s.category ?? '').toLowerCase() === category);
+    if (category) skills = skills.filter((s) => (s.category ?? '').toLowerCase() === category);
     if (query) {
       skills = skills.filter(
-        s =>
+        (s) =>
           s.name.toLowerCase().includes(query) ||
           s.description.toLowerCase().includes(query) ||
-          s.tags.some(t => t.toLowerCase().includes(query))
+          s.tags.some((t) => t.toLowerCase().includes(query)),
       );
     }
     if (skills.length === 0) return 'No skills found.';
-    const lines = skills.map(s => `- ${s.name}${s.category ? ` [${s.category}]` : ''}: ${s.description || '(no description)'}`);
+    const lines = skills.map(
+      (s) =>
+        `- ${s.name}${s.category ? ` [${s.category}]` : ''}: ${s.description || '(no description)'}`,
+    );
     return `${skills.length} skill(s):\n${lines.join('\n')}`;
   },
 };
@@ -55,7 +61,10 @@ export const skillViewTool: ToolModule = {
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Skill name' },
-          path: { type: 'string', description: 'Optional file inside the skill, e.g. "references/api.md"' },
+          path: {
+            type: 'string',
+            description: 'Optional file inside the skill, e.g. "references/api.md"',
+          },
         },
         required: ['name'],
       },
@@ -85,12 +94,28 @@ export const skillManageTool: ToolModule = {
             description: 'Operation to perform',
           },
           name: { type: 'string', description: 'Skill name (kebab-case)' },
-          content: { type: 'string', description: 'Full SKILL.md content (create/edit) or file content (write_file). Include YAML frontmatter with name/description.' },
+          content: {
+            type: 'string',
+            description:
+              'Full SKILL.md content (create/edit) or file content (write_file). Include YAML frontmatter with name/description.',
+          },
           old_text: { type: 'string', description: 'Text to replace (patch)' },
           new_text: { type: 'string', description: 'Replacement text (patch)' },
-          file_path: { type: 'string', description: 'Relative file path inside the skill (write_file/delete_file), e.g. references/notes.md' },
-          scope: { type: 'string', enum: ['user', 'workspace'], description: 'Where to create: user (~/.mycode/skills, default) or workspace (.mycode/skills)' },
-          overwrite: { type: 'boolean', description: 'Allow overwriting an existing skill on create' },
+          file_path: {
+            type: 'string',
+            description:
+              'Relative file path inside the skill (write_file/delete_file), e.g. references/notes.md',
+          },
+          scope: {
+            type: 'string',
+            enum: ['user', 'workspace'],
+            description:
+              'Where to create: user (~/.mycode/skills, default) or workspace (.mycode/skills)',
+          },
+          overwrite: {
+            type: 'boolean',
+            description: 'Allow overwriting an existing skill on create',
+          },
         },
         required: ['action', 'name'],
       },
@@ -105,8 +130,17 @@ export const skillManageTool: ToolModule = {
     if (!name) throw new Error('name is required');
 
     // Destructive operations go through the same approval gate as file writes.
-    if ((action === 'delete' || action === 'delete_file' || action === 'edit' || (action === 'create' && args.overwrite)) && options?.confirmFn) {
-      const ok = await options.confirmFn(`skill ${action}: ${name}${filePath ? '/' + filePath : ''}`, 'Modify skills library');
+    if (
+      (action === 'delete' ||
+        action === 'delete_file' ||
+        action === 'edit' ||
+        (action === 'create' && args.overwrite)) &&
+      options?.confirmFn
+    ) {
+      const ok = await options.confirmFn(
+        `skill ${action}: ${name}${filePath ? '/' + filePath : ''}`,
+        'Modify skills library',
+      );
       if (!ok) return 'Skill change cancelled by user.';
     }
 

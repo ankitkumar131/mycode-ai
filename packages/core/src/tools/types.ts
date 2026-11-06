@@ -13,11 +13,34 @@ export interface ToolExecuteOptions {
     add(record: CommandRecord): void;
   };
   abortSignal?: AbortSignal;
+  /** Owning session id — lets tools address per-session state (e.g. todos). */
+  sessionId?: string;
+  /**
+   * Sub-agent support, injected by AgentSession. Returns the sub-agent's report
+   * text, which is the only part that enters the parent context.
+   */
+  delegate?: (req: { kind: 'explore' | 'general'; task: string }) => Promise<string>;
+  /**
+   * Ask-the-user support, injected by the host UI. Receives questions and
+   * resolves with the user's answers keyed by question header.
+   */
+  askUser?: (questions: AskUserQuestion[]) => Promise<Record<string, string>>;
+}
+
+export interface AskUserQuestion {
+  question: string;
+  header?: string;
+  options?: Array<{ label: string; description?: string }>;
+  multiple?: boolean;
 }
 
 export interface ToolModule {
   definition: ToolFunctionDefinition;
-  execute: (args: Record<string, unknown>, cwd: string, options?: ToolExecuteOptions) => string | Promise<string>;
+  execute: (
+    args: Record<string, unknown>,
+    cwd: string,
+    options?: ToolExecuteOptions,
+  ) => string | Promise<string>;
 }
 
 export interface ToolDefinition {

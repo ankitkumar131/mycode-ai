@@ -15,7 +15,7 @@ const args = process.argv.slice(2);
 const pkgIndex = args.indexOf('--package');
 const targetPackage = pkgIndex !== -1 ? args[pkgIndex + 1] : null;
 
-const packages = targetPackage ? [targetPackage] : ['core', 'sdk', 'cli', 'a2a-server', 'devtools', 'test-utils'];
+const packages = targetPackage ? [targetPackage] : ['core', 'sdk', 'cli'];
 
 const NODE_BUILTINS = [
   'assert', 'assert/strict', 'async_hooks', 'buffer', 'child_process', 'cluster',
@@ -30,7 +30,7 @@ const NODE_BUILTINS = [
 ];
 
 function syncWorkspaceVersions() {
-  for (const pkg of ['core', 'sdk', 'cli', 'a2a-server', 'devtools', 'test-utils']) {
+  for (const pkg of ['core', 'sdk', 'cli']) {
     const pkgPath = join(root, 'packages', pkg, 'package.json');
     if (existsSync(pkgPath)) {
       try {
@@ -60,8 +60,12 @@ async function buildPackage(pkg) {
   const externalDeps = Object.keys(allDeps || {}).filter(
     (d) => !d.startsWith('@mycode/'),
   );
+  // Workspace deps stay external so a published package (e.g. @mycode/sdk)
+  // requires its peers instead of inlining another 13 MB copy of them. Only the
+  // CLI needs everything in one file, and it has its own standalone bundle.
+  const workspaceDeps = Object.keys(allDeps || {}).filter((d) => d.startsWith('@mycode/'));
 
-  const external = [...NODE_BUILTINS, ...externalDeps];
+  const external = [...NODE_BUILTINS, ...externalDeps, ...workspaceDeps];
 
   const sharedOpts = {
     platform: 'node',
@@ -73,16 +77,20 @@ async function buildPackage(pkg) {
     logLevel: 'info',
     define: {
       'process.env.CLI_VERSION': JSON.stringify(currentVersion),
+      'process.env.MYCODE_VERSION': JSON.stringify(currentVersion),
     },
   };
 
   try {
-    await esbuild.build({
-      ...sharedOpts,
-      entryPoints: [join(pkgDir, 'src', 'index.ts')],
-      outfile: join(pkgDir, 'dist', 'index.js'),
-      bundle: true,
-    });
+    const indexEntry = join(pkgDir, 'src', 'index.ts');
+    if (existsSync(indexEntry)) {
+      await esbuild.build({
+        ...sharedOpts,
+        entryPoints: [indexEntry],
+        outfile: join(pkgDir, 'dist', 'index.js'),
+        bundle: true,
+      });
+    }
 
     const binEntry = join(pkgDir, 'src', 'mycode.ts');
     if (existsSync(binEntry)) {
@@ -143,3 +151,13 @@ async function main() {
 }
 
 main();
+
+// Stamp the build so the CLI can report which build is running. Written next to
+// the CLI bundle, which is where describeBuild() looks for it.
+try {
+  const stampFile = join(root, 'packages', 'cli', 'dist', 'BUILD_STAMP');
+  mkdirSync(dirname(stampFile), { recursive: true });
+  writeFileSync(stampFile, String(Date.now()) + '\n');
+} catch {
+  /* non-fatal: the banner just shows the commit */
+}

@@ -3,7 +3,15 @@
  * Powers /save, /resume, /sessions, `mycode --continue`, and session search.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, unlinkSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+} from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { Message } from '../agent/context.js';
@@ -71,13 +79,16 @@ export class SessionStore {
       return latest ? this.read(latest.file) : null;
     }
     const all = this.list();
-    const byTitle = all.find(s => s.title?.toLowerCase() === q) ?? all.find(s => s.id.toLowerCase().startsWith(q)) ?? all.find(s => s.title?.toLowerCase().includes(q));
+    const byTitle =
+      all.find((s) => s.title?.toLowerCase() === q) ??
+      all.find((s) => s.id.toLowerCase().startsWith(q)) ??
+      all.find((s) => s.title?.toLowerCase().includes(q));
     return byTitle ? this.read(byTitle.file) : null;
   }
 
   latestFor(cwd?: string): SavedSession | null {
     const all = this.list();
-    const match = cwd ? all.find(s => s.cwd === cwd) : all[0];
+    const match = cwd ? all.find((s) => s.cwd === cwd) : all[0];
     return match ? this.read(match.file) : null;
   }
 
@@ -90,14 +101,14 @@ export class SessionStore {
 
   list(limit = 50): SessionSummary[] {
     if (!existsSync(this.dir)) return [];
-    const files = readdirSync(this.dir).filter(f => f.endsWith('.json'));
+    const files = readdirSync(this.dir).filter((f) => f.endsWith('.json'));
     const out: SessionSummary[] = [];
     for (const f of files) {
       const full = join(this.dir, f);
       try {
         const s = this.read(full);
         if (!s) continue;
-        const firstUser = s.messages.find(m => m.role === 'user');
+        const firstUser = s.messages.find((m) => m.role === 'user');
         out.push({
           id: s.id,
           title: s.title,
@@ -128,7 +139,10 @@ export class SessionStore {
         if (m.role === 'system') continue;
         const idx = m.content.toLowerCase().indexOf(q);
         if (idx !== -1) {
-          res.push({ ...s, snippet: m.content.slice(Math.max(0, idx - 60), idx + 100).replace(/\s+/g, ' ') });
+          res.push({
+            ...s,
+            snippet: m.content.slice(Math.max(0, idx - 60), idx + 100).replace(/\s+/g, ' '),
+          });
           break;
         }
       }

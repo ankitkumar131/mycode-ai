@@ -27,7 +27,10 @@ export interface MyCodeConfig {
     noBundled?: boolean;
   };
   /** User-defined quick commands: /name → shell exec or alias to another slash command */
-  quickCommands?: Record<string, { type: 'exec' | 'alias'; command?: string; target?: string; description?: string }>;
+  quickCommands?: Record<
+    string,
+    { type: 'exec' | 'alias'; command?: string; target?: string; description?: string }
+  >;
   /** Named personalities → system-prompt overlay text */
   personalities?: Record<string, string>;
   /** Approx context window per provider name or model (tokens) */

@@ -64,7 +64,7 @@ export function parseFrontmatter(content: string): SkillFrontmatter {
     if (!kv) continue;
 
     while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop();
-    const prefix = stack.map(s => s.key).join('.');
+    const prefix = stack.map((s) => s.key).join('.');
     const fullKey = prefix ? `${prefix}.${kv[1]}` : kv[1];
     const rest = kv[2].trim();
 
@@ -80,7 +80,11 @@ export function parseFrontmatter(content: string): SkillFrontmatter {
 
   const asList = (v: unknown): string[] | undefined => {
     if (Array.isArray(v)) return v.map(String);
-    if (typeof v === 'string' && v.trim()) return v.split(',').map(s => s.trim()).filter(Boolean);
+    if (typeof v === 'string' && v.trim())
+      return v
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
     return undefined;
   };
 
@@ -95,9 +99,10 @@ export function parseFrontmatter(content: string): SkillFrontmatter {
     version: raw.version !== undefined ? String(raw.version) : undefined,
     platforms: asList(raw.platforms),
     tags: asList(pick('tags', 'metadata.mycode.tags', 'metadata.hermes.tags')),
-    category: (pick('category', 'metadata.mycode.category', 'metadata.hermes.category') as string | undefined),
-    argumentHint: (pick('argument-hint', 'argumentHint') as string | undefined),
-    defaultArgs: (pick('default-args', 'defaultArgs') as string | undefined),
+    category: pick('category', 'metadata.mycode.category', 'metadata.hermes.category') as
+      string | undefined,
+    argumentHint: pick('argument-hint', 'argumentHint') as string | undefined,
+    defaultArgs: pick('default-args', 'defaultArgs') as string | undefined,
     raw,
   };
 }
@@ -105,7 +110,11 @@ export function parseFrontmatter(content: string): SkillFrontmatter {
 function parseScalar(v: string): unknown {
   const s = v.trim();
   if (s.startsWith('[') && s.endsWith(']')) {
-    return s.slice(1, -1).split(',').map(x => stripQuotes(x.trim())).filter(Boolean);
+    return s
+      .slice(1, -1)
+      .split(',')
+      .map((x) => stripQuotes(x.trim()))
+      .filter(Boolean);
   }
   if (s === 'true') return true;
   if (s === 'false') return false;
@@ -137,7 +146,11 @@ export function currentPlatformName(): 'macos' | 'linux' | 'windows' | string {
 export function isPlatformCompatible(platforms?: string[]): boolean {
   if (!platforms || platforms.length === 0) return true;
   const me = currentPlatformName();
-  return platforms.map(p => p.toLowerCase()).some(p => p === me || (p === 'darwin' && me === 'macos') || (p === 'win32' && me === 'windows'));
+  return platforms
+    .map((p) => p.toLowerCase())
+    .some(
+      (p) => p === me || (p === 'darwin' && me === 'macos') || (p === 'win32' && me === 'windows'),
+    );
 }
 
 // ─── Loader ──────────────────────────────────────────────────────────────────
@@ -154,7 +167,11 @@ export class SkillLoader {
     return results;
   }
 
-  loadSkillDir(skillDir: string, origin: InstalledSkill['origin'] = 'user', rootDir?: string): InstalledSkill | null {
+  loadSkillDir(
+    skillDir: string,
+    origin: InstalledSkill['origin'] = 'user',
+    rootDir?: string,
+  ): InstalledSkill | null {
     const skillPath = join(skillDir, 'SKILL.md');
     if (!existsSync(skillPath)) return null;
     let content = '';
@@ -181,7 +198,8 @@ export class SkillLoader {
       definition: {
         name,
         source: skillDir,
-        sourceType: origin === 'workspace' ? 'workspace' : origin === 'bundled' ? 'bundled' : 'local',
+        sourceType:
+          origin === 'workspace' ? 'workspace' : origin === 'bundled' ? 'bundled' : 'local',
         skillPath,
       },
       description,
@@ -197,7 +215,13 @@ export class SkillLoader {
     };
   }
 
-  private walk(root: string, dir: string, depth: number, origin: InstalledSkill['origin'], out: InstalledSkill[]): void {
+  private walk(
+    root: string,
+    dir: string,
+    depth: number,
+    origin: InstalledSkill['origin'],
+    out: InstalledSkill[],
+  ): void {
     if (depth > MAX_DEPTH) return;
     let entries: import('fs').Dirent[];
     try {
@@ -206,7 +230,7 @@ export class SkillLoader {
       return;
     }
 
-    const hasSkill = entries.some(e => e.isFile() && e.name === 'SKILL.md');
+    const hasSkill = entries.some((e) => e.isFile() && e.name === 'SKILL.md');
     if (hasSkill && dir !== root) {
       const skill = this.loadSkillDir(dir, origin, root);
       if (skill) out.push(skill);

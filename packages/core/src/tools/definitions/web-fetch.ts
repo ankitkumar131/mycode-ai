@@ -41,7 +41,8 @@ export const fetchWebPageTool: ToolModule = {
     type: 'function',
     function: {
       name: 'web_fetch',
-      description: 'Fetch web page content from a URL and convert HTML to clean markdown/text. Useful for reading online docs, READMEs, or articles.',
+      description:
+        'Fetch web page content from a URL and convert HTML to clean markdown/text. Useful for reading online docs, READMEs, or articles.',
       parameters: {
         type: 'object',
         properties: {
@@ -75,7 +76,7 @@ export const fetchWebPageTool: ToolModule = {
         signal: controller.signal,
         headers: {
           'User-Agent': 'MyCode-CLI/1.0 (AI coding assistant)',
-          'Accept': 'text/html,application/xhtml+xml,text/plain,application/json',
+          Accept: 'text/html,application/xhtml+xml,text/plain,application/json',
         },
       });
 
@@ -102,7 +103,9 @@ export const fetchWebPageTool: ToolModule = {
       }
 
       if (text.length > maxLength) {
-        text = text.slice(0, maxLength) + `\n\n... [Truncated: showing first ${maxLength} of ${body.length} characters]`;
+        text =
+          text.slice(0, maxLength) +
+          `\n\n... [Truncated: showing first ${maxLength} of ${body.length} characters]`;
       }
 
       return `URL: ${url}\nContent-Type: ${contentType}\nLength: ${text.length} chars\n\n${text}`;

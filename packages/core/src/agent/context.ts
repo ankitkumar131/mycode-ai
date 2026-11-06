@@ -1,7 +1,10 @@
+import { truncateToolOutput } from '../tools/output-store.js';
+
 const DEFAULT_MAX_TOKENS = 128_000;
 const TOKEN_ESTIMATE_RATIO = 4;
 const RESERVED_TOKENS = 4000;
-const MAX_TOOL_RESULT_CHARS = 8000;
+/** Model-visible cap for a single tool result. Full text spills to disk. */
+const MAX_TOOL_RESULT_CHARS = 24_000;
 const MAX_TOOL_ARG_CHARS = 4000;
 
 export interface Message {
@@ -17,6 +20,17 @@ export interface Message {
     };
   }>;
   name?: string;
+  /**
+   * Extended-thinking content, when the provider returned it.
+   *
+   * Kept on the message and sent back verbatim on the next request: the native
+   * Anthropic API rejects a tool-use turn whose thinking blocks were dropped,
+   * and losing them breaks the model's ability to build on its own prior
+   * reasoning. OpenAI-compatible providers simply ignore the field.
+   */
+  thinking?: string;
+  /** Provider signature for the thinking block; required on round-trip. */
+  thinking_signature?: string;
 }
 
 export class ConversationContext {
@@ -41,7 +55,7 @@ export class ConversationContext {
 
   /** Replace the primary (first) system message, or insert one. */
   setSystem(content: string): void {
-    const idx = this.messages.findIndex(m => m.role === 'system');
+    const idx = this.messages.findIndex((m) => m.role === 'system');
     if (idx === -1) this.messages.unshift({ role: 'system', content });
     else this.messages[idx] = { role: 'system', content };
   }
@@ -82,15 +96,19 @@ export class ConversationContext {
         name: string;
         arguments: string;
       };
-    }>
+    }>,
+    thinking?: { text?: string; signature?: string },
   ): void {
-    const sanitized = toolCalls.map(tc => {
+    const sanitized = toolCalls.map((tc) => {
       let argsStr = tc.function.arguments;
       if (argsStr.length > MAX_TOOL_ARG_CHARS) {
         try {
           const parsed = JSON.parse(argsStr);
           if (typeof parsed.content === 'string' && parsed.content.length > 1000) {
-            parsed.content = parsed.content.slice(0, 500) + `\n... [${parsed.content.length - 1000} chars truncated for history efficiency] ...\n` + parsed.content.slice(-500);
+            parsed.content =
+              parsed.content.slice(0, 500) +
+              `\n... [${parsed.content.length - 1000} chars truncated for history efficiency] ...\n` +
+              parsed.content.slice(-500);
             argsStr = JSON.stringify(parsed);
           }
         } catch {
@@ -108,20 +126,33 @@ export class ConversationContext {
       };
     });
 
-    this.messages.push({ role: 'assistant', content, tool_calls: sanitized });
+    this.messages.push({
+      role: 'assistant',
+      content,
+      tool_calls: sanitized,
+      ...(thinking?.text ? { thinking: thinking.text } : {}),
+      ...(thinking?.signature ? { thinking_signature: thinking.signature } : {}),
+    });
   }
 
+  /**
+   * Add a tool result, bounded by the output store.
+   *
+   * Unlike a plain slice, this keeps head *and* tail, records how much was
+   * removed, and spills the full text to disk so the model can re-read it with
+   * `read_file` instead of re-running an expensive command.
+   */
   addToolResult(toolCallId: string, rawContent: string, name?: string): void {
-    let content = rawContent;
-    if (content.length > MAX_TOOL_RESULT_CHARS) {
-      const head = content.slice(0, 3000);
-      const tail = content.slice(-3000);
-      content = `${head}\n... [${content.length - 6000} characters truncated for context speed & efficiency] ...\n${tail}`;
-    }
+    const result = truncateToolOutput(rawContent, {
+      maxChars: MAX_TOOL_RESULT_CHARS,
+      headChars: Math.floor(MAX_TOOL_RESULT_CHARS * 0.6),
+      tailChars: Math.floor(MAX_TOOL_RESULT_CHARS * 0.3),
+      label: name ?? 'tool',
+    });
 
     this.messages.push({
       role: 'tool',
-      content,
+      content: result.text,
       tool_call_id: toolCallId,
       name,
     });
@@ -165,8 +196,10 @@ export class ConversationContext {
 
   getHistory(limit?: number): Message[] {
     if (limit && this.messages.length > limit) {
-      const systemMsgs = this.messages.filter(m => m.role === 'system');
-      const rest = this.messages.filter(m => m.role !== 'system').slice(-(limit - systemMsgs.length));
+      const systemMsgs = this.messages.filter((m) => m.role === 'system');
+      const rest = this.messages
+        .filter((m) => m.role !== 'system')
+        .slice(-(limit - systemMsgs.length));
       return [...systemMsgs, ...rest];
     }
     return [...this.messages];

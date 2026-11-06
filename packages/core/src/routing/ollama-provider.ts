@@ -4,10 +4,16 @@ import { classifyError, ProviderServerError } from '../errors.js';
 import type { ProviderConfig } from './types.js';
 
 const TOOL_CAPABLE_MODELS = [
-  'llama3.1', 'llama3.2', 'llama3.3', 'llama4',
-  'qwen2.5', 'qwen3',
-  'mistral', 'mixtral',
-  'command-r', 'command-a',
+  'llama3.1',
+  'llama3.2',
+  'llama3.3',
+  'llama4',
+  'qwen2.5',
+  'qwen3',
+  'mistral',
+  'mixtral',
+  'command-r',
+  'command-a',
   'firefunction',
   'granite3',
 ];
@@ -31,10 +37,18 @@ export class OllamaProvider extends BaseProvider {
     });
   }
 
-  get name(): string { return this._name; }
-  get model(): string { return this._model; }
-  get canRead(): boolean { return this._canRead; }
-  get canWrite(): boolean { return this._canWrite; }
+  get name(): string {
+    return this._name;
+  }
+  get model(): string {
+    return this._model;
+  }
+  get canRead(): boolean {
+    return this._canRead;
+  }
+  get canWrite(): boolean {
+    return this._canWrite;
+  }
 
   private async ensureRunning(): Promise<void> {
     try {
@@ -42,7 +56,7 @@ export class OllamaProvider extends BaseProvider {
     } catch {
       throw new Error(
         `Ollama is not running at ${(this.client as any).host || 'http://localhost:11434'}. ` +
-        'Start it with: ollama serve'
+          'Start it with: ollama serve',
       );
     }
   }
@@ -54,9 +68,10 @@ export class OllamaProvider extends BaseProvider {
       type: 'function',
       function: {
         name: tc.function?.name || '',
-        arguments: typeof tc.function?.arguments === 'string'
-          ? tc.function.arguments
-          : JSON.stringify(tc.function?.arguments || {}),
+        arguments:
+          typeof tc.function?.arguments === 'string'
+            ? tc.function.arguments
+            : JSON.stringify(tc.function?.arguments || {}),
       },
     }));
   }
@@ -67,7 +82,10 @@ export class OllamaProvider extends BaseProvider {
       const params: any = {
         model: this._model,
         messages,
-        options: { temperature: options.temperature ?? 0.3, num_predict: options.max_tokens ?? 16384 },
+        options: {
+          temperature: options.temperature ?? 0.3,
+          num_predict: options.max_tokens ?? 16384,
+        },
       };
       if (tools.length > 0 && this.supportsTools()) {
         params.tools = tools;
@@ -86,7 +104,8 @@ export class OllamaProvider extends BaseProvider {
             content += chunk.message.content;
             options.onStream(chunk.message.content);
           }
-          if (chunk.message?.tool_calls?.length) toolCalls = toolCalls.concat(chunk.message.tool_calls);
+          if (chunk.message?.tool_calls?.length)
+            toolCalls = toolCalls.concat(chunk.message.tool_calls);
         }
         const norm = this.normalizeToolCalls(toolCalls);
         return {
@@ -124,14 +143,21 @@ export class OllamaProvider extends BaseProvider {
     }
   }
 
-  async *stream(messages: unknown[], tools: unknown[] = [], options: any = {}): AsyncGenerator<any> {
+  async *stream(
+    messages: unknown[],
+    tools: unknown[] = [],
+    options: any = {},
+  ): AsyncGenerator<any> {
     try {
       await this.ensureRunning();
       const params: any = {
         model: this._model,
         messages,
         stream: true,
-        options: { temperature: options.temperature ?? 0.3, num_predict: options.max_tokens ?? 16384 },
+        options: {
+          temperature: options.temperature ?? 0.3,
+          num_predict: options.max_tokens ?? 16384,
+        },
       };
       if (tools.length > 0 && this.supportsTools()) {
         params.tools = tools;
@@ -152,7 +178,10 @@ export class OllamaProvider extends BaseProvider {
           yield {
             type: 'finish',
             finish_reason: chunk.message?.tool_calls?.length ? 'tool_calls' : 'stop',
-            usage: { prompt_tokens: chunk.prompt_eval_count || 0, completion_tokens: chunk.eval_count || 0 },
+            usage: {
+              prompt_tokens: chunk.prompt_eval_count || 0,
+              completion_tokens: chunk.eval_count || 0,
+            },
           };
         }
       }

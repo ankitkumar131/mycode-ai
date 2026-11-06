@@ -1,13 +1,25 @@
 import { BaseProvider } from './base-provider.js';
 
 class TestProvider extends BaseProvider {
-  get name() { return 'test-provider'; }
-  get model() { return 'test-model'; }
-  get canRead() { return true; }
-  get canWrite() { return true; }
+  get name() {
+    return 'test-provider';
+  }
+  get model() {
+    return 'test-model';
+  }
+  get canRead() {
+    return true;
+  }
+  get canWrite() {
+    return true;
+  }
 
-  async chat() { return { content: '' }; }
-  async *stream() { yield { type: 'text', content: '' }; }
+  async chat() {
+    return { content: '' };
+  }
+  async *stream() {
+    yield { type: 'text', content: '' };
+  }
 }
 
 describe('BaseProvider', () => {

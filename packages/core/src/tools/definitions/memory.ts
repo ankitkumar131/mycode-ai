@@ -36,8 +36,14 @@ export const memoryTool: ToolModule = {
         type: 'object',
         properties: {
           action: { type: 'string', enum: ['add', 'replace', 'remove', 'list'] },
-          content: { type: 'string', description: 'Memory line to add (add), or new text (replace)' },
-          target: { type: 'string', description: 'Existing text to replace/remove (substring match)' },
+          content: {
+            type: 'string',
+            description: 'Memory line to add (add), or new text (replace)',
+          },
+          target: {
+            type: 'string',
+            description: 'Existing text to replace/remove (substring match)',
+          },
         },
         required: ['action'],
       },
@@ -57,7 +63,10 @@ export const memoryTool: ToolModule = {
         if (mem.includes(content)) return 'Already in memory.';
         const line = content.startsWith('-') ? content : `- ${content}`;
         mem = (mem.trim() ? mem.trimEnd() + '\n' : '# Memory\n') + line + '\n';
-        if (mem.length > MAX_MEMORY_CHARS) throw new Error(`Memory would exceed ${MAX_MEMORY_CHARS} characters — remove or consolidate entries first.`);
+        if (mem.length > MAX_MEMORY_CHARS)
+          throw new Error(
+            `Memory would exceed ${MAX_MEMORY_CHARS} characters — remove or consolidate entries first.`,
+          );
         writeMemoryFile(mem);
         return `Remembered: ${content}`;
       }
@@ -70,7 +79,7 @@ export const memoryTool: ToolModule = {
       case 'remove': {
         if (!target) throw new Error('target is required');
         const lines = mem.split('\n');
-        const kept = lines.filter(l => !l.includes(target));
+        const kept = lines.filter((l) => !l.includes(target));
         if (kept.length === lines.length) throw new Error('target not found in memory');
         writeMemoryFile(kept.join('\n'));
         return `Removed ${lines.length - kept.length} line(s).`;

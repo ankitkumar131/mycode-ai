@@ -5,7 +5,7 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
 
@@ -18,8 +18,12 @@ const FETCH_TIMEOUT_MS = 3000;
  */
 export function isNewerVersion(v1: string, v2: string): boolean {
   const clean = (v: string) => v.replace(/^v/, '').split('-')[0];
-  const p1 = clean(v1).split('.').map(n => parseInt(n, 10) || 0);
-  const p2 = clean(v2).split('.').map(n => parseInt(n, 10) || 0);
+  const p1 = clean(v1)
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
+  const p2 = clean(v2)
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
 
   for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
     const n1 = p1[i] || 0;
@@ -51,7 +55,10 @@ export function getLocalPackageInfo(): { name: string; version: string } {
     for (const p of candidates) {
       if (existsSync(p)) {
         const pkg = JSON.parse(readFileSync(p, 'utf-8'));
-        if (pkg.version && (pkg.name === PUBLISHED_PACKAGE_NAME || pkg.name === '@ankitkumar131/mycode-ai')) {
+        if (
+          pkg.version &&
+          (pkg.name === PUBLISHED_PACKAGE_NAME || pkg.name === '@ankitkumar131/mycode-ai')
+        ) {
           return {
             name: PUBLISHED_PACKAGE_NAME,
             version: pkg.version,
@@ -84,11 +91,17 @@ export function getLocalPackageInfo(): { name: string; version: string } {
  */
 export async function checkForUpdate(): Promise<void> {
   try {
+    // A development checkout is not something you "update" by installing from
+    // npm, so the notice is just noise — and actively misleading when the local
+    // version has moved ahead of, or diverged from, the published one.
+    if (isSourceCheckout()) return;
+    if (process.env.MYCODE_NO_UPDATE_CHECK === '1') return;
+
     const { name: pkgName, version: localVersion } = getLocalPackageInfo();
 
     const response = await fetch(`https://registry.npmjs.org/${pkgName}/latest`, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      headers: { 'Accept': 'application/json' },
+      headers: { Accept: 'application/json' },
     });
 
     if (!response.ok) return;
@@ -101,6 +114,29 @@ export async function checkForUpdate(): Promise<void> {
     }
   } catch {
     // Silently ignore network failures or offline mode
+  }
+}
+
+/**
+ * True when running from a git working copy rather than an installed package.
+ *
+ * Detected by the presence of `.git` beside the package root: an installed
+ * package under `node_modules` never has one.
+ */
+function isSourceCheckout(): boolean {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    // Walk up a few levels looking for a repository root.
+    let dir = here;
+    for (let i = 0; i < 6; i++) {
+      if (existsSync(join(dir, '.git'))) return true;
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return false;
+  } catch {
+    return false;
   }
 }
 

@@ -40,8 +40,12 @@ export async function fixCommand(target?: string): Promise<void> {
   const session = new AgentSession({
     providerRouter: router,
     cwd: process.cwd(),
-    onError(msg) { spinner.fail(chalk.red(msg)); },
-    onFinish() { spinner.stop(); },
+    onError(msg) {
+      spinner.fail(chalk.red(msg));
+    },
+    onFinish() {
+      spinner.stop();
+    },
   });
 
   try {

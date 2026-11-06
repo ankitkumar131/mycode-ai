@@ -1,16 +1,56 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@mycode/core', () => {
+  // Ponytail defaults on; the banner asks for the live mode.
+  const getPonytailMode = vi.fn(() => 'full');
+  const describePonytailMode = vi.fn(() => 'ponytail: full (default)');
   const mockRun = vi.fn().mockResolvedValue('Mock response');
+  const noop = () => () => {};
+  const FailoverCoordinator = vi.fn().mockImplementation(() => ({
+    prime: vi.fn(),
+    observe: vi.fn(),
+    pinForTurn: vi.fn(),
+    buildHandoffBrief: vi.fn(() => null),
+    summary: vi.fn(() => null),
+    safeWindow: 128000,
+  }));
+  const SubAgentRunner = vi.fn().mockImplementation(() => ({
+    run: () => Promise.resolve({ report: '', tokens: 0, turns: 0 }),
+  }));
+  const todoStore = { get: () => [], set: vi.fn(), subscribe: noop, clear: vi.fn() };
+  const sessionStore = { save: vi.fn(), load: vi.fn(), list: () => [], delete: vi.fn() };
   const MockSession = vi.fn().mockImplementation(() => ({
     run: mockRun,
     id: 'test-session',
     title: null,
     getContext: () => ({ getMessages: () => [], maxTokens: 128000 }),
-    getState: () => ({ messageCount: 0, iterations: 0, estimatedTokens: 0, contextWindow: 128000, elapsedMs: 0, usage: {}, queued: 0 }),
+    getState: () => ({
+      messageCount: 0,
+      iterations: 0,
+      estimatedTokens: 0,
+      contextWindow: 128000,
+      elapsedMs: 0,
+      usage: {},
+      queued: 0,
+    }),
     getRegistry: () => ({ disable: vi.fn(), getToolsets: () => [], getDefinitions: () => [] }),
-    getUsage: () => ({ promptTokens: 0, completionTokens: 0, totalTokens: 0, turns: 0, toolCalls: 0, compressions: 0 }),
-    toJSON: () => ({ id: 'test-session', title: null, cwd: process.cwd(), createdAt: '', updatedAt: '', usage: {}, messages: [] }),
+    getUsage: () => ({
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      turns: 0,
+      toolCalls: 0,
+      compressions: 0,
+    }),
+    toJSON: () => ({
+      id: 'test-session',
+      title: null,
+      cwd: process.cwd(),
+      createdAt: '',
+      updatedAt: '',
+      usage: {},
+      messages: [],
+    }),
     load: vi.fn(),
     reset: vi.fn(),
     abort: vi.fn(),
@@ -18,6 +58,9 @@ vi.mock('@mycode/core', () => {
     queuedCount: 0,
   }));
   return {
+    MUTATING_TOOLS: ['write_file', 'patch', 'execute_code', 'skill_manage'],
+    getPonytailMode,
+    describePonytailMode,
     ConfigManager: vi.fn().mockImplementation(() => ({
       configExists: () => true,
       load: () =>
@@ -41,7 +84,14 @@ vi.mock('@mycode/core', () => {
       find: vi.fn(() => undefined),
       getSkillsDir: () => '/tmp/skills',
     },
-    sessionStore: { save: vi.fn(), load: vi.fn(() => null), latestFor: vi.fn(() => null), list: vi.fn(() => []), search: vi.fn(() => []), getDir: () => '/tmp/sessions' },
+    sessionStore: {
+      save: vi.fn(),
+      load: vi.fn(() => null),
+      latestFor: vi.fn(() => null),
+      list: vi.fn(() => []),
+      search: vi.fn(() => []),
+      getDir: () => '/tmp/sessions',
+    },
     processManager: { killAll: vi.fn().mockResolvedValue(0) },
     mcpManager: { listServers: () => [] },
     isDocumentFile: () => false,
@@ -52,6 +102,13 @@ vi.mock('@mycode/core', () => {
     memoryPath: () => '/tmp/MEMORY.md',
     findContextFiles: () => [],
     TOOLSETS: {},
+    FailoverCoordinator,
+    SubAgentRunner,
+    effectiveWindowFor: vi.fn(() => 128000),
+    safeContextWindow: vi.fn(() => 128000),
+    renderSubAgentResult: (r: any) => r?.report ?? '',
+    todoStore,
+    sessionStore,
   };
 });
 

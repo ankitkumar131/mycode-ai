@@ -65,7 +65,10 @@ describe('OllamaProvider', () => {
 
     it('normalizes tool call arguments to strings', async () => {
       mockChatFn.mockResolvedValueOnce({
-        message: { content: '', tool_calls: [{ function: { name: 'foo', arguments: { key: 'value' } } }] },
+        message: {
+          content: '',
+          tool_calls: [{ function: { name: 'foo', arguments: { key: 'value' } } }],
+        },
       });
 
       const p = new OllamaProvider({ name: 'local', apiProvider: 'ollama', model: 'llama3.2' });
@@ -84,7 +87,9 @@ describe('OllamaProvider', () => {
     it('throws error when Ollama is not running', async () => {
       mockList.mockRejectedValueOnce(new Error('connect ECONNREFUSED'));
       const p = new OllamaProvider({ name: 'local', apiProvider: 'ollama', model: 'llama3.2' });
-      await expect(p.chat([{ role: 'user', content: 'Hi' }])).rejects.toThrow(/Ollama is not running/);
+      await expect(p.chat([{ role: 'user', content: 'Hi' }])).rejects.toThrow(
+        /Ollama is not running/,
+      );
     });
   });
 
@@ -108,13 +113,19 @@ describe('OllamaProvider', () => {
       const p = new OllamaProvider({ name: 'local', apiProvider: 'ollama', model: 'llama3.2' });
       const events = await collectStream(p, [{ role: 'user', content: 'Hi' }]);
 
-      expect(events.filter(e => e.type === 'text').map(e => e.content)).toEqual(['Hello', ' world']);
-      expect(events.some(e => e.type === 'finish')).toBe(true);
+      expect(events.filter((e) => e.type === 'text').map((e) => e.content)).toEqual([
+        'Hello',
+        ' world',
+      ]);
+      expect(events.some((e) => e.type === 'finish')).toBe(true);
     });
 
     it('yields tool call events', async () => {
       async function* mockStreamFn() {
-        yield { message: { content: '', tool_calls: [{ function: { name: 'foo', arguments: '{}' } }] }, done: false };
+        yield {
+          message: { content: '', tool_calls: [{ function: { name: 'foo', arguments: '{}' } }] },
+          done: false,
+        };
         yield { message: { content: '' }, done: true, prompt_eval_count: 5 };
       }
       mockChatFn.mockResolvedValueOnce(mockStreamFn());
@@ -122,8 +133,8 @@ describe('OllamaProvider', () => {
       const p = new OllamaProvider({ name: 'local', apiProvider: 'ollama', model: 'llama3.2' });
       const events = await collectStream(p, [{ role: 'user', content: 'Use tool' }], [{}]);
 
-      expect(events.filter(e => e.type === 'tool_call').length).toBe(1);
-      expect(events.find(e => e.type === 'tool_call')!.tool_call.function.name).toBe('foo');
+      expect(events.filter((e) => e.type === 'tool_call').length).toBe(1);
+      expect(events.find((e) => e.type === 'tool_call')!.tool_call.function.name).toBe('foo');
     });
 
     it('handles streaming errors', async () => {

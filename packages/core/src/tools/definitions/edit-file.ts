@@ -36,13 +36,20 @@ function findAll(content: string, needle: string): number[] {
 }
 
 /** Locate `oldStr` in `content` with progressively fuzzier strategies. */
-export function locate(content: string, oldStr: string): { matches: MatchResult[]; strategy: MatchResult['strategy'] } {
+export function locate(
+  content: string,
+  oldStr: string,
+): { matches: MatchResult[]; strategy: MatchResult['strategy'] } {
   // 1. exact
-  const exact = findAll(content, oldStr).map(s => ({ start: s, end: s + oldStr.length, strategy: 'exact' as const }));
+  const exact = findAll(content, oldStr).map((s) => ({
+    start: s,
+    end: s + oldStr.length,
+    strategy: 'exact' as const,
+  }));
   if (exact.length) return { matches: exact, strategy: 'exact' };
 
   // 2. per-line trimmed matching
-  const needleLines = oldStr.split('\n').map(l => l.trim());
+  const needleLines = oldStr.split('\n').map((l) => l.trim());
   while (needleLines.length && needleLines[needleLines.length - 1] === '') needleLines.pop();
   while (needleLines.length && needleLines[0] === '') needleLines.shift();
   if (needleLines.length) {
@@ -94,7 +101,7 @@ export function locate(content: string, oldStr: string): { matches: MatchResult[
         prevSpace = false;
       }
     }
-    const ws: MatchResult[] = findAll(collapsed, needleC).map(s => ({
+    const ws: MatchResult[] = findAll(collapsed, needleC).map((s) => ({
       start: map[s],
       end: map[s + needleC.length - 1] + 1,
       strategy: 'whitespace' as const,
@@ -120,11 +127,21 @@ export const editFileTool: ToolModule = {
         type: 'object',
         properties: {
           path: { type: 'string', description: 'Path to the file' },
-          old_string: { type: 'string', description: 'Exact text to find (must be unique unless replace_all=true). Empty string with create_if_missing=true creates a new file.' },
+          old_string: {
+            type: 'string',
+            description:
+              'Exact text to find (must be unique unless replace_all=true). Empty string with create_if_missing=true creates a new file.',
+          },
           new_string: { type: 'string', description: 'Replacement text' },
           replace_all: { type: 'boolean', description: 'Replace every occurrence (default false)' },
-          create_if_missing: { type: 'boolean', description: 'Create the file if it does not exist (default false)' },
-          dry_run: { type: 'boolean', description: 'Return the diff without writing (default false)' },
+          create_if_missing: {
+            type: 'boolean',
+            description: 'Create the file if it does not exist (default false)',
+          },
+          dry_run: {
+            type: 'boolean',
+            description: 'Return the diff without writing (default false)',
+          },
           // legacy camelCase aliases kept for older prompts
           oldString: { type: 'string', description: 'Alias of old_string' },
           newString: { type: 'string', description: 'Alias of new_string' },
@@ -156,7 +173,9 @@ export const editFileTool: ToolModule = {
       content = '';
       isNew = true;
     } else {
-      throw new Error(`File not found: ${filePath}. Use write_file to create new files or set create_if_missing=true.`);
+      throw new Error(
+        `File not found: ${filePath}. Use write_file to create new files or set create_if_missing=true.`,
+      );
     }
 
     const normalizedOld = normalizeLineEndings(oldString);
@@ -177,14 +196,21 @@ export const editFileTool: ToolModule = {
       strategy = st;
       if (matches.length === 0) {
         const hint = normalizedOld.split('\n')[0]?.trim().slice(0, 60);
-        const near = hint ? content.split('\n').findIndex(l => l.includes(hint.slice(0, 20))) : -1;
+        const near = hint
+          ? content.split('\n').findIndex((l) => l.includes(hint.slice(0, 20)))
+          : -1;
         throw new Error(
-          `Could not find old_string in ${filePath}.${near >= 0 ? ` A similar line exists near line ${near + 1} — re-read the file and copy the exact text.` : ' Re-read the file and copy the exact text (including indentation).'}`
+          `Could not find old_string in ${filePath}.${near >= 0 ? ` A similar line exists near line ${near + 1} — re-read the file and copy the exact text.` : ' Re-read the file and copy the exact text (including indentation).'}`,
         );
       }
       if (matches.length > 1 && !replaceAll) {
-        const lines = matches.slice(0, 6).map(m => lineOf(content, m.start)).join(', ');
-        throw new Error(`old_string matches ${matches.length} locations (lines ${lines}). Add more surrounding context to make it unique, or set replace_all=true.`);
+        const lines = matches
+          .slice(0, 6)
+          .map((m) => lineOf(content, m.start))
+          .join(', ');
+        throw new Error(
+          `old_string matches ${matches.length} locations (lines ${lines}). Add more surrounding context to make it unique, or set replace_all=true.`,
+        );
       }
       const targets = replaceAll ? matches : [matches[0]];
       let out = '';
@@ -198,7 +224,9 @@ export const editFileTool: ToolModule = {
       replaced = targets.length;
     }
 
-    const patch = createTwoFilesPatch(filePath, filePath, content, newContent, '', '', { context: 2 });
+    const patch = createTwoFilesPatch(filePath, filePath, content, newContent, '', '', {
+      context: 2,
+    });
     const added = (patch.match(/^\+(?!\+\+)/gm) || []).length;
     const removed = (patch.match(/^-(?!--)/gm) || []).length;
     const diffBody = patch.split('\n').slice(4).join('\n').trim();
@@ -208,14 +236,19 @@ export const editFileTool: ToolModule = {
     }
 
     if (options?.confirmFn) {
-      const ok = await options.confirmFn(filePath, `patch (+${added} −${removed})\n${diffBody.slice(0, 1500)}`);
+      const ok = await options.confirmFn(
+        filePath,
+        `patch (+${added} −${removed})\n${diffBody.slice(0, 1500)}`,
+      );
       if (!ok) return 'Edit cancelled by user.';
     }
 
     await mkdir(dirname(resolvedPath), { recursive: true });
     await writeFile(resolvedPath, newContent, 'utf-8');
 
-    const firstLine = isNew ? 1 : lineOf(content, locate(content, normalizedOld).matches[0]?.start ?? 0);
+    const firstLine = isNew
+      ? 1
+      : lineOf(content, locate(content, normalizedOld).matches[0]?.start ?? 0);
     const note = strategy !== 'exact' ? ` (matched with ${strategy} whitespace tolerance)` : '';
     return `${isNew ? 'Created' : 'Edited'} ${filePath}${isNew ? '' : ` at line ${firstLine}`}: ${replaced} replacement(s), +${added} −${removed}${note}\n\n${diffBody.slice(0, 4000)}`;
   },

@@ -16,7 +16,11 @@ export const writeFileTool: ToolModule = {
         properties: {
           path: { type: 'string', description: 'Absolute or relative path to the file' },
           content: { type: 'string', description: 'Full content to write' },
-          mode: { type: 'string', enum: ['overwrite', 'append'], description: 'overwrite (default) or append' },
+          mode: {
+            type: 'string',
+            enum: ['overwrite', 'append'],
+            description: 'overwrite (default) or append',
+          },
         },
         required: ['path', 'content'],
       },
@@ -45,7 +49,9 @@ export const writeFileTool: ToolModule = {
     let added = content.split('\n').length;
     let removed = 0;
     if (exists && mode === 'overwrite') {
-      const patch = createTwoFilesPatch(filePath, filePath, previous, content, '', '', { context: 2 });
+      const patch = createTwoFilesPatch(filePath, filePath, previous, content, '', '', {
+        context: 2,
+      });
       added = (patch.match(/^\+(?!\+\+)/gm) || []).length;
       removed = (patch.match(/^-(?!--)/gm) || []).length;
       diffPreview = patch.split('\n').slice(4).join('\n').trim();

@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 import readline from 'readline';
 import { TextArea, type SlashMenuItem } from '../text-area.js';
+import { resetCapabilityCache } from '../capabilities.js';
 
 class FakeStdin extends EventEmitter {
   isTTY = true;
@@ -32,6 +33,9 @@ class FakeStdin extends EventEmitter {
 }
 
 class FakeStdout {
+  // A simulated TTY has to say so: cursor-control support is detected from
+  // isTTY/TERM, and this harness is simulating a capable terminal.
+  isTTY = true;
   columns = 80;
   rows = 24;
   chunks: string[] = [];
@@ -66,6 +70,9 @@ describe('TextArea (simulated TTY)', () => {
     (globalThis as any).__fakeStdin = stdin;
     Object.defineProperty(process, 'stdin', { value: stdin, configurable: true });
     Object.defineProperty(process, 'stdout', { value: stdout, configurable: true });
+    process.env.TERM = 'xterm-256color';
+    // Capability detection is cached per process; each test installs a new fake.
+    resetCapabilityCache();
 
     textarea = new TextArea({
       prompt: '❯ ',
@@ -75,6 +82,7 @@ describe('TextArea (simulated TTY)', () => {
 
   afterEach(() => {
     textarea.close();
+    resetCapabilityCache();
     Object.defineProperty(process, 'stdin', { value: origStdin, configurable: true });
     Object.defineProperty(process, 'stdout', { value: origStdout, configurable: true });
     vi.restoreAllMocks();
@@ -83,8 +91,7 @@ describe('TextArea (simulated TTY)', () => {
   const type = (s: string) => {
     for (const ch of s) stdin.emit('data', Buffer.from(ch, 'utf-8'));
   };
-  const press = (str: string, key: Partial<readline.Key>) =>
-    stdin.emit('keypress', str, key);
+  const press = (str: string, key: Partial<readline.Key>) => stdin.emit('keypress', str, key);
 
   const tick = () => new Promise<void>((r) => setTimeout(r, 5));
 

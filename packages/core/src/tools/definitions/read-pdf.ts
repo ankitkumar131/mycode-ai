@@ -15,7 +15,8 @@ export const readPdfTool: ToolModule = {
     type: 'function',
     function: {
       name: 'read_pdf',
-      description: 'Read and extract text from a PDF file, page by page. Supports page selection and offsets for long documents.',
+      description:
+        'Read and extract text from a PDF file, page by page. Supports page selection and offsets for long documents.',
       parameters: {
         type: 'object',
         properties: {
