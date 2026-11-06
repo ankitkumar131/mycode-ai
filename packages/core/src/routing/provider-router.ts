@@ -1,6 +1,7 @@
 import { BaseProvider } from './base-provider.js';
 import { OpenAICompatibleProvider } from './openai-compatible.js';
 import { OllamaProvider } from './ollama-provider.js';
+import { AnthropicProvider } from './anthropic-provider.js';
 import {
   RateLimitError,
   AuthError,
@@ -11,10 +12,15 @@ import {
 } from '../errors.js';
 import { logger } from '../output/logger.js';
 import type { ProviderConfig, ProviderStats } from './types.js';
+import { describeFailoverReason } from './failover.js';
 
 export class ProviderRouter {
   private providers: BaseProvider[] = [];
   private _currentIndex = 0;
+  /** Index of the first provider that failed in this attempt, or -1. */
+  private _attemptedProviderIndex = -1;
+  /** Details of the most recent internal failover, consumed by the session. */
+  private _lastFailover: { from: string; to: string; reason: string; at: number } | null = null;
 
   constructor(configs: ProviderConfig[] = []) {
     if (!configs.length) {
@@ -30,6 +36,10 @@ export class ProviderRouter {
     switch (config.apiProvider) {
       case 'ollama':
         return new OllamaProvider(config);
+      case 'anthropic':
+        // Native Messages API, not the OpenAI-compatible shim: this is what
+        // keeps extended thinking, prompt caching and native tool schemas.
+        return new AnthropicProvider(config);
       case 'openrouter':
       case 'nvidia_nim':
       case 'openai':
@@ -73,6 +83,17 @@ export class ProviderRouter {
     }
   }
 
+  /**
+   * Details of the most recent mid-call provider switch, if any.
+   *
+   * The session reads this to explain the switch to the user and to re-orient
+   * the replacement model. The read is non-destructive so that the announcement
+   * and the handoff brief both see the same event.
+   */
+  get lastFailover(): { from: string; to: string; reason: string; at: number } | null {
+    return this._lastFailover;
+  }
+
   getCurrentProvider(): BaseProvider | null {
     return this.providers[this._currentIndex] ?? this.providers[0] ?? null;
   }
@@ -90,6 +111,8 @@ export class ProviderRouter {
   }
 
   async chat(messages: unknown[], tools?: unknown[], options?: any): Promise<any> {
+    this._attemptedProviderIndex = -1;
+    this._lastFailover = null;
     let eligible = this.getEligibleProviders(options);
     if (eligible.length === 0) {
       this.providers.forEach((p) => ((p as any)._health.isAvailable = true));
@@ -102,6 +125,8 @@ export class ProviderRouter {
   }
 
   async *stream(messages: unknown[], tools?: unknown[], options?: any): AsyncGenerator<any> {
+    this._attemptedProviderIndex = -1;
+    this._lastFailover = null;
     let eligible = this.getEligibleProviders(options);
     if (eligible.length === 0) {
       this.providers.forEach((p) => ((p as any)._health.isAvailable = true));
@@ -113,16 +138,51 @@ export class ProviderRouter {
     yield* this.attemptStreamWithFailover(eligible, messages, tools, options);
   }
 
+  /** Last provider we told the user about, so a stable session stays quiet. */
+  private _announcedProvider: string | null = null;
+
+  /**
+   * Log which provider is serving us, but only when that changes.
+   *
+   * The agent loop issues one request per iteration, so announcing on every
+   * request buried the transcript under identical lines. A switch (including a
+   * failover) still announces, because that is information the user needs.
+   */
+  private announceOnce(provider: BaseProvider): void {
+    const key = `${provider.name}\u0000${provider.model}`;
+    if (this._announcedProvider === key) return;
+    this._announcedProvider = key;
+    logger.provider(`Using ${provider.name} (${provider.model})`);
+  }
+
+  /** Forget the announcement, e.g. after the user switches provider by hand. */
+  resetAnnouncement(): void {
+    this._announcedProvider = null;
+  }
+
   private async attemptWithFailover(providers: BaseProvider[], messages: unknown[], tools?: unknown[], options?: any): Promise<any> {
     const errors: Error[] = [];
-    for (const provider of providers) {
+    for (let i = 0; i < providers.length; i++) {
+      const provider = providers[i];
       try {
-        logger.provider(`Using ${provider.name} (${provider.model})`);
+        this.announceOnce(provider);
         const result = await provider.chat(messages, tools, options);
+        const switchedFrom = providers[this._attemptedProviderIndex];
+        if (this._attemptedProviderIndex >= 0 && switchedFrom && switchedFrom.name !== provider.name) {
+          // Record *why* we moved on, so the session can hand the replacement
+          // model an accurate account of what happened.
+          this._lastFailover = {
+            from: switchedFrom.name,
+            to: provider.name,
+            reason: describeFailoverReason(errors[errors.length - 1]),
+            at: Date.now(),
+          };
+        }
         this._currentIndex = this.providers.indexOf(provider);
         return result;
       } catch (err: any) {
         errors.push(err);
+        if (this._attemptedProviderIndex < 0) this._attemptedProviderIndex = i;
         this.handleProviderError(provider, err, providers);
       }
     }
@@ -131,17 +191,28 @@ export class ProviderRouter {
 
   private async *attemptStreamWithFailover(providers: BaseProvider[], messages: unknown[], tools?: unknown[], options?: any): AsyncGenerator<any> {
     const errors: Error[] = [];
-    for (const provider of providers) {
+    for (let i = 0; i < providers.length; i++) {
+      const provider = providers[i];
       try {
-        logger.provider(`Using ${provider.name} (${provider.model})`);
+        this.announceOnce(provider);
         const gen = provider.stream(messages, tools, options);
         for await (const chunk of gen) {
           yield chunk;
+        }
+        const switchedFrom = providers[this._attemptedProviderIndex];
+        if (this._attemptedProviderIndex >= 0 && switchedFrom && switchedFrom.name !== provider.name) {
+          this._lastFailover = {
+            from: switchedFrom.name,
+            to: provider.name,
+            reason: describeFailoverReason(errors[errors.length - 1]),
+            at: Date.now(),
+          };
         }
         this._currentIndex = this.providers.indexOf(provider);
         return;
       } catch (err: any) {
         errors.push(err);
+        if (this._attemptedProviderIndex < 0) this._attemptedProviderIndex = i;
         this.handleProviderError(provider, err, providers);
       }
     }

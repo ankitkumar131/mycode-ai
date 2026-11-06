@@ -12,7 +12,23 @@ vi.mock('@mycode/core', () => ({
     get: () => ({ providers: [{ name: 'test', apiKey: 'sk-test' }] }),
   })),
   AgentSession: vi.fn().mockImplementation(() => mockSession),
-  ProviderRouter: vi.fn(),
+  ProviderRouter: vi.fn().mockImplementation(() => ({
+    getCurrentProvider: () => ({ name: 'test', model: 'test-model' }),
+    setActiveProvider: vi.fn(),
+    getAllProviders: () => [{ name: 'test', model: 'test-model' }],
+  })),
+  FailoverCoordinator: vi.fn().mockImplementation(() => ({
+    prime: vi.fn(),
+    observe: vi.fn(),
+    pinForTurn: vi.fn(),
+    buildHandoffBrief: vi.fn(() => null),
+    summary: vi.fn(() => null),
+    safeWindow: 128_000,
+  })),
+  SubAgentRunner: vi.fn().mockImplementation(() => ({ run: () => Promise.resolve({ report: '', tokens: 0, turns: 0 }) })),
+  renderSubAgentResult: vi.fn((r) => r.report ?? ''),
+  todoStore: { get: () => [], subscribe: () => () => {}, set: vi.fn(), clear: vi.fn() },
+  sessionStore: { save: vi.fn(), load: vi.fn(), list: () => [], delete: vi.fn() },
 }));
 
 const mockQuestion = vi.fn();

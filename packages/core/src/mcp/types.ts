@@ -1,11 +1,11 @@
 export interface MCPServerConfig {
-  id: string;
+  id?: string;
   name: string;
   command?: string;
   args?: string[];
   url?: string;
-  enabled: boolean;
-  status: 'connected' | 'disconnected' | 'error';
+  enabled?: boolean;
+  status?: 'connected' | 'disconnected' | 'error';
   env?: Record<string, string>;
 }
 

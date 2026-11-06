@@ -1,80 +1,103 @@
 import chalk from 'chalk';
+import { getTokens, getThemeName, type ThemeTokens } from './registry.js';
 
-export const theme = {
-  // Electric Cyan (Primary Cyber Glow)
-  green: '#00f0ff',
-  greenDim: '#0369a1',
-  greenDeep: '#082f49',
-  greenGlow: '#38bdf8',
-  greenMute: '#0284c7',
+/**
+ * Live theme tokens.
+ *
+ * `theme` is a Proxy rather than a frozen object so that `/theme <name>` takes
+ * effect immediately without every module re-importing. Existing call sites
+ * (`theme.green`, `COLORS.diffAdd`) keep working unchanged — the legacy token
+ * names are aliases onto the semantic tokens in themes/registry.ts.
+ */
 
-  // Electric Neon Pink / Purple / Amber Accents
-  amber: '#d946ef',
-  amberDim: '#86198f',
-  red: '#ff0055',
-  redMute: '#9f1239',
+/** Legacy token name -> semantic token name. */
+const ALIASES: Record<string, keyof ThemeTokens> = {
+  green: 'brand',
+  greenDim: 'brandDim',
+  greenDeep: 'brandDeep',
+  greenGlow: 'brandGlow',
+  greenMute: 'brandMute',
+  amber: 'accent',
+  amberDim: 'accentDim',
+  red: 'error',
+  redMute: 'errorMute',
+  white: 'text',
+  muted: 'textMuted',
+  dim: 'textDim',
+  black: 'codeBgDark',
+  brand: 'brand',
+  brandLight: 'brandLight',
+  brandDim: 'brandDim',
+  accent: 'accent',
+  accentPink: 'accentPink',
+  accentCyan: 'brandGlow',
+  accentGold: 'accentGold',
+  success: 'success',
+  warning: 'warning',
+  error: 'error',
+  info: 'info',
+  text: 'text',
+  textSecondary: 'textSecondary',
+  textMuted: 'textMuted',
+  textDim: 'textDim',
+  sparkle: 'sparkle',
+  thinking: 'thinking',
+  tool: 'tool',
+  provider: 'provider',
+  switch: 'switch',
+  codeBg: 'codeBg',
+  codeBgDark: 'codeBgDark',
+  diffAdd: 'diffAdd',
+  diffDel: 'diffDel',
+  diffHunk: 'diffHunk',
+  border: 'border',
+};
 
-  // Obsidian & Slate Greys
-  white: '#f8fafc',
-  muted: '#94a3b8',
-  dim: '#475569',
-  black: '#020617',
-
-  // Legacy compatibility tokens
-  brand: '#00f0ff',
-  brandLight: '#38bdf8',
-  brandDim: '#0369a1',
-  accent: '#d946ef',
-  accentPink: '#f472b6',
-  accentCyan: '#00f0ff',
-  accentGold: '#f59e0b',
-  success: '#10b981',
-  warning: '#f59e0b',
-  error: '#ff0055',
-  info: '#38bdf8',
-  text: '#f8fafc',
-  textSecondary: '#94a3b8',
-  textMuted: '#64748b',
-  textDim: '#475569',
-
-  // UI Renderer tokens
-  sparkle: '#00f0ff',
-  thinking: '#d946ef',
-  tool: '#38bdf8',
-  provider: '#f59e0b',
-  switch: '#00f0ff',
-  codeBg: '#0f172a',
-  codeBgDark: '#020617',
-
-  // Diff renderer tokens
-  diffAdd: '#34d399',
-  diffDel: '#f87171',
-  diffHunk: '#60a5fa',
-} as const;
+export const theme = new Proxy({} as Record<string, string>, {
+  get: (_t, prop: string) => {
+    const tokens = getTokens();
+    const key = ALIASES[prop];
+    if (key) return tokens[key];
+    return (tokens as unknown as Record<string, string>)[prop];
+  },
+  has: (_t, prop: string) => prop in ALIASES || prop in getTokens(),
+  ownKeys: () => Object.keys(ALIASES),
+  getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
+});
 
 export const COLORS = theme;
 
-export const S = {
-  brand: chalk.hex(theme.green),
-  brandBold: chalk.hex(theme.green).bold,
-  accent: chalk.hex(theme.amber),
-  accentBold: chalk.hex(theme.amber).bold,
-  cyan: chalk.hex(theme.greenGlow),
-  cyanBold: chalk.hex(theme.greenGlow).bold,
-  gold: chalk.hex(theme.accentGold),
-  success: chalk.hex(theme.success),
-  successBold: chalk.hex(theme.success).bold,
-  warning: chalk.hex(theme.warning),
-  warningBold: chalk.hex(theme.warning).bold,
-  error: chalk.hex(theme.error),
-  errorBold: chalk.hex(theme.error).bold,
-  text: chalk.hex(theme.white),
-  muted: chalk.hex(theme.muted),
-  dim: chalk.hex(theme.dim),
-  dimmer: chalk.hex(theme.greenDim),
-  code: chalk.hex(theme.white).bgHex(theme.codeBg),
-  codespan: chalk.hex(theme.greenGlow).bgHex(theme.codeBgDark),
-} as const;
+/** Chalk style helpers, resolved against the active theme on every access. */
+export const S = new Proxy({} as Record<string, (s: string) => string>, {
+  get: (_t, prop: string) => {
+    const t = getTokens();
+    switch (prop) {
+      case 'brand': return chalk.hex(t.brand);
+      case 'brandBold': return chalk.hex(t.brand).bold;
+      case 'accent': return chalk.hex(t.accent);
+      case 'accentBold': return chalk.hex(t.accent).bold;
+      case 'cyan': return chalk.hex(t.brandGlow);
+      case 'cyanBold': return chalk.hex(t.brandGlow).bold;
+      case 'gold': return chalk.hex(t.accentGold);
+      case 'success': return chalk.hex(t.success);
+      case 'successBold': return chalk.hex(t.success).bold;
+      case 'warning': return chalk.hex(t.warning);
+      case 'warningBold': return chalk.hex(t.warning).bold;
+      case 'error': return chalk.hex(t.error);
+      case 'errorBold': return chalk.hex(t.error).bold;
+      case 'text': return chalk.hex(t.text);
+      case 'muted': return chalk.hex(t.textMuted);
+      case 'dim': return chalk.hex(t.textDim);
+      case 'dimmer': return chalk.hex(t.brandDim);
+      case 'code': return (s: string) => chalk.hex(t.text).bgHex(t.codeBg)(s);
+      case 'codespan': return (s: string) => chalk.hex(t.brandGlow).bgHex(t.codeBgDark)(s);
+      default: return (s: string) => s;
+    }
+  },
+});
+
+export { getThemeName, setTheme, listThemes, themeNames, getTokens, DEFAULT_THEME } from './registry.js';
+export type { ThemeTokens, Theme } from './registry.js';
 
 export const ICONS = {
   sparkle: '✦',

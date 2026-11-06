@@ -32,6 +32,8 @@ import { todoWriteTool } from './definitions/todowrite.js';
 import { readInstructionsTool } from './definitions/read-instructions.js';
 import { skillsListTool, skillViewTool, skillManageTool } from './definitions/skills.js';
 import { memoryTool } from './definitions/memory.js';
+import { delegateTool } from './definitions/delegate.js';
+import { questionTool } from './definitions/question.js';
 
 export const TOOLSETS: Record<string, string[]> = {
   files: ['read_file', 'write_file', 'patch', 'list_dir', 'glob', 'search_files', 'read_document', 'read_pdf'],
@@ -39,7 +41,7 @@ export const TOOLSETS: Record<string, string[]> = {
   git: ['git_status'],
   web: ['web_search', 'web_fetch'],
   skills: ['skills_list', 'skill_view', 'skill_manage'],
-  agent: ['todo_write', 'read_instructions', 'memory'],
+  agent: ['todo_write', 'read_instructions', 'memory', 'delegate', 'question'],
 };
 
 const ALL_TOOLS: ToolModule[] = [
@@ -63,6 +65,8 @@ const ALL_TOOLS: ToolModule[] = [
   todoWriteTool,
   readInstructionsTool,
   memoryTool,
+  delegateTool,
+  questionTool,
 ];
 
 export const ALIASES: Record<string, string> = {
@@ -120,6 +124,13 @@ export const ALIASES: Record<string, string> = {
   skills: 'skills_list',
   list_skills: 'skills_list',
   view_skill: 'skill_view',
+  // delegation / user questions
+  task: 'delegate',
+  subagent: 'delegate',
+  spawn_agent: 'delegate',
+  ask: 'question',
+  ask_user: 'question',
+  askUser: 'question',
 };
 
 const WRITE_TOOLS = new Set(['write_file', 'patch', 'execute_code', 'terminal', 'skill_manage']);

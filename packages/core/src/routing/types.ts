@@ -8,6 +8,13 @@ export interface ProviderConfig {
   read?: boolean;
   write?: boolean;
   maxRetries?: number;
+  /**
+   * Explicit context window in tokens. When omitted it is inferred from the
+   * model name by `effectiveWindowFor()` in routing/failover.ts. Setting this
+   * is the reliable option: an inferred window that is too large causes a hard
+   * overflow mid-task, and one that is too small causes premature compaction.
+   */
+  contextWindow?: number;
 }
 
 export interface ProviderStats {

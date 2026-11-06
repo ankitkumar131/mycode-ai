@@ -143,3 +143,13 @@ async function main() {
 }
 
 main();
+
+// Stamp the build so the CLI can report which build is running. Written next to
+// the CLI bundle, which is where describeBuild() looks for it.
+try {
+  const stampFile = join(root, 'packages', 'cli', 'dist', 'BUILD_STAMP');
+  mkdirSync(dirname(stampFile), { recursive: true });
+  writeFileSync(stampFile, String(Date.now()) + '\n');
+} catch {
+  /* non-fatal: the banner just shows the commit */
+}

@@ -21,10 +21,10 @@ function parseChatFlags(args: string[]): { opts: ChatOptions; rest: string[] } {
     if (a === '--continue' || a === '-c') opts.continue = true;
     else if (a === '--resume' || a === '-r') opts.resume = next();
     else if (a.startsWith('--resume=')) opts.resume = a.slice(9);
-    else if (a === '--query' || a === '-q') opts.query = next();
+    else if (a === '--query' || a === '-q' || a === '-Q') opts.query = next();
     else if (a === '--model' || a === '-m') opts.model = next();
     else if (a.startsWith('--model=')) opts.model = a.slice(8);
-    else if (a === '--yolo' || a === '--dangerously-skip-permissions') opts.yolo = true;
+    else if (a === '--yolo' || a === '--dangerously-skip-permissions' || a === '--allow-all' || a === '--dangerously-allow-all') opts.yolo = true;
     else rest.push(a);
   }
   if (!opts.query && rest.length && !opts.continue) {
@@ -34,7 +34,7 @@ function parseChatFlags(args: string[]): { opts: ChatOptions; rest: string[] } {
   return { opts, rest };
 }
 
-const CHAT_FLAGS = new Set(['--continue', '-c', '--resume', '-r', '--query', '-q', '--model', '-m', '--yolo']);
+const CHAT_FLAGS = new Set(['--continue', '-c', '--resume', '-r', '--query', '-q', '-Q', '--model', '-m', '--yolo', '--allow-all', '--dangerously-skip-permissions']);
 const first = argv[0];
 const cmd = first === undefined || CHAT_FLAGS.has(first) || first.startsWith('--resume=') || first.startsWith('--model=') ? 'chat' : first;
 const args = cmd === 'chat' && first !== 'chat' ? argv : argv.slice(1);
@@ -50,7 +50,10 @@ async function main() {
     case 'config':
       await configCommand(args[0], ...args.slice(1));
       break;
-    case 'chat': {
+    case 'chat':
+    // `mycode run "..."` is the same one-shot path other agents expose, so a
+    // script written for `opencode run` or `claude -p` works with minimal edits.
+    case 'run': {
       const { opts } = parseChatFlags(args);
       await chatCommand(opts);
       break;
@@ -64,9 +67,16 @@ async function main() {
     case 'edit':
       await editCommand(args[0], args.slice(1).join(' '));
       break;
-    case 'agent':
-      await agentCommand(args.join(' '));
+    case 'agent': {
+      // Flags belong to the command, not to the prompt: passing `--yolo`
+      // through as task text makes the model try to act on it. `--allow-all`
+      // is the same switch under the name used by the /allow-all command.
+      const agentFlags = new Set(['--yolo', '-y', '--allow-all', '--dangerously-skip-permissions']);
+      const yolo = args.some((a) => agentFlags.has(a));
+      const task = args.filter((a) => !agentFlags.has(a)).join(' ');
+      await agentCommand(task || undefined, { yolo });
       break;
+    }
     case 'skills': {
       const { skillManager } = await import('@mycode/core');
       skillManager.seedBundledSkills();
@@ -93,7 +103,8 @@ async function main() {
       console.log(`  Providers: ${cfg.providers.length ? cfg.providers.map(p => p.name).join(', ') : 'none'}`);
       console.log(`  Skills:    ${skillManager.list(process.cwd()).length} in ${skillManager.getSkillsDir()}`);
       console.log(`  Editor:    ${process.env.VISUAL || process.env.EDITOR || '(unset — Ctrl+G uses vi/notepad)'}`);
-      console.log(`  TTY:       ${process.stdout.isTTY ? 'yes' : 'no'}  TERM=${process.env.TERM ?? ''}  ${process.env.TERM_PROGRAM ?? ''}\n`);
+      const { describeTerminal } = await import('./ui/capabilities.js');
+      console.log(`  Terminal:  ${describeTerminal()}\n`);
       break;
     }
     case '--version':
@@ -108,11 +119,12 @@ async function main() {
 
 Commands:
   chat [flags] [query]   Start interactive chat (default)
+  run  [flags] [query]   Alias for a one-shot chat, e.g. mycode run "fix the bug"
       -c, --continue         Resume the latest session for this directory
       -r, --resume <id>      Resume a saved session by id or title
       -q, --query <text>     Run a single query and exit
       -m, --model <name>     Use a specific configured provider/model
-      --yolo                 Skip approval prompts
+      --yolo                 Skip approval prompts (alias: --allow-all)
   init | setup           Setup configuration
   config                 Manage providers
   skills                 List installed skills
@@ -125,7 +137,9 @@ Commands:
   --version, -v          Show CLI version
   --help, -h             Show this help
 
-Inside chat: type / for commands, !cmd for shell, @file to attach, Ctrl+Enter for a new line.`);
+Inside chat: type / for commands, !cmd for shell, @file to attach, Ctrl+Enter for a new line.
+  /allow-all             Stop being asked for the rest of the session (writes, commands, or both).
+Custom slash commands come from .mycode/commands/*.md (also reads .opencode/command and .claude/commands).`);
       break;
     default:
       console.error(`Unknown command: ${cmd}`);
